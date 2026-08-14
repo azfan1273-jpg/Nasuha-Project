@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'providers/settings_provider.dart';
 import 'screens/kasir_home_screen.dart';
+import 'screens/login_screen.dart';
 
 // ISI DENGAN CREDENTIAL SUPABASE KAMU NANTI
 const String supabaseUrl = 'https://qcpxitlltkkxtdctertz.supabase.co';
@@ -37,13 +38,7 @@ class NasuhaApp extends StatelessWidget {
     return MaterialApp(
       title: 'NASUHA Kasir',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        fontFamily: 'Roboto',
-        scaffoldBackgroundColor: const Color(0xFFF8FAFC),
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2563EB)),
-        useMaterial3: true,
-      ),
-      home: const KasirHomeScreen(),
+      home: const LoginScreen(), // SET LAYAR PERTAMA KE LOGIN SCREEN
     );
   }
 }

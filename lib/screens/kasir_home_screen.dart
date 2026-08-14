@@ -48,11 +48,10 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
     }
   }
 
-  // PALET WARNA PINK AESTHETIC & TEKS HITAM KONTRAS
-  static const Color _bgDark = Color(0xFFFAF5F7);       // Cream Light
-  static const Color _cardDark = Color(0xFFFCE7F3);     // Rose Soft Card
-  static const Color _goldAccent = Color(0xFFEC4899);   // Rose Blush Accent
-  static const Color _textBlack = Color(0xFF111827);    // Hitam Pekat Tegas
+  static const Color _bgDark = Color(0xFFFAF5F7);       
+  static const Color _cardDark = Color(0xFFFCE7F3);     
+  static const Color _goldAccent = Color(0xFFEC4899);   
+  static const Color _textBlack = Color(0xFF111827);    
 
   double get _totalOmsetHariIni {
     return _ordersHariIni.fold(
@@ -76,7 +75,7 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
               children: [
                 const SizedBox(height: 10),
 
-                // 1. HEADER TOKO (Poin 1: Nama Nasuha Laundry warna Hitam)
+                // HEADER TOKO
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
@@ -105,7 +104,7 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
                                   Text(
                                     settings.namaToko,
                                     style: const TextStyle(
-                                      color: _textBlack, // FIX 1: HITAM TEGAS
+                                      color: _textBlack,
                                       fontWeight: FontWeight.bold,
                                       fontSize: 14,
                                     ),
@@ -152,7 +151,7 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
 
                 const SizedBox(height: 12),
 
-                // 2. BANNER PROMO
+                // BANNER PROMO
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Container(
@@ -220,7 +219,7 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
 
                 const SizedBox(height: 12),
 
-                // 3. TAB VIEW
+                // TAB VIEW
                 Expanded(
                   child: IndexedStack(
                     index: _currentIndex,
@@ -237,7 +236,7 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
                   ),
                 ),
 
-                // 4. TOMBOL TRANSAKSI
+                // TOMBOL TRANSAKSI
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
                   child: SizedBox(
@@ -271,7 +270,7 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
                   ),
                 ),
 
-                // 5. BOTTOM NAVBAR
+                // BOTTOM NAVBAR
                 Container(
                   color: _cardDark,
                   padding: const EdgeInsets.symmetric(vertical: 6),
@@ -324,7 +323,7 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
       padding: const EdgeInsets.all(12),
       child: Column(
         children: [
-          // CARD RINGKASAN CUCIAN (Poin 2: Ringkasan Cucian warna Hitam)
+          // CARD RINGKASAN CUCIAN
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -336,37 +335,72 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: const [
-                    Text(
+                  children: [
+                    const Text(
                       'RINGKASAN CUCIAN',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
-                        color: _textBlack, // FIX 2: HITAM TEGAS
+                        color: _textBlack,
                       ),
                     ),
-                    Text(
-                      'Realtime',
-                      style: TextStyle(fontSize: 9, color: Colors.black54),
+                    // BADGE REALTIME 3D
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Colors.white, Color(0xFFFCE7F3)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white, width: 1.5),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _goldAccent.withOpacity(0.2),
+                            blurRadius: 6,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(
+                            Icons.fiber_manual_record,
+                            color: Colors.green,
+                            size: 8,
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            'Realtime',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              color: _textBlack,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
-                
-                // Poin 3: Angka di dalam bar "cucian aktif, harus selesai, terlambat, selesai" warna hitam tebal
+
+                // STATS GRID
                 Row(
                   children: [
                     _buildGridStat(
                       'CUCIAN AKTIF',
                       '${_ordersHariIni.where((o) => o['status'] == 'Antrian' || o['status'] == 'Proses').length}',
-                      _textBlack, // FIX 3: ANGKA HITAM TEBAL
+                      _textBlack,
                       Icons.local_laundry_service,
                     ),
                     const SizedBox(width: 8),
                     _buildGridStat(
                       'HARUS SELESAI',
                       '0',
-                      _textBlack, // FIX 3: ANGKA HITAM TEBAL
+                      _textBlack,
                       Icons.timer_outlined,
                     ),
                   ],
@@ -377,14 +411,14 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
                     _buildGridStat(
                       'TERLAMBAT',
                       '0',
-                      _textBlack, // FIX 3: ANGKA HITAM TEBAL
+                      _textBlack,
                       Icons.warning_amber_rounded,
                     ),
                     const SizedBox(width: 8),
                     _buildGridStat(
                       'SELESAI',
                       '${_ordersHariIni.where((o) => o['status'] == 'Selesai').length}',
-                      _textBlack, // FIX 3: ANGKA HITAM TEBAL
+                      _textBlack,
                       Icons.check_circle_outline,
                     ),
                   ],
@@ -395,7 +429,7 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
 
           const SizedBox(height: 10),
 
-          // CARD KEUANGAN HARI INI (Poin 4: Keuangan Hari Ini warna Hitam)
+          // KEUANGAN HARI INI
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -412,7 +446,7 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
-                        color: _textBlack, // FIX 4: HITAM TEGAS
+                        color: _textBlack,
                       ),
                     ),
                     Text(
@@ -463,7 +497,7 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
 
           const SizedBox(height: 10),
 
-          // MASUK HARI INI (Poin 5: Masuk Hari Ini warna Hitam)
+          // MASUK HARI INI
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -481,7 +515,7 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
-                        color: _textBlack, // FIX 5: HITAM TEGAS
+                        color: _textBlack,
                       ),
                     ),
                     Text(
@@ -513,7 +547,7 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
-                                  color: _textBlack, // FIX TEKS EMPTY
+                                  color: _textBlack,
                                 ),
                               ),
                               Text(
@@ -524,7 +558,6 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
                           ),
                         ),
                       )
-                    // Poin 6: Kolom list untuk pelanggan masuk hari ini warna Hitam
                     : ListView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
@@ -547,7 +580,7 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
                                     Text(
                                       order['customer'] ?? '-',
                                       style: const TextStyle(
-                                        color: _textBlack, // FIX 6: NAMA PELANGGAN HITAM
+                                        color: _textBlack,
                                         fontWeight: FontWeight.bold,
                                         fontSize: 11,
                                       ),
@@ -655,7 +688,7 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
                                 Text(
                                   order['customer'] ?? '-',
                                   style: const TextStyle(
-                                    color: _textBlack, // NAMA PELANGGAN HITAM
+                                    color: _textBlack,
                                     fontWeight: FontWeight.bold,
                                     fontSize: 12,
                                   ),
@@ -713,7 +746,7 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
                   style: const TextStyle(
                     fontSize: 7,
                     fontWeight: FontWeight.bold,
-                    color: Colors.black54, // TITLE STAT HITAM SAMAR
+                    color: Colors.black54,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -722,7 +755,7 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: _textBlack, // FIX 3: ANGKA HITAM TEBAL
+                    color: _textBlack,
                   ),
                 ),
               ],
