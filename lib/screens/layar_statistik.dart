@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../main.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/buat_order_dialog.dart';
+import '../widgets/report_dialog.dart';
+import '../widgets/setting_dialog.dart';
 
 import 'package:remixicon/remixicon.dart';
 
@@ -397,85 +399,92 @@ class _LayarStatistikState extends State<LayarStatistik> {
   }
 
   Widget _buildLeftSidebar() {
-    return SizedBox(
-      width: 78,
-      child: Column(
-        children: [
-          _buildFilterButton('Antrian', 'ANTRIAN', Remix.time_line),
-          const SizedBox(height: 8),
-          _buildFilterButton('Proses', 'PROSES', Remix.loader_2_line),
-          const SizedBox(height: 8),
-          _buildFilterButton('Selesai', 'SELESAI', Remix.shield_check_line),
-          const SizedBox(height: 8),
-          _buildFilterButton('Transaksi\nbatal', 'BATAL', Remix.close_circle_line),
+   return SizedBox(
+            width: 46, // Lebar dikunci 46px agar hemat tempat
+            child: Column(
+              children: [
+                // 4 Filter Atas (Icon-Only)
+                _buildFilterButton('ANTRIAN', Remix.time_line),
+                const SizedBox(height: 8),
+                _buildFilterButton('PROSES', Remix.loader_2_line),
+                const SizedBox(height: 8),
+                _buildFilterButton('SELESAI', Remix.shield_check_line),
+                const SizedBox(height: 8),
+                _buildFilterButton('BATAL', Remix.close_circle_line),
+                
+                const Spacer(), // Dorong tombol Report & Setting ke paling bawah
+
           
-          const Spacer(),
+            // 1. Tombol Report
+            InkWell(
+              onTap: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => const ReportDialog(),
+                );
+              },
+              child: _buildSideMenuItem(
+                icon: Icons.assignment_outlined,
+              ),
+            ),
+            
+            const SizedBox(height: 8),
+            
+            // 2. Tombol Setting (Teks sudah diganti dari Pengaturan ke Setting)
+            InkWell(
+                  onTap: () {
+                    showDialog(
+                      context: context,
+                      builder: (context) => const SettingDialog(),
+                    );
+                  },
+                  child: _buildSideMenuItem(icon: Icons.settings_outlined),
+                ),
+              ],
+            )
+          );  
+        }
 
-          _buildBottomActionIcon(
-            icon: Icons.assignment_outlined,
-            label: 'Report',
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Membuka Laporan Lengkap...')),
-              );
-            },
-          ),
-          const SizedBox(height: 12),
-
-          _buildBottomActionIcon(
-            icon: Icons.settings_outlined,
-            label: 'Pengaturan',
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Membuka Pengaturan Toko...')),
-              );
-            },
-          ),
-          const SizedBox(height: 8),
-        ],
+  Widget _buildFilterButton(String filterKey, IconData icon) {
+    final bool isSelected = _selectedFilter == filterKey;
+  
+    return GestureDetector(
+      onTap: () => setState(() => _selectedFilter = filterKey),
+      child: Container(
+        width: 46,
+        height: 46,
+        decoration: BoxDecoration(
+          // Hijau Indikator (0xFF22C55E) saat AKTIF, Pink Soft saat MATI
+          color: isSelected ? const Color(0xFF22C55E) : const Color(0xFFFCE7F3),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF22C55E).withOpacity(0.4),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ]
+              : [],
+        ),
+        child: Icon(
+          icon,
+          size: 20,
+          color: isSelected ? Colors.white : const Color(0xFF111827),
+        ),
       ),
     );
   }
 
-  Widget _buildFilterButton(String label, String filterKey, IconData icon) {
-    final bool isSelected = _selectedFilter == filterKey;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedFilter = filterKey;
-        });
-      },
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-        decoration: BoxDecoration(
-          color: isSelected ? _goldAccent : _cardDark.withOpacity(0.7),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isSelected ? _goldAccent : Colors.transparent,
-          ),
-        ),
-        child: Column(
-          children: [
-            Icon(
-              icon,
-              size: 22,
-              color: isSelected ? Colors.white : _textBlack,
-            ),
-           /* const SizedBox(height: 2),
-            Text(
-              'Icon\n$label',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 8,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                color: isSelected ? Colors.white : _textBlack,
-                height: 1.1,*/
-              
-            
-          ],
-        ),
+  Widget _buildSideMenuItem({required IconData icon}) {
+    return Container(
+      width: 46,
+      height: 46,
+      decoration: BoxDecoration(
+        color: const Color(0xFFFCE7F3),
+        borderRadius: BorderRadius.circular(14),
       ),
+      child: Icon(icon, size: 20, color: const Color(0xFF111827)),
     );
   }
 

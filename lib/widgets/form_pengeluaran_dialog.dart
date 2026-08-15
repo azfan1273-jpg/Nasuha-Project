@@ -3,22 +3,16 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 final supabase = Supabase.instance.client;
 
-// ============================================================================
-// COMPONENT DIALOG FORM PENGELUARAN TOKO (FULL HEIGHT & TABLE EXPANDED)
-// ============================================================================
 class FormPengeluaranDialog extends StatefulWidget {
   final VoidCallback onSuccess;
 
-  const FormPengeluaranDialog({required this.onSuccess});
+  const FormPengeluaranDialog({super.key, required this.onSuccess});
 
   @override
-  State<FormPengeluaranDialog> createState() => FormPengeluaranDialogState();
+  State<FormPengeluaranDialog> createState() => _FormPengeluaranDialogState();
 }
 
-class FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
-  static const Color _bgDark = Color(0xFFFAF5F7);
-  static const Color _cardDark = Color(0xFFFCE7F3);
-  static const Color _goldAccent = Color(0xFFEC4899);
+class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
   static const Color _textBlack = Color(0xFF111827);
   static const Color _yellowInput = Color(0xFFFFF59D);
 
@@ -31,7 +25,6 @@ class FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
   String _selectedKategori = 'Operasional Outlet';
   bool _isSubmitting = false;
 
-  // Mock data 5 transaksi 1-line (Langsung kelihatan 5 tanpa di-scroll)
   final List<Map<String, String>> _daftarPengeluaran = [
     {
       'tanggal': '02/09/2026',
@@ -68,6 +61,22 @@ class FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
     super.dispose();
   }
 
+  // Fungsi Pilih Tanggal Kalender
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+    );
+    if (picked != null) {
+      setState(() {
+        _tanggalController.text =
+            "${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}";
+      });
+    }
+  }
+
   Future<void> _simpanPengeluaran() async {
     if (_totalController.text.trim().isEmpty) return;
 
@@ -99,16 +108,15 @@ class FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
 
   @override
   Widget build(BuildContext context) {
-    // Ambil tinggi penuh layar HP
     final screenHeight = MediaQuery.of(context).size.height;
 
     return Dialog(
       backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), // Jarak luar makin tipis
+      insetPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       child: ConstrainedBox(
         constraints: BoxConstraints(
           maxWidth: 420,
-          maxHeight: screenHeight * 0.98, // Penyesuaian 1: Full tinggi layar HP (~98%)
+          maxHeight: screenHeight * 0.98,
         ),
         child: Container(
           decoration: BoxDecoration(
@@ -192,9 +200,9 @@ class FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
                         ),
                         const SizedBox(height: 6),
 
-                        // Penyesuaian 2: TABEL DIBERSIHKAN DAN DITINGGIKAN UNTUK 5 BARIS (1 LINE)
+                        // TABEL DAFTAR PENGELUARAN
                         Container(
-                          height: 195, // Tinggi pas memuat 5 baris single-line
+                          height: 195,
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(10),
@@ -232,7 +240,7 @@ class FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
                                 ),
                               ),
 
-                              // Isi Baris Tabel (5 Data Single Line)
+                              // Isi Baris Tabel
                               Expanded(
                                 child: ListView.separated(
                                   padding: EdgeInsets.zero,
@@ -256,8 +264,8 @@ class FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
                                           Expanded(
                                             child: Text(
                                               item['deskripsi']!,
-                                              maxLines: 1, // Kunci 1 Line
-                                              overflow: TextOverflow.ellipsis, // Bikin ... jika kepanjangan
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
                                               style: const TextStyle(fontSize: 9.5, color: Colors.black87),
                                             ),
                                           ),
@@ -281,7 +289,49 @@ class FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
                             ],
                           ),
                         ),
-                        const SizedBox(height: 14),
+
+                        // KREASI SUB-TOTAL DI BAWAH TABEL (MANIS & CLEAN)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6, bottom: 8),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              const Text(
+                                'Total Pengeluaran : ',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  fontStyle: FontStyle.italic,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: Colors.black12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.04),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: const Text(
+                                  'Rp. 45.100.000',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    fontStyle: FontStyle.italic,
+                                    color: _textBlack,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
 
                         // 3. INPUT PENGELUARAN SECTION
                         const Text(
@@ -306,6 +356,7 @@ class FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
                             children: [
                               Row(
                                 children: [
+                                  // INPUT TANGGAL + ICON KALENDER
                                   Expanded(
                                     flex: 4,
                                     child: Column(
@@ -313,17 +364,34 @@ class FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
                                       children: [
                                         const Text('Tanggal', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic)),
                                         const SizedBox(height: 4),
-                                        Container(
-                                          height: 36,
-                                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                                          decoration: BoxDecoration(
-                                            color: _yellowInput,
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
-                                          child: TextField(
-                                            controller: _tanggalController,
-                                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic),
-                                            decoration: const InputDecoration(border: InputBorder.none, contentPadding: EdgeInsets.only(bottom: 12)),
+                                        InkWell(
+                                          onTap: () => _selectDate(context),
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: Container(
+                                            height: 36,
+                                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                                            decoration: BoxDecoration(
+                                              color: _yellowInput,
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Expanded(
+                                                  child: TextField(
+                                                    controller: _tanggalController,
+                                                    readOnly: true,
+                                                    onTap: () => _selectDate(context),
+                                                    style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic),
+                                                    decoration: const InputDecoration(border: InputBorder.none, contentPadding: EdgeInsets.only(bottom: 12)),
+                                                  ),
+                                                ),
+                                                const Icon(
+                                                  Icons.calendar_month_rounded,
+                                                  size: 18,
+                                                  color: Colors.black87,
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                         ),
                                       ],
@@ -444,7 +512,7 @@ class FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
                         width: 100,
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF86EFAC), // Hijau pastel sesuai SS
+                            backgroundColor: const Color(0xFF86EFAC),
                             foregroundColor: Colors.black87,
                             elevation: 0,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
