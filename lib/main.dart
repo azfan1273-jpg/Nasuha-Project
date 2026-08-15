@@ -1,26 +1,27 @@
+// lib/main.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'providers/settings_provider.dart';
-import 'screens/kasir_home_screen.dart';
-import 'screens/login_screen.dart';
+import 'settings_provider.dart';
+import 'kasir_home_screen.dart';
+import 'login_screen.dart';
+import 'kasir_page_manager.dart'; // Jika memakai layar geser
 
-// ISI DENGAN CREDENTIAL SUPABASE KAMU NANTI
 const String supabaseUrl = 'https://qcpxitlltkkxtdctertz.supabase.co';
 const String supabaseAnonKey = 'sb_publishable_CeC_XB7zVoD26xBHmsKHKw_VxqWhPAG';
 
-final supabase = Supabase.instance.client;
+// Helpergetter aman untuk mengakses Supabase Client kapan saja
+SupabaseClient get supabase => Supabase.instance.client;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Inisialisasi Supabase (Jika URL belum diisi, panggil app tanpa crash)
-  if (supabaseUrl != 'https://qcpxitlltkkxtdctertz.supabase.co') {
-    await Supabase.initialize(
-      url: supabaseUrl,
-      anonKey: supabaseAnonKey,
-    );
-  }
+  // Wajib inisialisasi Supabase sebelum runApp dijalankan
+  await Supabase.initialize(
+    url: supabaseUrl,
+    anonKey: supabaseAnonKey,
+  );
 
   runApp(
     ChangeNotifierProvider(
@@ -38,7 +39,7 @@ class NasuhaApp extends StatelessWidget {
     return MaterialApp(
       title: 'NASUHA Kasir',
       debugShowCheckedModeBanner: false,
-      home: const LoginScreen(), // SET LAYAR PERTAMA KE LOGIN SCREEN
+      home: const KasirPageManager(), // Atau LoginScreen() / KasirHomeScreen()
     );
   }
 }

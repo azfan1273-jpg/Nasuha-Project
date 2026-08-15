@@ -1,61 +1,63 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../providers/settings_provider.dart';
-import '../main.dart';
-import '../widgets/buat_order_dialog.dart';
-
-class KasirHomeScreen extends StatefulWidget {
-  const KasirHomeScreen({super.key});
-
-  @override
-  State<KasirHomeScreen> createState() => _KasirHomeScreenState();
-}
-
-class _KasirHomeScreenState extends State<KasirHomeScreen> {
-  static const Color _bgDark = Color(0xFFFAF5F7);
-  static const Color _cardDark = Color(0xFFFCE7F3);
-  static const Color _goldAccent = Color(0xFFEC4899);
-  static const Color _textBlack = Color(0xFF111827);
-
-  final PageController _pageController = PageController();
-  final List<Map<String, dynamic>> _ordersHariIni = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadOrdersFromSupabase();
+  import 'package:provider/provider.dart';
+  import 'settings_provider.dart';
+  import '../main.dart'; // pastikan path import disesuaikan
+  import 'buat_order_dialog.dart';
+  
+  class KasirHomeScreen extends StatefulWidget {
+    const KasirHomeScreen({super.key});
+  
+    @override
+    State<KasirHomeScreen> createState() => _KasirHomeScreenState();
   }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadOrdersFromSupabase() async {
-    try {
-      final List<dynamic> data = await supabase
-          .from('orders')
-          .select('*')
-          .order('created_at', ascending: false);
-
-      if (mounted) {
-        setState(() {
-          _ordersHariIni.clear();
-          _ordersHariIni.addAll(data.map((record) {
-            return {
-              'id': record['id'].toString(),
-              'customer': (record['customer_name'] ?? 'Pelanggan').toString(),
-              'total': (record['total'] as num?)?.toDouble() ?? 0.0,
-              'status': (record['status'] ?? 'Antrian').toString(),
-            };
-          }).toList());
-        });
-      }
-    } catch (e) {
-      debugPrint('Error load orders Supabase: $e');
+  
+  class _KasirHomeScreenState extends State<KasirHomeScreen> {
+    static const Color _bgDark = Color(0xFFFAF5F7);
+    static const Color _cardDark = Color(0xFFFCE7F3);
+    static const Color _goldAccent = Color(0xFFEC4899);
+    static const Color _textBlack = Color(0xFF111827);
+  
+    // Inisialisasi langsung PageController biar NGGAK LateInitializationError
+    final PageController _pageController = PageController(initialPage: 0);
+    final List<Map<String, dynamic>> _ordersHariIni = [];
+  
+    @override
+    void initState() {
+      super.initState();
+      _loadOrdersFromSupabase();
     }
-  }
+  
+    @override
+    void dispose() {
+      _pageController.dispose();
+      super.dispose();
+    }
+  
+    Future<void> _loadOrdersFromSupabase() async {
+      try {
+        final List<dynamic> data = await supabase
+            .from('orders')
+            .select('*')
+            .order('created_at', ascending: false);
+  
+        if (mounted) {
+          setState(() {
+            _ordersHariIni.clear();
+            _ordersHariIni.addAll(data.map((record) {
+              return {
+                'id': record['id'].toString(),
+                'customer': record['customer_name'] ?? 'Pelanggan',
+                'services': record['service_name'] ?? 'Layanan',
+                'status': record['status'] ?? 'Baru',
+                'total': record['total_price'] ?? 0,
+              };
+            }));
+          });
+        }
+      } catch (e) {
+        debugPrint('Log: Gagal memuat data Supabase (Tetap aman): $e');
+      }
+    }
 
   double get _totalOmsetHariIni {
     return _ordersHariIni.fold(
