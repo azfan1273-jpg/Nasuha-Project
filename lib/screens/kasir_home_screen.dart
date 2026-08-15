@@ -1,63 +1,62 @@
 import 'package:flutter/material.dart';
-  import 'package:provider/provider.dart';
-  import 'settings_provider.dart';
-  import '../main.dart'; // pastikan path import disesuaikan
-  import 'buat_order_dialog.dart';
-  
-  class KasirHomeScreen extends StatefulWidget {
-    const KasirHomeScreen({super.key});
-  
-    @override
-    State<KasirHomeScreen> createState() => _KasirHomeScreenState();
+import 'package:provider/provider.dart';
+import '../main.dart';
+import '../providers/settings_provider.dart';
+import '../widgets/buat_order_dialog.dart';
+import 'login_screen.dart';
+
+class KasirHomeScreen extends StatefulWidget {
+  const KasirHomeScreen({super.key});
+
+  @override
+  State<KasirHomeScreen> createState() => _KasirHomeScreenState();
+}
+
+class _KasirHomeScreenState extends State<KasirHomeScreen> {
+  static const Color _bgDark = Color(0xFFFAF5F7);
+  static const Color _cardDark = Color(0xFFFCE7F3);
+  static const Color _goldAccent = Color(0xFFEC4899);
+  static const Color _textBlack = Color(0xFF111827);
+
+  final List<Map<String, dynamic>> _ordersHariIni = [];
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOrdersFromSupabase();
   }
-  
-  class _KasirHomeScreenState extends State<KasirHomeScreen> {
-    static const Color _bgDark = Color(0xFFFAF5F7);
-    static const Color _cardDark = Color(0xFFFCE7F3);
-    static const Color _goldAccent = Color(0xFFEC4899);
-    static const Color _textBlack = Color(0xFF111827);
-  
-    // Inisialisasi langsung PageController biar NGGAK LateInitializationError
-    final PageController _pageController = PageController(initialPage: 0);
-    final List<Map<String, dynamic>> _ordersHariIni = [];
-  
-    @override
-    void initState() {
-      super.initState();
-      _loadOrdersFromSupabase();
-    }
-  
-    @override
-    void dispose() {
-      _pageController.dispose();
-      super.dispose();
-    }
-  
-    Future<void> _loadOrdersFromSupabase() async {
-      try {
-        final List<dynamic> data = await supabase
-            .from('orders')
-            .select('*')
-            .order('created_at', ascending: false);
-  
-        if (mounted) {
-          setState(() {
-            _ordersHariIni.clear();
-            _ordersHariIni.addAll(data.map((record) {
-              return {
-                'id': record['id'].toString(),
-                'customer': record['customer_name'] ?? 'Pelanggan',
-                'services': record['service_name'] ?? 'Layanan',
-                'status': record['status'] ?? 'Baru',
-                'total': record['total_price'] ?? 0,
-              };
-            }));
-          });
-        }
-      } catch (e) {
-        debugPrint('Log: Gagal memuat data Supabase (Tetap aman): $e');
+
+  Future<void> _loadOrdersFromSupabase() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final List<dynamic> data = await supabase
+          .from('orders')
+          .select('*')
+          .order('created_at', ascending: false);
+
+      if (mounted) {
+        setState(() {
+          _ordersHariIni.clear();
+          _ordersHariIni.addAll(data.map((record) {
+            return {
+              'id': record['id'].toString(),
+              'customer': record['customer_name'] ?? 'Pelanggan',
+              'services': record['service_name'] ?? 'Layanan',
+              'status': record['status'] ?? 'Baru',
+              'total': (record['total_price'] as num?)?.toDouble() ?? 0.0,
+            };
+          }));
+        });
       }
+    } catch (e) {
+      debugPrint('Log: Gagal memuat data Supabase: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
 
   double get _totalOmsetHariIni {
     return _ordersHariIni.fold(
@@ -66,56 +65,59 @@ import 'package:flutter/material.dart';
     );
   }
 
+  Future<void> _logout() async {
+    await supabase.auth.signOut();
+    if (mounted) {
+      context.read<SettingsProvider>().reset();
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
 
-    return Scaffold(
-      backgroundColor: _bgDark,
-      body: Center(
-        child: Container(
-          width: 390,
-          color: _bgDark,
-          child: SafeArea(
-            child: Column(
-              children: [
-                const SizedBox(height: 10),
+    return Center(
+      child: Container(
+        width: 390,
+        color: _bgDark,
+        child: Column(
+          children: [
+            const SizedBox(height: 10),
+            _buildHeader(settings),
+            const SizedBox(height: 12),
+            _buildBannerPromo(),
+            const SizedBox(height: 12),
 
-                // Header Toko
-                _buildHeader(settings),
-
-                const SizedBox(height: 12),
-
-                // Banner Promo
-                _buildBannerPromo(),
-
-                const SizedBox(height: 12),
-
-                // Swipeable Dashboard Pages
-                Expanded(
-                  child: PageView(
-                    controller: _pageController,
-                    scrollDirection: Axis.horizontal,
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _loadOrdersFromSupabase,
+                color: _goldAccent,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
                     children: [
-                      _buildBerandaTab(),
-                      _buildDashboardPage2(),
+                      _buildOrderSummaryCard(),
+                      const SizedBox(height: 10),
+                      _buildFinancialSummaryCard(),
+                      const SizedBox(height: 10),
+                      _buildTodayOrdersCard(),
                     ],
                   ),
                 ),
-
-                // Tombol Menu Transaksi
-                _buildTransactionButton(),
-              ],
+              ),
             ),
-          ),
+
+            _buildTransactionButton(),
+          ],
         ),
       ),
     );
   }
-
-  // ============================================================================
-  // WIDGET COMPONENTS
-  // ============================================================================
 
   Widget _buildHeader(SettingsProvider settings) {
     return Padding(
@@ -174,18 +176,30 @@ import 'package:flutter/material.dart';
                   ),
                   Text(
                     settings.emailToko,
-                    style: const TextStyle(
-                      color: Colors.black54,
-                      fontSize: 10,
-                    ),
+                    style: const TextStyle(color: Colors.black54, fontSize: 10),
                   ),
                 ],
               ),
             ],
           ),
-          IconButton(
-            icon: const Icon(Icons.refresh, color: _textBlack, size: 18),
-            onPressed: _loadOrdersFromSupabase,
+          Row(
+            children: [
+              IconButton(
+                icon: _isLoading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: _goldAccent),
+                      )
+                    : const Icon(Icons.refresh, color: _textBlack, size: 18),
+                onPressed: _loadOrdersFromSupabase,
+              ),
+              IconButton(
+                icon: const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 18),
+                onPressed: _logout,
+                tooltip: 'Keluar',
+              ),
+            ],
           ),
         ],
       ),
@@ -226,10 +240,7 @@ import 'package:flutter/material.dart';
                     SizedBox(height: 2),
                     Text(
                       'Berlaku sampai akhir bulan.',
-                      style: TextStyle(
-                        fontSize: 8,
-                        color: Colors.black54,
-                      ),
+                      style: TextStyle(fontSize: 8, color: Colors.black54),
                     ),
                   ],
                 ),
@@ -256,24 +267,9 @@ import 'package:flutter/material.dart';
     );
   }
 
-  Widget _buildBerandaTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        children: [
-          _buildOrderSummaryCard(),
-          const SizedBox(height: 10),
-          _buildFinancialSummaryCard(),
-          const SizedBox(height: 10),
-          _buildTodayOrdersCard(),
-        ],
-      ),
-    );
-  }
-
   Widget _buildOrderSummaryCard() {
     final activeCount = _ordersHariIni
-        .where((o) => o['status'] == 'Antrian' || o['status'] == 'Proses')
+        .where((o) => o['status'] == 'Baru' || o['status'] == 'Proses')
         .length;
     final doneCount =
         _ordersHariIni.where((o) => o['status'] == 'Selesai').length;
@@ -500,7 +496,7 @@ import 'package:flutter/material.dart';
                           ),
                         ),
                         Text(
-                          'Transaksi hari ini akan muncul di sini',
+                          'Tekan "MENU TRANSAKSI" untuk buat order',
                           style: TextStyle(fontSize: 9, color: Colors.black54),
                         ),
                       ],
@@ -523,207 +519,68 @@ import 'package:flutter/material.dart';
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  order['customer'] ?? '-',
+                                  style: const TextStyle(
+                                    color: _textBlack,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  order['services'] ?? '-',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Colors.black54,
+                                    fontSize: 9,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
                           Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(
-                                order['customer'] ?? '-',
+                                'Rp ${(order['total'] as double).toInt()}',
                                 style: const TextStyle(
-                                  color: _textBlack,
+                                  color: _goldAccent,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 11,
                                 ),
                               ),
-                              Text(
-                                'Status: ${order['status']}',
-                                style: const TextStyle(
-                                  color: Colors.black54,
-                                  fontSize: 9,
+                              const SizedBox(height: 2),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  order['status'] ?? 'Baru',
+                                  style: const TextStyle(
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.bold,
+                                    color: _goldAccent,
+                                  ),
                                 ),
                               ),
                             ],
-                          ),
-                          Text(
-                            'Rp ${(order['total'] as double).toInt()}',
-                            style: const TextStyle(
-                              color: _goldAccent,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 11,
-                            ),
                           ),
                         ],
                       ),
                     );
                   },
                 ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDashboardPage2() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'AKTIVITAS LAUNDRY',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: _textBlack,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _goldAccent.withOpacity(0.16),
-                      blurRadius: 7,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: const Text(
-                  'Hari Ini',
-                  style: TextStyle(
-                    fontSize: 9,
-                    color: Colors.black54,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: _cardDark,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Column(
-              children: [
-                _buildActivityBar(
-                  'Aila Nasuha',
-                  '1 Order',
-                  'Est selesai • 17/09/2026',
-                  'Rp. 77.500',
-                ),
-                const SizedBox(height: 8),
-                _buildActivityBar(
-                  'Yumna Nasuha',
-                  '5 Order',
-                  'Est selesai • 17/09/2026',
-                  'Rp. 155.500',
-                ),
-                const SizedBox(height: 8),
-                _buildActivityBar(
-                  'Nasuha Claymithree',
-                  '3 Order',
-                  'Est selesai • 17/09/2026',
-                  'Rp. 95.500',
-                ),
-                const SizedBox(height: 18),
-                Container(
-                  width: double.infinity,
-                  height: 220,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: _bgDark,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Text(
-                    'Konten halaman berikutnya',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.black38,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActivityBar(
-    String customer,
-    String orderCount,
-    String estimate,
-    String total,
-  ) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFFFF4B8), Color(0xFFFFC7E8)],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  customer,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: _textBlack,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  estimate,
-                  style: const TextStyle(
-                    fontSize: 9,
-                    fontStyle: FontStyle.italic,
-                    color: _textBlack,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                orderCount,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: _textBlack,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                total,
-                style: const TextStyle(
-                  fontSize: 9,
-                  fontStyle: FontStyle.italic,
-                  color: _textBlack,
-                ),
-              ),
-            ],
-          ),
         ],
       ),
     );
@@ -799,10 +656,7 @@ import 'package:flutter/material.dart';
           icon: const Icon(Icons.list_alt_rounded, size: 18),
           label: const Text(
             'MENU TRANSAKSI',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 12,
-            ),
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
           ),
         ),
       ),

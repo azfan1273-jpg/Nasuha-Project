@@ -5,11 +5,13 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   DatabaseHelper._init();
 
-  // Penampung data lokal sementara untuk mode offline
   final List<Map<String, dynamic>> _localOrders = [];
 
   Future<void> insertOrder(Map<String, dynamic> order) async {
-    _localOrders.add(order);
+    _localOrders.add({
+      ...order,
+      'created_at': DateTime.now().toIso8601String(),
+    });
     debugPrint('Order berhasil disimpan lokal: $order');
   }
 

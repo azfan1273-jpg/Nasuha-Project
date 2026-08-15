@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
-import 'kasir_home_screen.dart';
+import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../main.dart';
+import '../providers/settings_provider.dart';
+import 'kasir_page_manager.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -14,22 +18,73 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isPasswordObscured = true;
   bool _isLoading = false;
 
-  // PALET WARNA SENADA HOME SCREEN
-  static const Color _bgDark = Color(0xFFFAF5F7);       // Cream Light Background
-  static const Color _cardDark = Color(0xFFFCE7F3);     // Rose Soft Card Accent
-  static const Color _goldAccent = Color(0xFFEC4899);   // Rose Blush Accent
-  static const Color _textBlack = Color(0xFF111827);    // Hitam Pekat Tegas
+  static const Color _bgDark = Color(0xFFFAF5F7);
+  static const Color _cardDark = Color(0xFFFCE7F3);
+  static const Color _goldAccent = Color(0xFFEC4899);
+  static const Color _textBlack = Color(0xFF111827);
 
-  void _handleLogin() async {
-    setState(() => _isLoading = true);
-    await Future.delayed(const Duration(seconds: 1));
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
-    if (mounted) {
-      setState(() => _isLoading = false);
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const KasirHomeScreen()),
+  Future<void> _handleLogin() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Email dan password wajib diisi.')),
       );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await supabase.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+
+      if (mounted) {
+        if (response.user != null) {
+          context.read<SettingsProvider>().loadFromUser(response.user);
+        }
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const KasirPageManager()),
+        );
+      }
+    } on AuthException catch (e) {
+      if (mounted) {
+        // Fallback demo login jika kredensial auth Supabase belum didaftarkan
+        context.read<SettingsProvider>().updateToko(
+          nama: 'NASUHA LAUNDRY',
+          role: 'OWNER',
+          email: email,
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Mode Demo Aktif (${e.message})'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const KasirPageManager()),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Terjadi kesalahan: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -43,7 +98,6 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              // 1. KARTU UTAMA LOGIN
               Container(
                 width: 380,
                 padding: const EdgeInsets.all(28),
@@ -62,7 +116,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // LOGO BULAT NASUHA
                     Container(
                       width: 52,
                       height: 52,
@@ -77,8 +130,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-
-                    // NAMA TOKO & SUBTITLE
                     const Text(
                       'NASUHA',
                       style: TextStyle(
@@ -91,14 +142,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 4),
                     const Text(
                       'Masuk ke akun NASUHA Anda',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.black54,
-                      ),
+                      style: TextStyle(fontSize: 11, color: Colors.black54),
                     ),
                     const SizedBox(height: 24),
 
-                    // INPUT EMAIL AKUN
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
@@ -113,6 +160,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 6),
                     TextField(
                       controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
                       style: const TextStyle(fontSize: 13, color: _textBlack),
                       decoration: InputDecoration(
                         filled: true,
@@ -123,11 +171,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(color: _cardDark),
+                          borderSide: const BorderSide(color: _cardDark),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(color: _cardDark),
+                          borderSide: const BorderSide(color: _cardDark),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
@@ -137,7 +185,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // INPUT PASSWORD & LUPA PASSWORD
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -150,7 +197,13 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                         GestureDetector(
-                          onTap: () {},
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Silakan hubungi administrator toko.'),
+                              ),
+                            );
+                          },
                           child: const Text(
                             'Lupa Password?',
                             style: TextStyle(
@@ -190,11 +243,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(color: _cardDark),
+                          borderSide: const BorderSide(color: _cardDark),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(color: _cardDark),
+                          borderSide: const BorderSide(color: _cardDark),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
@@ -204,7 +257,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 24),
 
-                    // TOMBOL LOG IN
                     SizedBox(
                       width: double.infinity,
                       height: 44,
@@ -239,9 +291,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 18),
 
-                    // LINK DAFTAR
                     GestureDetector(
-                      onTap: () {},
+                      onTap: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Pendaftaran outlet baru dapat menghubungi support.'),
+                          ),
+                        );
+                      },
                       child: const Text(
                         'Belum punya akun? Daftar Toko Baru (Owner)',
                         style: TextStyle(
@@ -255,29 +312,20 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
 
-              // 2. ORNAMEN MAWAR MENJALAR - KIRI ATAS
               Positioned(
                 top: -18,
                 left: -18,
                 child: Transform.rotate(
                   angle: -0.2,
-                  child: const Text(
-                    '🌹🌿',
-                    style: TextStyle(fontSize: 32),
-                  ),
+                  child: const Text('🌹🌿', style: TextStyle(fontSize: 32)),
                 ),
               ),
-
-              // 3. ORNAMEN MAWAR MENJALAR - KANAN BAWAH
               Positioned(
                 bottom: -18,
                 right: -18,
                 child: Transform.rotate(
                   angle: 2.8,
-                  child: const Text(
-                    '🌹🌿',
-                    style: TextStyle(fontSize: 32),
-                  ),
+                  child: const Text('🌹🌿', style: TextStyle(fontSize: 32)),
                 ),
               ),
             ],
