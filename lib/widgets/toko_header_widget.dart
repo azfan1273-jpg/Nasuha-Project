@@ -16,65 +16,89 @@ class TokoHeaderWidget extends StatelessWidget {
     required this.onRefresh,
   });
 
+  static const Color _cardDark = Color(0xFFFCE7F3);
+  static const Color _goldAccent = Color(0xFFEC4899);
+  static const Color _textBlack = Color(0xFF111827);
+
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFCE7F3),
-                borderRadius: BorderRadius.circular(10),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: const BoxDecoration(
+                  color: _cardDark,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.storefront_rounded,
+                  color: _goldAccent,
+                  size: 20,
+                ),
               ),
-              child: const Icon(Icons.storefront_rounded, color: Color(0xFFEC4899), size: 22),
-            ),
-            const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      namaToko,
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
-                    ),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEC4899),
-                        borderRadius: BorderRadius.circular(6),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        namaToko,
+                        style: const TextStyle(
+                          color: _textBlack,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
                       ),
-                      child: Text(
-                        userRole,
-                        style: const TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.white),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _goldAccent,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          userRole,
+                          style: const TextStyle(
+                            fontSize: 8,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
                       ),
+                    ],
+                  ),
+                  Text(
+                    emailToko,
+                    style: const TextStyle(color: Colors.black54, fontSize: 10),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          IconButton(
+            icon: isLoading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: _goldAccent,
                     ),
-                  ],
-                ),
-                Text(
-                  emailToko,
-                  style: const TextStyle(fontSize: 10, color: Colors.black54),
-                ),
-              ],
-            ),
-          ],
-        ),
-        IconButton(
-          icon: isLoading
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFEC4899)),
-                )
-              : const Icon(Icons.refresh, color: Color(0xFF111827), size: 18),
-          onPressed: onRefresh,
-        ),
-      ],
+                  )
+                : const Icon(Icons.refresh, color: _textBlack, size: 18),
+            onPressed: onRefresh,
+          ),
+        ],
+      ),
     );
   }
 }

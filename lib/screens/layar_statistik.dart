@@ -6,7 +6,6 @@ import '../widgets/buat_order_dialog.dart';
 import '../widgets/report_dialog.dart';
 import '../widgets/setting_dialog.dart';
 import '../widgets/toko_header_widget.dart';
-
 import 'package:remixicon/remixicon.dart';
 
 class LayarStatistik extends StatefulWidget {
@@ -25,8 +24,7 @@ class _LayarStatistikState extends State<LayarStatistik> {
   final List<Map<String, dynamic>> _allOrders = [];
   final TextEditingController _searchController = TextEditingController();
 
-  // Default aktif di Tombol 1 (ANTRIAN)
-  String _selectedFilter = 'ANTRIAN'; // ANTRIAN, PROSES, SELESAI, BATAL
+  String _selectedFilter = 'ANTRIAN';
   String _searchQuery = '';
   bool _isLoading = false;
 
@@ -136,26 +134,27 @@ class _LayarStatistikState extends State<LayarStatistik> {
         child: Column(
           children: [
             const SizedBox(height: 10),
-            // 1. Header Toko
-            _buildHeader(settings),
+            TokoHeaderWidget(
+              namaToko: settings.namaToko,
+              userRole: settings.userRole,
+              emailToko: settings.emailToko,
+              isLoading: _isLoading,
+              onRefresh: _fetchOrders,
+            ),
             const SizedBox(height: 10),
 
-            // 2. Banner Promo
             _buildBannerPromo(),
             const SizedBox(height: 10),
 
-            // 3. Konten Utama
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // --- SIDEBAR KIRI (4 TOMBOL FILTER & REPORT/SETTING) ---
                     _buildLeftSidebar(),
 
                     const SizedBox(width: 6),
-                    // Pembatas Garis Vertikal
                     Container(
                       width: 2.5,
                       margin: const EdgeInsets.symmetric(vertical: 4),
@@ -166,11 +165,9 @@ class _LayarStatistikState extends State<LayarStatistik> {
                     ),
                     const SizedBox(width: 8),
 
-                    // --- AREA KANAN (JUDUL DINAMIS, SEARCH & LIST) ---
                     Expanded(
                       child: Column(
                         children: [
-                          // Header Judul & Search Field
                           Row(
                             children: [
                               Expanded(
@@ -215,7 +212,6 @@ class _LayarStatistikState extends State<LayarStatistik> {
                           ),
                           const SizedBox(height: 8),
 
-                          // Container Penampung List Bar
                           Expanded(
                             child: Container(
                               padding: const EdgeInsets.all(8),
@@ -261,79 +257,9 @@ class _LayarStatistikState extends State<LayarStatistik> {
               ),
             ),
 
-            // 4. Tombol Menu Transaksi Pink di Bawah
             _buildTransactionButton(),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildHeader(SettingsProvider settings) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: const BoxDecoration(
-                  color: _cardDark,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.storefront_rounded,
-                  color: _goldAccent,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        settings.namaToko,
-                        style: const TextStyle(
-                          color: _textBlack,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: _goldAccent,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          settings.userRole,
-                          style: const TextStyle(
-                            fontSize: 8,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  Text(
-                    settings.emailToko,
-                    style: const TextStyle(color: Colors.black54, fontSize: 10),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh, color: _textBlack, size: 18),
-            onPressed: _fetchOrders,
-          ),
-        ],
       ),
     );
   }
@@ -400,51 +326,47 @@ class _LayarStatistikState extends State<LayarStatistik> {
   }
 
   Widget _buildLeftSidebar() {
-   return SizedBox(
-            width: 46, // Lebar dikunci 46px agar hemat tempat
-            child: Column(
-              children: [
-                // 4 Filter Atas (Icon-Only)
-                _buildFilterButton('ANTRIAN', Remix.time_line),
-                const SizedBox(height: 8),
-                _buildFilterButton('PROSES', Remix.loader_2_line),
-                const SizedBox(height: 8),
-                _buildFilterButton('SELESAI', Remix.shield_check_line),
-                const SizedBox(height: 8),
-                _buildFilterButton('BATAL', Remix.close_circle_line),
-                
-                const Spacer(), // Dorong tombol Report & Setting ke paling bawah
-
+    return SizedBox(
+      width: 46,
+      child: Column(
+        children: [
+          _buildFilterButton('ANTRIAN', Remix.time_line),
+          const SizedBox(height: 8),
+          _buildFilterButton('PROSES', Remix.loader_2_line),
+          const SizedBox(height: 8),
+          _buildFilterButton('SELESAI', Remix.shield_check_line),
+          const SizedBox(height: 8),
+          _buildFilterButton('BATAL', Remix.close_circle_line),
           
-            // 1. Tombol Report
-            InkWell(
-              onTap: () {
-                showDialog(
-                  context: context,
-                  builder: (context) => const ReportDialog(),
-                );
-              },
-              child: _buildSideMenuItem(
-                icon: Icons.assignment_outlined,
-              ),
+          const Spacer(),
+
+          InkWell(
+            onTap: () {
+              showDialog(
+                context: context,
+                builder: (context) => const ReportDialog(),
+              );
+            },
+            child: _buildSideMenuItem(
+              icon: Icons.assignment_outlined,
             ),
-            
-            const SizedBox(height: 8),
-            
-            // 2. Tombol Setting (Teks sudah diganti dari Pengaturan ke Setting)
-            InkWell(
-                  onTap: () {
-                    showDialog(
-                      context: context,
-                      builder: (context) => const SettingDialog(),
-                    );
-                  },
-                  child: _buildSideMenuItem(icon: Icons.settings_outlined),
-                ),
-              ],
-            )
-          );  
-        }
+          ),
+          
+          const SizedBox(height: 8),
+          
+          InkWell(
+            onTap: () {
+              showDialog(
+                context: context,
+                builder: (context) => const SettingDialog(),
+              );
+            },
+            child: _buildSideMenuItem(icon: Icons.settings_outlined),
+          ),
+        ],
+      ),
+    );  
+  }
 
   Widget _buildFilterButton(String filterKey, IconData icon) {
     final bool isSelected = _selectedFilter == filterKey;
@@ -455,7 +377,6 @@ class _LayarStatistikState extends State<LayarStatistik> {
         width: 46,
         height: 46,
         decoration: BoxDecoration(
-          // Hijau Indikator (0xFF22C55E) saat AKTIF, Pink Soft saat MATI
           color: isSelected ? const Color(0xFF22C55E) : const Color(0xFFFCE7F3),
           borderRadius: BorderRadius.circular(14),
           boxShadow: isSelected
@@ -486,37 +407,6 @@ class _LayarStatistikState extends State<LayarStatistik> {
         borderRadius: BorderRadius.circular(14),
       ),
       child: Icon(icon, size: 20, color: const Color(0xFF111827)),
-    );
-  }
-
-  Widget _buildBottomActionIcon({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(7),
-            decoration: BoxDecoration(
-              color: _cardDark,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.black12),
-            ),
-            child: Icon(icon, size: 20, color: _textBlack),
-          ),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w600, color: _textBlack),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
     );
   }
 

@@ -66,17 +66,6 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
     );
   }
 
-  Future<void> _logout() async {
-    await supabase.auth.signOut();
-    if (mounted) {
-      context.read<SettingsProvider>().reset();
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
@@ -88,7 +77,13 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
         child: Column(
           children: [
             const SizedBox(height: 10),
-            _buildHeader(settings),
+            TokoHeaderWidget(
+              namaToko: settings.namaToko,
+              userRole: settings.userRole,
+              emailToko: settings.emailToko,
+              isLoading: _isLoading,
+              onRefresh: _loadOrdersFromSupabase,
+            ),
             const SizedBox(height: 12),
             _buildBannerPromo(),
             const SizedBox(height: 12),
@@ -116,88 +111,6 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
             _buildTransactionButton(),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildHeader(SettingsProvider settings) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: const BoxDecoration(
-                  color: _cardDark,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.storefront_rounded,
-                  color: _goldAccent,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        settings.namaToko,
-                        style: const TextStyle(
-                          color: _textBlack,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _goldAccent,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          settings.userRole,
-                          style: const TextStyle(
-                            fontSize: 8,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  Text(
-                    settings.emailToko,
-                    style: const TextStyle(color: Colors.black54, fontSize: 10),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          Row(
-            children: [
-              IconButton(
-                icon: _isLoading
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: _goldAccent),
-                      )
-                    : const Icon(Icons.refresh, color: _textBlack, size: 18),
-                onPressed: _loadOrdersFromSupabase,
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }

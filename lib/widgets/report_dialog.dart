@@ -10,8 +10,11 @@ class ReportDialog extends StatefulWidget {
 class _ReportDialogState extends State<ReportDialog> {
   int _selectedTab = 0; // 0: Omset, 1: Pendapatan, 2: Pengeluaran, 3: Net Cash
 
-  static const Color _cardBg = Colors.white;
-  static const Color _textDark = Color(0xFF111827);
+  static const Color _bgSoft = Color(0xFFFAF5F7); // Warna dasar sama dengan Setting
+    static const Color _cardBg = Colors.white;
+    static const Color _borderPink = Color(0xFFFCE7F3);
+    static const Color _pinkAccent = Color(0xFFEC4899);
+    static const Color _textDark = Color(0xFF111827);
 
   @override
   Widget build(BuildContext context) {
@@ -27,15 +30,11 @@ class _ReportDialogState extends State<ReportDialog> {
         ),
         child: Container(
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFFF6C3FA), Color(0xFFEFA6F7)],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
+            color: const Color(0xFFFAF5F7), // Warna soft gray-pink persis Setting
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.18),
+                color: Colors.black.withOpacity(0.15),
                 blurRadius: 20,
                 offset: const Offset(0, 8),
               ),
@@ -336,7 +335,7 @@ class _ReportDialogState extends State<ReportDialog> {
       case 2:
         return 'Laporan Pengeluaran';
       case 3:
-        return 'Sisa Cash Flow';
+        return 'Piutang';
       default:
         return 'Laporan Omset';
     }
