@@ -4,6 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../main.dart';
 import '../providers/settings_provider.dart';
 import 'kasir_page_manager.dart';
+import 'kasir_home_screen.dart';
+import 'package:flutter/foundation.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -22,6 +24,7 @@ class _LoginScreenState extends State<LoginScreen> {
   static const Color _cardDark = Color(0xFFFCE7F3);
   static const Color _goldAccent = Color(0xFFEC4899);
   static const Color _textBlack = Color(0xFF111827);
+  static const Color _pinkAccent = Color(0xFFEC4899);
 
   @override
   void dispose() {
@@ -30,16 +33,15 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> _handleLogin() async {
+	// 1. FUNGSI LOGIN DENGAN EMAIL & PASSWORD
+  Future<void> _loginWithEmail() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
     if (email.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Email dan password wajib diisi.')),
-      );
-      return;
-    }
+      _showSnackBar('Email dan Password wajib diisi!', isError: true);
+          return;
+        }
 
     setState(() => _isLoading = true);
 
@@ -49,44 +51,58 @@ class _LoginScreenState extends State<LoginScreen> {
         password: password,
       );
 
-      if (mounted) {
-        if (response.user != null) {
-          context.read<SettingsProvider>().loadFromUser(response.user);
-        }
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const KasirPageManager()),
-        );
-      }
-    } on AuthException catch (e) {
-      if (mounted) {
-        // Fallback demo login jika kredensial auth Supabase belum didaftarkan
-        context.read<SettingsProvider>().updateToko(
-          nama: 'NASUHA LAUNDRY',
-          role: 'OWNER',
-          email: email,
-        );
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Mode Demo Aktif (${e.message})'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const KasirPageManager()),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Terjadi kesalahan: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
+      if (response.user != null && mounted) {
+              _showSnackBar('Login berhasil! Selamat datang.');
+              _navigateToHome();
+            }
+    	} on AuthException catch (e) {
+     		 if (mounted) _showSnackBar(e.message, isError: true);
+        } catch (e) {
+              if (mounted) _showSnackBar('Terjadi kesalahan: $e', isError: true);
+            } finally {
+              if (mounted) setState(() => _isLoading = false);
+            }
+          }
+        // 2. FUNGSI LOGIN DENGAN GOOGLE (SUPABASE OAUTH)
+          Future<void> _loginWithGoogle() async {
+              setState(() => _isLoading = true);
+          
+              try {
+                final String? currentDomain = kIsWeb ? Uri.base.origin : null;
+          
+                final bool redirectToWeb = await supabase.auth.signInWithOAuth(
+                  OAuthProvider.google,
+                  redirectTo: currentDomain,
+                );
+          
+                if (!redirectToWeb && mounted) {
+                  _showSnackBar('Gagal mengarahkan ke login Google', isError: true);
+                }
+              } on AuthException catch (e) {
+                if (mounted) _showSnackBar(e.message, isError: true);
+              } catch (e) {
+                if (mounted) _showSnackBar('Gagal Login Google: $e', isError: true);
+              } finally {
+                if (mounted) setState(() => _isLoading = false);
+              }
+            }
+        
+          void _navigateToHome() {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const KasirHomeScreen()),
+            );
+          }
+        
+          void _showSnackBar(String message, {bool isError = false}) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(message, style: const TextStyle(fontSize: 12)),
+                backgroundColor: isError ? Colors.redAccent : Colors.green,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
 
   @override
   Widget build(BuildContext context) {
@@ -94,241 +110,213 @@ class _LoginScreenState extends State<LoginScreen> {
       backgroundColor: _bgDark,
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
-          child: Stack(
-            clipBehavior: Clip.none,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 400),
+                        child: Stack(
+                          clipBehavior: Clip.none,
             children: [
+            // DEKORASI MAWAR ATAS KIRI
+              const Positioned(
+                top: -24,
+                left: -10,
+                child: Text('🌹🌿', style: TextStyle(fontSize: 28)),
+              ),
+
+              // CARD FORM LOGIN
               Container(
-                width: 380,
-                padding: const EdgeInsets.all(28),
+                padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: _cardDark, width: 1.5),
                   boxShadow: [
                     BoxShadow(
-                      color: _goldAccent.withOpacity(0.12),
-                      blurRadius: 25,
-                      offset: const Offset(0, 10),
+                      color: Colors.black.withOpacity(0.06),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
                     ),
                   ],
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                  // LOGO TOKO
                     Container(
-                      width: 52,
-                      height: 52,
-                      decoration: const BoxDecoration(
-                        color: _cardDark,
-                        shape: BoxShape.circle,
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFCE7F3),
+                        borderRadius: BorderRadius.circular(16),
                       ),
                       child: const Icon(
                         Icons.storefront_rounded,
-                        color: _goldAccent,
-                        size: 28,
+                        color: _pinkAccent,
+                        size: 26,
                       ),
                     ),
                     const SizedBox(height: 12),
                     const Text(
-                      'NASUHA',
+                      'LNDR KASIR LAUNDRY',
                       style: TextStyle(
                         fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: _textBlack,
+                        fontWeight: FontWeight.w900,
                         letterSpacing: 1,
+                        color: _textBlack,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     const Text(
-                      'Masuk ke akun NASUHA Anda',
-                      style: TextStyle(fontSize: 11, color: Colors.black54),
+                      'Masuk ke akun LNDR Anda',
+                      style: TextStyle(fontSize: 11, color: Colors.black45),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
 
+					// INPUT EMAIL
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
                         'Email Akun',
                         style: TextStyle(
                           fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey.shade800,
+                          fontWeight: FontWeight.bold,
+                          color: _textBlack),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      style: const TextStyle(fontSize: 13, color: _textBlack),
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: _bgDark,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
+                      const SizedBox(height: 6),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF9FAFB),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.black12),
                         ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: _cardDark),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: _cardDark),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: _goldAccent),
+                        child: TextField(
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          style: const TextStyle(fontSize: 12, color: _textBlack),
+                          decoration: const InputDecoration(
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-
+                      const SizedBox(height: 14),
+                      
+					// INPUT PASSWORD
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
+                        const Text(
                           'Password',
                           style: TextStyle(
                             fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey.shade800,
+                            fontWeight: FontWeight.bold,
+                            color: _textBlack),
                           ),
-                        ),
+                        
                         GestureDetector(
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Silakan hubungi administrator toko.'),
-                              ),
-                            );
-                          },
-                          child: const Text(
-                            'Lupa Password?',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: _goldAccent,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: _passwordController,
-                      obscureText: _isPasswordObscured,
-                      style: const TextStyle(fontSize: 13, color: _textBlack),
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: _bgDark,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _isPasswordObscured
-                                ? Icons.visibility_off_outlined
-                                : Icons.visibility_outlined,
-                            size: 18,
-                            color: Colors.grey,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _isPasswordObscured = !_isPasswordObscured;
-                            });
-                          },
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: _cardDark),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: _cardDark),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: _goldAccent),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
+                         onTap: () => _showSnackBar('Fitur reset password belum diaktifkan'),
+                         child: const Text(
+                           'Lupa Password?',
+                           style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _pinkAccent),
+                         ),
+                       ),
+                     ],
+                   ),
+                    const SizedBox(height: 20),
+                    
+                    // TOMBOL LOG IN (EMAIL)
                     SizedBox(
                       width: double.infinity,
                       height: 44,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: _goldAccent,
+                          backgroundColor: _pinkAccent,
+                          foregroundColor: Colors.white,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        onPressed: _isLoading ? null : _handleLogin,
+                        onPressed: _isLoading ? null : _loginWithEmail,
                         child: _isLoading
                             ? const SizedBox(
                                 width: 20,
                                 height: 20,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
+                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                               )
                             : const Text(
                                 'LOG IN',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                  letterSpacing: 0.5,
-                                ),
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                               ),
                       ),
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 14),
 
-                    GestureDetector(
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Pendaftaran outlet baru dapat menghubungi support.'),
+					// SEPARATOR "ATAU"
+                    Row(
+                      children: const [
+                        Expanded(child: Divider(color: Colors.black12)),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8),
+                          child: Text('atau', style: TextStyle(fontSize: 10, color: Colors.black38)),
+                        ),
+                        Expanded(child: Divider(color: Colors.black12)),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+
+                    // TOMBOL LOGIN BY GOOGLE EMAIL
+                      SizedBox(
+                        width: double.infinity,
+                        height: 44,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: _textBlack,
+                            side: const BorderSide(color: Colors.black12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
-                        );
-                      },
-                      child: const Text(
-                        'Belum punya akun? Daftar Toko Baru (Owner)',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: _goldAccent,
+                          onPressed: _isLoading ? null : _loginWithGoogle,
+                          icon: Image.network(
+                            'https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg',
+                            height: 18,
+                            width: 18,
+                            errorBuilder: (_, __, ___) => const Icon(Icons.g_mobiledata, size: 24, color: Colors.red),
+                          ),
+                          label: const Text(
+                            'Masuk dengan Google',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
+                      const SizedBox(height: 16),
 
-              Positioned(
-                top: -18,
-                left: -18,
-                child: Transform.rotate(
-                  angle: -0.2,
-                  child: const Text('🌹🌿', style: TextStyle(fontSize: 32)),
+                      // LINK DAFTAR TOKO BARU
+                      GestureDetector(
+                        onTap: () => _showSnackBar('Silakan hubungi Admin untuk pendaftaran toko baru'),
+                        child: const Text(
+                          'Belum punya akun? Daftar Toko Baru (Owner)',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.bold,
+                            color: _pinkAccent,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              Positioned(
-                bottom: -18,
-                right: -18,
-                child: Transform.rotate(
-                  angle: 2.8,
-                  child: const Text('🌹🌿', style: TextStyle(fontSize: 32)),
+
+                // DEKORASI MAWAR BAWAH KANAN
+                const Positioned(
+                  bottom: -24,
+                  right: -10,
+                  child: Text('🌿🌹', style: TextStyle(fontSize: 28)),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
