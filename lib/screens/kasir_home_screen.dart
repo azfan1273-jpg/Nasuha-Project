@@ -4,6 +4,7 @@ import '../main.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/buat_order_dialog.dart';
 import 'login_screen.dart';
+import '../widgets/toko_header_widget.dart';
 
 class KasirHomeScreen extends StatefulWidget {
   const KasirHomeScreen({super.key});
@@ -193,11 +194,6 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
                       )
                     : const Icon(Icons.refresh, color: _textBlack, size: 18),
                 onPressed: _loadOrdersFromSupabase,
-              ),
-              IconButton(
-                icon: const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 18),
-                onPressed: _logout,
-                tooltip: 'Keluar',
               ),
             ],
           ),
