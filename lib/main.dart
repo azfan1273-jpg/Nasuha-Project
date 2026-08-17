@@ -6,8 +6,8 @@ import 'screens/login_screen.dart';
 import 'screens/kasir_page_manager.dart';
 
 
-const String supabaseUrl = 'https://qcpxitlltkkxtdctertz.supabase.co';
-const String supabaseAnonKey = 'sb_publishable_CeC_XB7zVoD26xBHmsKHKw_VxqWhPAG';
+const String supabaseUrl = 'https://elesjrpswpppbliaifbw.supabase.co';
+const String supabaseAnonKey = 'sb_publishable_iX0RtTSOEZjtsyz_wj4-aw_hgPjOIUZ';
 
 SupabaseClient get supabase => Supabase.instance.client;
 
