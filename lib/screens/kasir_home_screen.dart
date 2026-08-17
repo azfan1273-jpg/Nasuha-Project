@@ -69,13 +69,11 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
-
-    return Center(
-      child: Container(
-        width: 390,
-        color: _bgDark,
-        child: Column(
-          children: [
+          
+    return Container(
+      color: _bgDark,
+      child: Column(
+      children: [
             const SizedBox(height: 10),
             TokoHeaderWidget(
               namaToko: settings.namaToko,
@@ -111,9 +109,8 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
             _buildTransactionButton(),
           ],
         ),
-      ),
-    );
-  }
+      );
+    }
 
   Widget _buildBannerPromo() {
     return Padding(
@@ -549,9 +546,9 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
           style: ElevatedButton.styleFrom(
             backgroundColor: _goldAccent,
             foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 12),
+            padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(14),
             ),
           ),
           onPressed: () {
@@ -562,10 +559,10 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
               ),
             );
           },
-          icon: const Icon(Icons.list_alt_rounded, size: 18),
+          icon: const Icon(Icons.list_alt_rounded, size: 22),
           label: const Text(
             'MENU TRANSAKSI',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
           ),
         ),
       ),

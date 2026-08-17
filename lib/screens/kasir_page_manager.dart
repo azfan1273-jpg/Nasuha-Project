@@ -32,36 +32,44 @@ class _KasirPageManagerState extends State<KasirPageManager> {
   Widget build(BuildContext context) {
     const Color creamLightColor = Color(0xFFFAF5F7);
     const Color goldAccent = Color(0xFFEC4899);
-
+  
     return Scaffold(
-      backgroundColor: creamLightColor,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Indicator Tab Top Bar
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-              color: Colors.white,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+      backgroundColor: Colors.grey.shade900, // Background luar (samping kiri-kanan)
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 385), // Lebar maksimal HP
+          child: Container(
+            color: creamLightColor,
+            child: SafeArea(
+              child: Column(
                 children: [
-                  _buildTabButton(0, 'Beranda Kasir', Icons.home_rounded, goldAccent),
-                  const SizedBox(width: 12),
-                  _buildTabButton(1, 'Laporan & Statistik', Icons.bar_chart_rounded, goldAccent),
+                  // Indicator Tab Top Bar
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                    color: Colors.white,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildTabButton(0, 'Beranda Kasir', Icons.home_rounded, goldAccent),
+                        const SizedBox(width: 12),
+                        _buildTabButton(1, 'Laporan & Statistik', Icons.bar_chart_rounded, goldAccent),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: PageView(
+                      controller: _pageController,
+                      onPageChanged: _onPageChanged,
+                      children: const [
+                        KasirHomeScreen(),
+                        LayarStatistik(),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
-            Expanded(
-              child: PageView(
-                controller: _pageController,
-                onPageChanged: _onPageChanged,
-                children: const [
-                  KasirHomeScreen(),
-                  LayarStatistik(),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

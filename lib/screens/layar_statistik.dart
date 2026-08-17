@@ -129,7 +129,7 @@ class _LayarStatistikState extends State<LayarStatistik> {
 
     return Center(
       child: Container(
-        width: 390,
+        width: 385,
         color: _bgDark,
         child: Column(
           children: [

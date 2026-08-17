@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../screens/login_screen.dart';
 
 class TokoHeaderWidget extends StatelessWidget {
   final String namaToko;
@@ -22,13 +24,17 @@ class TokoHeaderWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+	  final currentUser = Supabase.instance.client.auth.currentUser;
+	  final String emailUser = currentUser?.email ?? 'owner@lndr.com';
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+         // KIRI: icon 7 detail toko
           Row(
-            children: [
+            children: [	
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: const BoxDecoration(
@@ -63,14 +69,14 @@ class TokoHeaderWidget extends StatelessWidget {
                         ),
                         decoration: BoxDecoration(
                           color: _goldAccent,
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
-                          userRole,
+                          userRole.toUpperCase(),
                           style: const TextStyle(
-                            fontSize: 8,
-                            fontWeight: FontWeight.bold,
                             color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
@@ -78,27 +84,28 @@ class TokoHeaderWidget extends StatelessWidget {
                   ),
                   Text(
                     emailToko,
-                    style: const TextStyle(color: Colors.black54, fontSize: 10),
+                    style: TextStyle(color: Colors.grey[600],
+                    fontSize: 11,
                   ),
-                ],
-              ),
-            ],
-          ),
-          IconButton(
-            icon: isLoading
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: _goldAccent,
-                    ),
-                  )
-                : const Icon(Icons.refresh, color: _textBlack, size: 18),
-            onPressed: onRefresh,
-          ),
-        ],
-      ),
-    );
+                ),
+              ], // <-- Menutup children dari Column
+            ),
+          ], // <-- Menutup children dari Row Kiri
+        ),
+           
+          // KANAN: TOMBOL REFRESH & LOGOUT        
+          Row(
+           children: [ // <-- Menambahkan children: [] yang sempat terlewat 
+              IconButton(
+                icon: const Icon(Icons.refresh_rounded, color: _textBlack),
+                onPressed: onRefresh,
+           		),       
+	          ],
+           	),
+		  ],
+		),
+      );
+    }
   }
-}
+	    	
+
