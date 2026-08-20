@@ -5,7 +5,6 @@ import '../providers/settings_provider.dart';
 import '../widgets/buat_order_dialog.dart';
 import 'login_screen.dart';
 import '../widgets/toko_header_widget.dart';
-import '../widgets/buat_order_dialog.dart'; 
 
 class KasirHomeScreen extends StatefulWidget {
   const KasirHomeScreen({super.key});
@@ -29,6 +28,20 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
     final String result = str.replaceAllMapped(reg, (Match m) => '${m[1]}.');
     return 'Rp $result';
   }
+
+	// HELPER FUNCTION PENGECEK TANGGAL HARI INI
+	bool _isHariIni(String? rawDate) {
+	  if (rawDate == null || rawDate.isEmpty) return false;
+	  try {
+	    final dt = DateTime.parse(rawDate).toLocal();
+	    final now = DateTime.now();
+	    return dt.year == now.year &&
+	        dt.month == now.month &&
+	        dt.day == now.day;
+	  } catch (_) {
+	    return false;
+	  }
+	}
 
   @override
   void initState() {
@@ -56,6 +69,7 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
               'services': record['service_name'] ?? 'Layanan',
               'status': record['status'] ?? 'Baru',
               'total': (record['total_price'] as num?)?.toDouble() ?? 0.0,
+              'created_at': record['created_at'],
             };
           }));
         });
@@ -67,27 +81,27 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
     }
   }
 
- // 🔹 1. Getter Total Omset (Bukan Pengeluaran)
-double get _totalOmsetHariIni {
-  double total = 0.0;
-  for (var item in _ordersHariIni) {
-    if (item['status'] != 'Pengeluaran') {
-      total += (item['total'] as num?)?.toDouble() ?? 0.0;
+  // 🔹 1. Getter Total Omset
+  double get _totalOmsetHariIni {
+    double total = 0.0;
+    for (var item in _ordersHariIni) {
+      if (item['status'] != 'Pengeluaran' && _isHariIni(item['created_at'])) {
+        total += (item['total'] as num?)?.toDouble() ?? 0.0;
+      }
     }
+    return total;
   }
-  return total;
-}
 
-// 🔹 2. Getter Total Pengeluaran
-double get _totalPengeluaranHariIni {
-  double total = 0.0;
-  for (var item in _ordersHariIni) {
-    if (item['status'] == 'Pengeluaran') {
-      total += (item['total'] as num?)?.toDouble() ?? 0.0;
+  // 🔹 2. Getter Total Pengeluaran
+  double get _totalPengeluaranHariIni {
+    double total = 0.0;
+    for (var item in _ordersHariIni) {
+      if (item['status'] == 'Pengeluaran' && _isHariIni(item['created_at'])) {
+        total += (item['total'] as num?)?.toDouble() ?? 0.0;
+      }
     }
+    return total;
   }
-  return total;
-}
 
   @override
   Widget build(BuildContext context) {
@@ -96,105 +110,112 @@ double get _totalPengeluaranHariIni {
     return Container(
       color: _bgDark,
       child: Column(
-      children: [
-            const SizedBox(height: 10),
-            TokoHeaderWidget(
-              namaToko: settings.namaToko,
-              userRole: settings.userRole,
-              emailToko: settings.emailToko,
-              isLoading: _isLoading,
+        children: [
+          const SizedBox(height: 10),
+          TokoHeaderWidget(
+            namaToko: settings.namaToko,
+            userRole: settings.userRole,
+            emailToko: settings.emailToko,
+            isLoading: _isLoading,
+            onRefresh: _loadOrdersFromSupabase,
+          ),
+          const SizedBox(height: 10),
+          _buildBannerPromo(),
+          const SizedBox(height: 10),
+  
+          // 🔹 1. RINGKASAN CUCIAN (STATIS)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: _buildOrderSummaryCard(),
+          ),
+          const SizedBox(height: 10),
+  
+          // 🔹 2. KEUANGAN HARI INI (STATIS)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: _buildFinancialSummaryCard(),
+          ),
+          const SizedBox(height: 10),
+  
+          // 🔹 3. MASUK HARI INI (DINAMIS / AREA SCROLL)
+          Expanded(
+            child: RefreshIndicator(
               onRefresh: _loadOrdersFromSupabase,
-            ),
-            const SizedBox(height: 12),
-            _buildBannerPromo(),
-            const SizedBox(height: 12),
-
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: _loadOrdersFromSupabase,
-                color: _goldAccent,
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    children: [
-                      _buildOrderSummaryCard(),
-                      const SizedBox(height: 10),
-                      _buildFinancialSummaryCard(),
-                      const SizedBox(height: 10),
-                      _buildTodayOrdersCard(),
-                    ],
-                  ),
-                ),
+              color: _goldAccent,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: _buildTodayOrdersCard(), // 👈 Hanya widget ini di area scroll
               ),
             ),
-
-            _buildTransactionButton(),
-          ],
-        ),
-      );
-    }
+          ),
+  
+          _buildTransactionButton(),
+        ],
+      ),
+    );
+  }
 
   Widget _buildBannerPromo() {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), // 👈 Rampingkan padding
-          decoration: BoxDecoration(
-            color: _cardDark,
-            borderRadius: BorderRadius.circular(10), // 👈 Dikecilkan dari 14
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.campaign_outlined,
-                    color: _goldAccent,
-                    size: 16, // 👈 Dikecilkan dari 20
-                  ),
-                  const SizedBox(width: 8), // 👈 Dikecilkan dari 10
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text(
-                        'Promo Cuci Komplit Diskon 10%',
-                        style: TextStyle(
-                          fontSize: 9.5, // 👈 Dikecilkan dari 10
-                          fontWeight: FontWeight.bold,
-                          color: _goldAccent,
-                        ),
-                      ),
-                      SizedBox(height: 1),
-                      Text(
-                        'Berlaku sampai akhir bulan.',
-                        style: TextStyle(fontSize: 7.5, color: Colors.black54), // 👈 Dikecilkan dari 8
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), // 👈 Dikecilkan dari (8, 3)
-                decoration: BoxDecoration(
-                  color: _goldAccent,
-                  borderRadius: BorderRadius.circular(5),
-                ),
-                child: const Text(
-                  'NEW',
-                  style: TextStyle(
-                    fontSize: 7.5, // 👈 Dikecilkan dari 8
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: _cardDark,
+          borderRadius: BorderRadius.circular(10),
         ),
-      );
-    }
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.campaign_outlined,
+                  color: _goldAccent,
+                  size: 16,
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text(
+                      'Promo Cuci Komplit Diskon 10%',
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.bold,
+                        color: _goldAccent,
+                      ),
+                    ),
+                    SizedBox(height: 1),
+                    Text(
+                      'Berlaku sampai akhir bulan.',
+                      style: TextStyle(fontSize: 7.5, color: Colors.black54),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: _goldAccent,
+                borderRadius: BorderRadius.circular(5),
+              ),
+              child: const Text(
+                'NEW',
+                style: TextStyle(
+                  fontSize: 7.5,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _buildOrderSummaryCard() {
     final activeCount = _ordersHariIni
@@ -204,7 +225,7 @@ double get _totalPengeluaranHariIni {
         _ordersHariIni.where((o) => o['status'] == 'Selesai').length;
 
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: _cardDark,
         borderRadius: BorderRadius.circular(12),
@@ -263,7 +284,7 @@ double get _totalPengeluaranHariIni {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 6),
           Row(
             children: [
               _buildGridStat(
@@ -272,7 +293,7 @@ double get _totalPengeluaranHariIni {
                 _textBlack,
                 Icons.local_laundry_service,
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 4),
               _buildGridStat(
                 'HARUS SELESAI',
                 '0',
@@ -281,7 +302,7 @@ double get _totalPengeluaranHariIni {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Row(
             children: [
               _buildGridStat(
@@ -290,7 +311,7 @@ double get _totalPengeluaranHariIni {
                 _textBlack,
                 Icons.warning_amber_rounded,
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 4),
               _buildGridStat(
                 'SELESAI',
                 '$doneCount',
@@ -306,7 +327,7 @@ double get _totalPengeluaranHariIni {
 
   Widget _buildFinancialSummaryCard() {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: _cardDark,
         borderRadius: BorderRadius.circular(12),
@@ -330,39 +351,40 @@ double get _totalPengeluaranHariIni {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 6),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
                 'Omset Hari Ini',
-                style: TextStyle(fontSize: 11, color: Colors.black87),
+                style: TextStyle(fontSize: 10, color: Colors.black87),
               ),
-              Text(_formatRupiah(_totalOmsetHariIni)),                 
+              Text(_formatRupiah(_totalOmsetHariIni)),
             ],
           ),
           const Divider(height: 16, color: Colors.black12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
+              const Text(
                 'Pengeluaran Hari Ini',
                 style: TextStyle(fontSize: 11, color: Colors.black87),
               ),
-              Text(_formatRupiah(_totalPengeluaranHariIni)) 
+              Text(_formatRupiah(_totalPengeluaranHariIni)),
             ],
           ),
-          
         ],
       ),
     );
   }
 
   Widget _buildTodayOrdersCard() {
-  final daftarMasukHariIni = _ordersHariIni
-        .where((item) => item['status'] != 'Pengeluaran')
-        .toList();
-        
+    final daftarMasukHariIni = _ordersHariIni
+            .where((item) =>
+                item['status'] != 'Pengeluaran' &&
+                _isHariIni(item['created_at'])) // 👈 Filter tanggal hari ini
+            .toList();
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -372,22 +394,13 @@ double get _totalPengeluaranHariIni {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                '☕ MASUK HARI INI',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: _textBlack,
-                ),
-              ),
-              Text(
-              _formatRupiah(_totalOmsetHariIni)),
-                
-              
-            ],
+          const Text(
+            '☕ MASUK HARI INI',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: _textBlack,
+            ),
           ),
           const SizedBox(height: 12),
           daftarMasukHariIni.isEmpty
@@ -467,7 +480,7 @@ double get _totalPengeluaranHariIni {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              Text(_formatRupiah(order['total_price'] ?? order['total'] ?? 0)),
+                              Text(_formatRupiah(order['total'] ?? 0)),
                               const SizedBox(height: 2),
                               Container(
                                 padding: const EdgeInsets.symmetric(
@@ -507,10 +520,10 @@ double get _totalPengeluaranHariIni {
   ) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(10),
+        padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: _bgDark,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -526,18 +539,18 @@ double get _totalPengeluaranHariIni {
                     color: Colors.black54,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 1),
                 Text(
                   value,
                   style: const TextStyle(
-                    fontSize: 14,
+                    fontSize: 12,
                     fontWeight: FontWeight.bold,
                     color: _textBlack,
                   ),
                 ),
               ],
             ),
-            Icon(icon, size: 18, color: _goldAccent),
+            Icon(icon, size: 15, color: _goldAccent),
           ],
         ),
       ),
@@ -563,9 +576,8 @@ double get _totalPengeluaranHariIni {
               context: context,
               builder: (context) => BuatOrderDialog(
                 onOrderCreated: () {
-                        // Refresh data dashboard setelah order berhasil dibuat
-                        _loadOrdersFromSupabase(); // 👈 Panggil fungsi ini (bukan sekadar setState)
-              },
+                  _loadOrdersFromSupabase();
+                },
               ),
             );
           },

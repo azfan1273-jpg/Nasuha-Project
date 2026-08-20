@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:remixicon/remixicon.dart';
 import '../main.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/buat_order_dialog.dart';
 import '../widgets/report_dialog.dart';
 import '../widgets/setting_dialog.dart';
 import '../widgets/toko_header_widget.dart';
-import 'package:remixicon/remixicon.dart';
 
 class LayarStatistik extends StatefulWidget {
   const LayarStatistik({Key? key}) : super(key: key);
@@ -23,7 +23,6 @@ class _LayarStatistikState extends State<LayarStatistik> {
 
   final List<Map<String, dynamic>> _allOrders = [];
   final TextEditingController _searchController = TextEditingController();
-
 
   String _selectedFilter = 'ANTRIAN';
   String _searchQuery = '';
@@ -71,32 +70,30 @@ class _LayarStatistikState extends State<LayarStatistik> {
       final query = _searchQuery.toLowerCase();
       final matchesSearch = name.contains(query) || phone.contains(query);
 
-      final status = (order['status'] ?? 'Baru').toString().toUpperCase();
-
       if (!matchesSearch) return false;
 
-      if (_selectedFilter == 'ANTRIAN') {
-        return status == 'ANTRIAN' || status == 'BARU';
-      } else if (_selectedFilter == 'PROSES') {
-        return status == 'PROSES';
-      } else if (_selectedFilter == 'SELESAI') {
-        return status == 'SELESAI';
-      } else if (_selectedFilter == 'BATAL') {
-        return status == 'BATAL' || status == 'CANCEL';
+      final status = (order['status'] ?? 'Baru').toString().toUpperCase();
+
+      switch (_selectedFilter) {
+        case 'ANTRIAN':
+          return status == 'ANTRIAN' || status == 'BARU';
+        case 'PROSES':
+          return status == 'PROSES';
+        case 'SELESAI':
+          return status == 'SELESAI';
+        case 'BATAL':
+          return status == 'BATAL' || status == 'CANCEL';
+        default:
+          return true;
       }
-      return true;
     }).toList();
   }
 
-  String _formatRupiah(double value) {
-    final number = value.round().toString();
-    final chars = number.split('').reversed.toList();
-    final chunks = <String>[];
-    for (int i = 0; i < chars.length; i += 3) {
-      final end = (i + 3 < chars.length) ? i + 3 : chars.length;
-      chunks.add(chars.sublist(i, end).reversed.join());
-    }
-    return 'Rp. ${chunks.reversed.join('.')}';
+  String _formatRupiah(num number) {
+    final String str = number.toInt().toString();
+    final RegExp reg = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
+    final String result = str.replaceAllMapped(reg, (Match m) => '${m[1]}.');
+    return 'Rp $result';
   }
 
   String _formatTanggal(String? rawDate) {
@@ -142,9 +139,6 @@ class _LayarStatistikState extends State<LayarStatistik> {
               isLoading: _isLoading,
               onRefresh: _fetchOrders,
             ),
-            const SizedBox(height: 10),
-
-            _buildBannerPromo(),
             const SizedBox(height: 10),
 
             Expanded(
@@ -265,67 +259,6 @@ class _LayarStatistikState extends State<LayarStatistik> {
     );
   }
 
-  Widget _buildBannerPromo() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: _cardDark,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                const Icon(
-                  Icons.campaign_outlined,
-                  color: _goldAccent,
-                  size: 20,
-                ),
-                const SizedBox(width: 10),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      'Promo Cuci Komplit Diskon 10%',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: _goldAccent,
-                      ),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Berlaku sampai akhir bulan.',
-                      style: TextStyle(fontSize: 8, color: Colors.black54),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: _goldAccent,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Text(
-                'NEW',
-                style: TextStyle(
-                  fontSize: 8,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildLeftSidebar() {
     return SizedBox(
       width: 46,
@@ -341,7 +274,8 @@ class _LayarStatistikState extends State<LayarStatistik> {
           
           const Spacer(),
 
-          InkWell(
+          _buildSideMenuItem(
+            icon: Icons.assignment_outlined,
             onTap: () {
               Navigator.push(
                 context,
@@ -350,21 +284,18 @@ class _LayarStatistikState extends State<LayarStatistik> {
                 ),
               );
             },
-            child: _buildSideMenuItem(
-              icon: Icons.assignment_outlined,
-            ),
           ),
           
           const SizedBox(height: 8),
           
-          InkWell(
+          _buildSideMenuItem(
+            icon: Icons.settings_outlined,
             onTap: () {
               showDialog(
                 context: context,
                 builder: (context) => const SettingDialog(),
               );
             },
-            child: _buildSideMenuItem(icon: Icons.settings_outlined),
           ),
         ],
       ),
@@ -401,15 +332,19 @@ class _LayarStatistikState extends State<LayarStatistik> {
     );
   }
 
-  Widget _buildSideMenuItem({required IconData icon}) {
-    return Container(
-      width: 46,
-      height: 46,
-      decoration: BoxDecoration(
-        color: const Color(0xFFFCE7F3),
-        borderRadius: BorderRadius.circular(14),
+  Widget _buildSideMenuItem({required IconData icon, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        width: 46,
+        height: 46,
+        decoration: BoxDecoration(
+          color: _cardDark,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Icon(icon, size: 20, color: _textBlack),
       ),
-      child: Icon(icon, size: 20, color: const Color(0xFF111827)),
     );
   }
 
