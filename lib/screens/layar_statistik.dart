@@ -24,6 +24,7 @@ class _LayarStatistikState extends State<LayarStatistik> {
   final List<Map<String, dynamic>> _allOrders = [];
   final TextEditingController _searchController = TextEditingController();
 
+
   String _selectedFilter = 'ANTRIAN';
   String _searchQuery = '';
   bool _isLoading = false;
@@ -342,9 +343,11 @@ class _LayarStatistikState extends State<LayarStatistik> {
 
           InkWell(
             onTap: () {
-              showDialog(
-                context: context,
-                builder: (context) => const ReportDialog(),
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ReportDialog(),
+                ),
               );
             },
             child: _buildSideMenuItem(

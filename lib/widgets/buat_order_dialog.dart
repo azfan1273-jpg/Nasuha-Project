@@ -20,34 +20,31 @@ class _BuatOrderDialogState extends State<BuatOrderDialog> {
   static const Color _cardDark = Color(0xFFFCE7F3);
   static const Color _goldAccent = Color(0xFFEC4899);
   static const Color _textBlack = Color(0xFF111827);
-
-  final List<Map<String, String>> _topCustomers = [];
-
-  void _showFormOrder(BuildContext context, String type) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => type == "OUT"
-
-			// Jika dipencet dari tombol Pengeluaran (OUT)
-      		? FormPengeluaranDialog(
-                onSuccess: () {
-         			 Navigator.pop(dialogContext); // Tutup Form Order
-          			 Navigator.pop(context); // Tutup Menu Transaksi
-         			 widget.onOrderCreated(); // Refresh Callback Dashboard
-        		   },
-      			 )
-
-			// Jika dipencet dari tombol Buat Orders (IN)
-      		: FormOrderDialog(
-                  type: type,
-                  onOrderSuccess: () {
-                    Navigator.pop(dialogContext);
-                    Navigator.pop(context);
-                    widget.onOrderCreated();
-                  },
-                ),
-    );
+  
+  void _showFormOrder(BuildContext context, String type) async {
+    // 1. Tutup dulu dialog Menu Transaksi agar tidak menumpuk
+    Navigator.pop(context);
+  
+    if (type == "OUT") {
+      // Jika Pengeluaran
+      showDialog(
+        context: context,
+        builder: (dialogContext) => FormPengeluaranDialog(
+          onSuccess: widget.onOrderCreated,
+        ),
+      );
+    } else {
+      // Jika Buat Orders (IN)
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => FormOrderDialog(
+            type: type,
+            onOrderSuccess: widget.onOrderCreated,
+          ),
+        ),
+      );
+    }
   }
   
     
@@ -103,116 +100,16 @@ class _BuatOrderDialogState extends State<BuatOrderDialog> {
                         colors: [const Color(0xFFFB923C), const Color(0xFFE11D48)],
                         shadowColor: Colors.deepOrange.shade600,
                         onTap: () => _showFormOrder(context, 'OUT'),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                const Divider(height: 1, color: Colors.black12),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: const [
-                    Text(
-                      'Top Customers',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: _textBlack,
-                      ),
-                    ),
-                    Icon(Icons.star_rounded, color: Colors.amber, size: 18),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  height: 180,
-                  child: _topCustomers.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'Belum ada data pelanggan',
-                            style: TextStyle(fontSize: 11, color: Colors.black38),
-                          ),
-                        )
-                      : ListView.builder(
-                          shrinkWrap: true,
-                          itemCount: _topCustomers.length,
-                          itemBuilder: (context, index) {
-                            final customer = _topCustomers[index];
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: _cardDark,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Row(
-                                    children: [
-                                      CircleAvatar(
-                                        radius: 14,
-                                        backgroundColor: Colors.white,
-                                        child: Text(
-                                          '${index + 1}',
-                                          style: const TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                            color: _goldAccent,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            customer['name'] ?? '',
-                                            style: const TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.bold,
-                                              color: _textBlack,
-                                            ),
-                                          ),
-                                          Text(
-                                            customer['orders'] ?? '',
-                                            style: const TextStyle(
-                                              fontSize: 9,
-                                              color: Colors.black54,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      customer['status'] ?? '',
-                                      style: const TextStyle(
-                                        fontSize: 8,
-                                        fontWeight: FontWeight.bold,
-                                        color: _goldAccent,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
+                     ),
+                   ),
+                 ],
+               ), // 👈 Penutup Row Tombol
+             ],   // 👈 Penutup children Column (Baris 204)
+           ),     // 👈 Penutup Padding
+         ),       // 👈 Penutup ConstrainedBox
+       ),         // 👈 Penutup Dialog
+     );           // 👈 Penutup return
+   }              // 👈 Penutup build method
   
     Widget _buildActionButton({
       required String title,

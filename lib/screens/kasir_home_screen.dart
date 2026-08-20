@@ -5,6 +5,7 @@ import '../providers/settings_provider.dart';
 import '../widgets/buat_order_dialog.dart';
 import 'login_screen.dart';
 import '../widgets/toko_header_widget.dart';
+import '../widgets/buat_order_dialog.dart'; 
 
 class KasirHomeScreen extends StatefulWidget {
   const KasirHomeScreen({super.key});
@@ -21,6 +22,13 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
 
   final List<Map<String, dynamic>> _ordersHariIni = [];
   bool _isLoading = false;
+
+  String _formatRupiah(num number) {
+    final String str = number.toInt().toString();
+    final RegExp reg = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
+    final String result = str.replaceAllMapped(reg, (Match m) => '${m[1]}.');
+    return 'Rp $result';
+  }
 
   @override
   void initState() {
@@ -59,12 +67,27 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
     }
   }
 
-  double get _totalOmsetHariIni {
-    return _ordersHariIni.fold(
-      0.0,
-      (sum, item) => sum + ((item['total'] as num?)?.toDouble() ?? 0.0),
-    );
+ // 🔹 1. Getter Total Omset (Bukan Pengeluaran)
+double get _totalOmsetHariIni {
+  double total = 0.0;
+  for (var item in _ordersHariIni) {
+    if (item['status'] != 'Pengeluaran') {
+      total += (item['total'] as num?)?.toDouble() ?? 0.0;
+    }
   }
+  return total;
+}
+
+// 🔹 2. Getter Total Pengeluaran
+double get _totalPengeluaranHariIni {
+  double total = 0.0;
+  for (var item in _ordersHariIni) {
+    if (item['status'] == 'Pengeluaran') {
+      total += (item['total'] as num?)?.toDouble() ?? 0.0;
+    }
+  }
+  return total;
+}
 
   @override
   Widget build(BuildContext context) {
@@ -113,65 +136,65 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
     }
 
   Widget _buildBannerPromo() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: _cardDark,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                const Icon(
-                  Icons.campaign_outlined,
-                  color: _goldAccent,
-                  size: 20,
-                ),
-                const SizedBox(width: 10),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      'Promo Cuci Komplit Diskon 10%',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: _goldAccent,
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), // 👈 Rampingkan padding
+          decoration: BoxDecoration(
+            color: _cardDark,
+            borderRadius: BorderRadius.circular(10), // 👈 Dikecilkan dari 14
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.campaign_outlined,
+                    color: _goldAccent,
+                    size: 16, // 👈 Dikecilkan dari 20
+                  ),
+                  const SizedBox(width: 8), // 👈 Dikecilkan dari 10
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text(
+                        'Promo Cuci Komplit Diskon 10%',
+                        style: TextStyle(
+                          fontSize: 9.5, // 👈 Dikecilkan dari 10
+                          fontWeight: FontWeight.bold,
+                          color: _goldAccent,
+                        ),
                       ),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Berlaku sampai akhir bulan.',
-                      style: TextStyle(fontSize: 8, color: Colors.black54),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: _goldAccent,
-                borderRadius: BorderRadius.circular(6),
+                      SizedBox(height: 1),
+                      Text(
+                        'Berlaku sampai akhir bulan.',
+                        style: TextStyle(fontSize: 7.5, color: Colors.black54), // 👈 Dikecilkan dari 8
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              child: const Text(
-                'NEW',
-                style: TextStyle(
-                  fontSize: 8,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), // 👈 Dikecilkan dari (8, 3)
+                decoration: BoxDecoration(
+                  color: _goldAccent,
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: const Text(
+                  'NEW',
+                  style: TextStyle(
+                    fontSize: 7.5, // 👈 Dikecilkan dari 8
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
-    );
-  }
+      );
+    }
 
   Widget _buildOrderSummaryCard() {
     final activeCount = _ordersHariIni
@@ -315,40 +338,31 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
                 'Omset Hari Ini',
                 style: TextStyle(fontSize: 11, color: Colors.black87),
               ),
-              Text(
-                'Rp ${_totalOmsetHariIni.toInt()}',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: _goldAccent,
-                ),
-              ),
+              Text(_formatRupiah(_totalOmsetHariIni)),                 
             ],
           ),
           const Divider(height: 16, color: Colors.black12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
+            children: [
               Text(
                 'Pengeluaran Hari Ini',
                 style: TextStyle(fontSize: 11, color: Colors.black87),
               ),
-              Text(
-                'Rp 0',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.redAccent,
-                ),
-              ),
+              Text(_formatRupiah(_totalPengeluaranHariIni)) 
             ],
           ),
+          
         ],
       ),
     );
   }
 
   Widget _buildTodayOrdersCard() {
+  final daftarMasukHariIni = _ordersHariIni
+        .where((item) => item['status'] != 'Pengeluaran')
+        .toList();
+        
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -370,13 +384,13 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
                 ),
               ),
               Text(
-                '${_ordersHariIni.length} Order',
-                style: const TextStyle(fontSize: 9, color: Colors.black54),
-              ),
+              _formatRupiah(_totalOmsetHariIni)),
+                
+              
             ],
           ),
           const SizedBox(height: 12),
-          _ordersHariIni.isEmpty
+          daftarMasukHariIni.isEmpty
               ? Center(
                   child: Container(
                     width: double.infinity,
@@ -412,9 +426,9 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
               : ListView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _ordersHariIni.length,
+                  itemCount: daftarMasukHariIni.length,
                   itemBuilder: (context, index) {
-                    final order = _ordersHariIni[index];
+                    final order = daftarMasukHariIni[index];
                     return Container(
                       margin: const EdgeInsets.only(bottom: 8),
                       padding: const EdgeInsets.all(10),
@@ -453,14 +467,7 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              Text(
-                                'Rp ${(order['total'] as double).toInt()}',
-                                style: const TextStyle(
-                                  color: _goldAccent,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 11,
-                                ),
-                              ),
+                              Text(_formatRupiah(order['total_price'] ?? order['total'] ?? 0)),
                               const SizedBox(height: 2),
                               Container(
                                 padding: const EdgeInsets.symmetric(
@@ -555,7 +562,10 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
             showDialog(
               context: context,
               builder: (context) => BuatOrderDialog(
-                onOrderCreated: () => _loadOrdersFromSupabase(),
+                onOrderCreated: () {
+                        // Refresh data dashboard setelah order berhasil dibuat
+                        _loadOrdersFromSupabase(); // 👈 Panggil fungsi ini (bukan sekadar setState)
+              },
               ),
             );
           },

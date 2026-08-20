@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'kasir_home_screen.dart';
 import 'layar_statistik.dart';
-class KasirPageManager extends StatefulWidget {
-  const KasirPageManager({Key? key}) : super(key: key);
+
+		class KasirPageManager extends StatefulWidget {
+		  const KasirPageManager({Key? key}) : super(key: key);
 
   @override
   State<KasirPageManager> createState() => _KasirPageManagerState();

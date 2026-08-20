@@ -7,6 +7,7 @@ import 'kelola_pelanggan_dialog.dart';
 import 'kelola_printer_dialog.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'; // Jika pakai Supabase
 import '../screens/login_screen.dart'; // Arahkan ke file login kamu
+import 'kelola_pelanggan_dialog.dart';
 
 class SettingDialog extends StatelessWidget {
   const SettingDialog({super.key});
