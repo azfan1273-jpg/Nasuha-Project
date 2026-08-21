@@ -581,54 +581,7 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // HEADER TOKO
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
-                                  children: [
-                                    Container(
-                                      width: 38,
-                                      height: 38,
-                                      decoration: BoxDecoration(
-                                        color: Colors.black,
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: const Icon(Icons.storefront_rounded,
-                                          color: Colors.white, size: 22),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: const [
-                                        Text(
-                                          'NASUHA LAUNDRY',
-                                          style: TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.bold,
-                                              color: _textBlack),
-                                        ),
-                                        Text(
-                                          'Jl. Mawar No. 12 (Outlet Utama)',
-                                          style: TextStyle(
-                                              fontSize: 10,
-                                              color: Colors.black54,
-                                              fontStyle: FontStyle.italic),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                                IconButton(
-                                  visualDensity: VisualDensity.compact,
-                                  icon: const Icon(Icons.close_rounded,
-                                      color: Colors.black54),
-                                  onPressed: () => Navigator.pop(context),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-
+                            
                             // JUDUL DAFTAR PENGELUARAN + TOMBOL FILTER
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,

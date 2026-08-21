@@ -4,8 +4,8 @@ import 'package:remixicon/remixicon.dart';
 import '../main.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/buat_order_dialog.dart';
-import '../widgets/report_dialog.dart';
-import '../widgets/setting_dialog.dart';
+import '../screens/report_screen.dart';
+import 'setting_screen.dart';
 import '../widgets/toko_header_widget.dart';
 
 class LayarStatistik extends StatefulWidget {
@@ -280,7 +280,7 @@ class _LayarStatistikState extends State<LayarStatistik> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => const ReportDialog(),
+                  builder: (context) => ReportScreen(),
                 ),
               );
             },
@@ -291,9 +291,11 @@ class _LayarStatistikState extends State<LayarStatistik> {
           _buildSideMenuItem(
             icon: Icons.settings_outlined,
             onTap: () {
-              showDialog(
-                context: context,
-                builder: (context) => const SettingDialog(),
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const  SettingScreen(),
+                ),
               );
             },
           ),

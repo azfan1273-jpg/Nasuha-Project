@@ -5,6 +5,7 @@ import '../providers/settings_provider.dart';
 import '../widgets/buat_order_dialog.dart';
 import 'login_screen.dart';
 import '../widgets/toko_header_widget.dart';
+import '../screens/report_screen.dart';
 
 class KasirHomeScreen extends StatefulWidget {
   const KasirHomeScreen({super.key});

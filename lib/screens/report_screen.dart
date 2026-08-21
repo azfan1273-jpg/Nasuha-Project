@@ -2,17 +2,17 @@ import 'dart:convert';
 import 'dart:html' as html;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../screens/custom_date_screen.dart';
-import '../screens/chart_screen.dart';
+import 'custom_date_screen.dart';
+import 'chart_screen.dart';
 
-class ReportDialog extends StatefulWidget {
-  const ReportDialog({super.key});
+class ReportScreen extends StatefulWidget {
+  const ReportScreen({super.key});
 
   @override
-  State<ReportDialog> createState() => _ReportDialogState();
+  State<ReportScreen> createState() => _ReportScreenState();
 }
 
-class _ReportDialogState extends State<ReportDialog> {
+class _ReportScreenState extends State<ReportScreen> {
   String _selectedPeriode = 'Hari Ini';
   DateTimeRange? _customDateRange;
   int _selectedTab = 0; // Default 0 = Laporan Omset
@@ -383,7 +383,7 @@ class _ReportDialogState extends State<ReportDialog> {
                     ),
                     const SizedBox(height: 6),
 
-                    // 4. FILTER PERIODE (KANAN ATAS GRAFIK)
+                    // 4. FILTER PERIODE
                     Align(
                       alignment: Alignment.centerRight,
                       child: Container(
@@ -431,7 +431,7 @@ class _ReportDialogState extends State<ReportDialog> {
                     ReportChartWidget(
                       items: _reportItems,
                       isLoading: _isLoadingReport,
-                      height: 200, // 👈 Atur tinggi grafik di sini
+                      height: 200,
                     ),
                     const SizedBox(height: 14),
 
@@ -439,7 +439,7 @@ class _ReportDialogState extends State<ReportDialog> {
                     _buildDottedLine(),
                     const SizedBox(height: 6),
 
-                    // 7. DROPDOWN KATEGORI LAPORAN (KIRI)
+                    // 7. DROPDOWN KATEGORI LAPORAN
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Container(
@@ -479,7 +479,7 @@ class _ReportDialogState extends State<ReportDialog> {
                     ),
                     const SizedBox(height: 6),
 
-                    // 8. LIST DATA TRANSAKSI (SCROLLABLE)
+                    // 8. LIST DATA TRANSAKSI
                     Expanded(
                       child: Container(
                         width: double.infinity,
@@ -558,7 +558,7 @@ class _ReportDialogState extends State<ReportDialog> {
                     ),
                     const SizedBox(height: 8),
 
-                    // 9. FOOTER (EXPORT EXCEL & TOTAL)
+                    // 9. FOOTER
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -610,4 +610,3 @@ class _ReportDialogState extends State<ReportDialog> {
     );
   }
 }
-
