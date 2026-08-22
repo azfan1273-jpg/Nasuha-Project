@@ -15,8 +15,8 @@ class _BuatOrderDialogState extends State<BuatOrderDialog> {
   late PageController _pageController;
   int _activeTab = 0; // 0 = Form Order, 1 = Form Pengeluaran
 
-  static const Color _activeGreen = Color(0xFFBEF264);
-  static const Color _inactiveGrey = Color(0xFFD1D5DB);
+  	static const Color _primaryPink = Color(0xFFE91E63);
+    static const Color _trackBg = Color(0xFFE5E7EB);
 
   @override
   void initState() {
@@ -42,145 +42,100 @@ class _BuatOrderDialogState extends State<BuatOrderDialog> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black26,
-      body: Center(
-        child: SizedBox(
-          width: 385,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Scaffold(
-              backgroundColor: const Color(0xFFFAF5F7),
-              body: SafeArea(
-                child: Column(
+    Widget build(BuildContext context) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFFAF5F7),
+        appBar: AppBar(
+          backgroundColor: const Color(0xFFFAF5F7),
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black87, size: 20),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: const Text(
+            'Buat Transaksi',
+            style: TextStyle(color: Colors.black87, fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          centerTitle: true,
+        ),
+        body: SafeArea(
+          child: Column(
+            children: [
+              _buildCustomTabBar(),
+              Expanded(
+                child: PageView(
+                  controller: _pageController,
+                  onPageChanged: (index) {
+                    setState(() {
+                      _activeTab = index;
+                    });
+                  },
                   children: [
-                    _buildCustomTabBar(),
-                    Expanded(
-                      child: PageView(
-                        controller: _pageController,
-                        onPageChanged: (index) {
-                          setState(() {
-                            _activeTab = index;
-                          });
-                        },
-                        children: [
-                          FormOrderDialog(
-                            type: 'IN',
-                            onOrderSuccess: widget.onOrderCreated,
-                          ),
-                          FormPengeluaranDialog(
-                            onSuccess: widget.onOrderCreated,
-                          ),
-                        ],
-                      ),
+                    FormOrderDialog(
+                      type: 'IN',
+                      onOrderSuccess: widget.onOrderCreated,
+                    ),
+                    FormPengeluaranDialog(
+                      onSuccess: widget.onOrderCreated,
                     ),
                   ],
                 ),
               ),
-            ),
+            ],
           ),
         ),
-      ),
-    );
-  }
+      );
+    }
 
-  Widget _buildCustomTabBar() {
-    final List<Widget> tabWidgets = [
-      Positioned(
-        right: 0,
-        top: 0,
-        bottom: 0,
-        width: 205,
-        child: GestureDetector(
-          onTap: () => _onTabTapped(1),
-          child: ClipPath(
-            clipper: RightTabClipper(),
-            child: Container(
-              color: _activeTab == 1 ? _activeGreen : _inactiveGrey,
-              alignment: Alignment.center,
-              padding: const EdgeInsets.only(left: 20),
-              child: Text(
-                'Form Pengeluaran',
-                style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.bold,
-                  fontStyle: FontStyle.italic,
-                  color: _activeTab == 1 ? Colors.black : Colors.black87,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-      Positioned(
-        left: 0,
-        top: 0,
-        bottom: 0,
-        width: 205,
-        child: GestureDetector(
-          onTap: () => _onTabTapped(0),
-          child: ClipPath(
-            clipper: LeftTabClipper(),
-            child: Container(
-              color: _activeTab == 0 ? _activeGreen : _inactiveGrey,
-              alignment: Alignment.center,
-              padding: const EdgeInsets.only(right: 20),
-              child: Text(
-                'Form Order',
-                style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.bold,
-                  fontStyle: FontStyle.italic,
-                  color: _activeTab == 0 ? Colors.black : Colors.black87,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    ];
-
+ Widget _buildCustomTabBar() {
     return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       height: 42,
-      color: const Color(0xFFFAF5F7),
-      child: Stack(
-        children: _activeTab == 1 ? tabWidgets : tabWidgets.reversed.toList(),
+      decoration: BoxDecoration(
+        color: _trackBg,
+        borderRadius: BorderRadius.circular(21),
+      ),
+      child: Row(
+        children: [
+          _buildTabItem(index: 0, title: 'Form Order'),
+          _buildTabItem(index: 1, title: 'Form Pengeluaran'),
+        ],
       ),
     );
   }
-}
 
-class LeftTabClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    final path = Path();
-    path.moveTo(0, 10);
-    path.quadraticBezierTo(0, 0, 10, 0);
-    path.lineTo(size.width, 0);
-    path.lineTo(size.width - 25, size.height);
-    path.lineTo(0, size.height);
-    path.close();
-    return path;
+  Widget _buildTabItem({required int index, required String title}) {
+    final isActive = _activeTab == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => _onTabTapped(index),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          margin: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            color: isActive ? _primaryPink : Colors.transparent,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: isActive
+                ? [
+                    BoxShadow(
+                      color: _primaryPink.withOpacity(0.3),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    )
+                  ]
+                : [],
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            title,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: isActive ? Colors.white : Colors.grey.shade700,
+            ),
+          ),
+        ),
+      ),
+    );
   }
-
-  @override
-  bool shouldReclip(CustomClipper<Path> oldClipper) => false;
-}
-
-class RightTabClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    final path = Path();
-    path.moveTo(25, 0);
-    path.lineTo(size.width - 10, 0);
-    path.quadraticBezierTo(size.width, 0, size.width, 10);
-    path.lineTo(size.width, size.height);
-    path.lineTo(0, size.height);
-    path.close();
-    return path;
-  }
-
-  @override
-  bool shouldReclip(CustomClipper<Path> oldClipper) => false;
 }

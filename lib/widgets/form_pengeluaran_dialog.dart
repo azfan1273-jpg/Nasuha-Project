@@ -41,15 +41,14 @@ class FormPengeluaranDialog extends StatefulWidget {
 
 class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
   static const Color _textBlack = Color(0xFF111827);
-  static const Color _yellowInput = Color(0xFFFFF59D);
+  static const Color _primaryPink = Color(0xFFE91E63);
+  static const Color _bgBg = Color(0xFFFAF5F7);
 
   final TextEditingController _totalController = TextEditingController();
   final TextEditingController _catatanController = TextEditingController();
   final TextEditingController _tanggalController = TextEditingController();
 
   DateTime _selectedDate = DateTime.now();
-
-  // 🔹 Deklarasikan di sini (Baris 61)
   String _filterPeriode = '7 Hari';
 
   List<Map<String, dynamic>> _kategoriList = [];
@@ -58,18 +57,17 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
   bool _isLoading = true;
   bool _isSubmitting = false;
 
-  // 🔹 Getter Logika Filter Data
   List<Map<String, dynamic>> get _filteredDaftarPengeluaran {
     if (_filterPeriode == 'Semua') return _daftarPengeluaran;
-  
+
     final now = DateTime.now();
     return _daftarPengeluaran.where((item) {
       final rawDate = item['expense_date'] ?? item['created_at'];
       if (rawDate == null) return false;
-      
+
       final date = DateTime.tryParse(rawDate.toString());
       if (date == null) return false;
-  
+
       if (_filterPeriode == '7 Hari') {
         final difference = now.difference(date).inDays;
         return difference >= 0 && difference <= 7;
@@ -108,7 +106,7 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
     final String str = number.toInt().toString();
     final RegExp reg = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
     final String result = str.replaceAllMapped(reg, (Match m) => '${m[1]}.');
-    return 'Rp. $result';
+    return 'Rp $result';
   }
 
   String _formatTanggalItem(dynamic rawDate) {
@@ -190,6 +188,30 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
     }
   }
 
+  InputDecoration _getInputDecoration(String hintText, {Widget? suffixIcon}) {
+    return InputDecoration(
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      fillColor: Colors.white,
+      filled: true,
+      hintText: hintText,
+      hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+      suffixIcon: suffixIcon,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: Colors.grey.shade300),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: Colors.grey.shade300),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: _primaryPink, width: 1.5),
+      ),
+    );
+  }
+
   void _showKelolaKategoriDialog() {
     final TextEditingController newKategoriCtrl = TextEditingController();
 
@@ -226,35 +248,22 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
                     Row(
                       children: [
                         Expanded(
-                          child: Container(
-                            height: 38,
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            decoration: BoxDecoration(
-                              color: _yellowInput,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: TextField(
-                              controller: newKategoriCtrl,
-                              style: const TextStyle(
-                                  fontSize: 11, fontWeight: FontWeight.bold),
-                              decoration: const InputDecoration(
-                                hintText: 'Kategori baru...',
-                                hintStyle: TextStyle(
-                                    fontSize: 11, color: Colors.black38),
-                                border: InputBorder.none,
-                                contentPadding: EdgeInsets.only(bottom: 12),
-                              ),
-                            ),
+                          child: TextField(
+                            controller: newKategoriCtrl,
+                            style: const TextStyle(fontSize: 12),
+                            decoration:
+                                _getInputDecoration('Kategori baru...'),
                           ),
                         ),
                         const SizedBox(width: 8),
                         ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.black,
+                            backgroundColor: _primaryPink,
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 12),
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8)),
+                                borderRadius: BorderRadius.circular(10)),
                           ),
                           onPressed: () async {
                             final val = newKategoriCtrl.text.trim();
@@ -269,7 +278,7 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
                           },
                           child: const Text('Tambah',
                               style: TextStyle(
-                                  fontSize: 11, fontWeight: FontWeight.bold)),
+                                  fontSize: 12, fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),
@@ -292,14 +301,14 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
                             title: Text(
                               item['name'].toString(),
                               style: const TextStyle(
-                                  fontSize: 11, fontWeight: FontWeight.w600),
+                                  fontSize: 12, fontWeight: FontWeight.w600),
                             ),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 IconButton(
                                   icon: const Icon(Icons.edit_rounded,
-                                      size: 16, color: Colors.blue),
+                                      size: 18, color: Colors.blue),
                                   onPressed: () {
                                     final editCtrl = TextEditingController(
                                       text: item['name'].toString(),
@@ -309,20 +318,22 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
                                       builder: (ctx) => AlertDialog(
                                         title: const Text('Edit Kategori',
                                             style: TextStyle(
-                                                fontSize: 13,
+                                                fontSize: 14,
                                                 fontWeight: FontWeight.bold)),
                                         content: TextField(
                                           controller: editCtrl,
                                           style: const TextStyle(fontSize: 12),
-                                          decoration: const InputDecoration(
-                                              hintText: 'Nama Kategori'),
+                                          decoration: _getInputDecoration(
+                                              'Nama Kategori'),
                                         ),
                                         actions: [
                                           TextButton(
                                             onPressed: () => Navigator.pop(ctx),
                                             child: const Text('Batal'),
                                           ),
-                                          TextButton(
+                                          ElevatedButton(
+                                            style: ElevatedButton.styleFrom(
+                                                backgroundColor: _primaryPink),
                                             onPressed: () async {
                                               final newText =
                                                   editCtrl.text.trim();
@@ -337,7 +348,9 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
                                                 setDialogState(() {});
                                               }
                                             },
-                                            child: const Text('Simpan'),
+                                            child: const Text('Simpan',
+                                                style: TextStyle(
+                                                    color: Colors.white)),
                                           ),
                                         ],
                                       ),
@@ -346,7 +359,7 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
                                 ),
                                 IconButton(
                                   icon: const Icon(Icons.delete_outline_rounded,
-                                      size: 16, color: Colors.red),
+                                      size: 18, color: Colors.red),
                                   onPressed: () async {
                                     if (_kategoriList.length > 1) {
                                       await supabase
@@ -396,7 +409,7 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
             children: [
               const Text('Edit Pengeluaran',
                   style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 14,
                       fontWeight: FontWeight.bold,
                       color: _textBlack)),
               IconButton(
@@ -410,49 +423,28 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text('Total Pengeluaran',
-                  style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      fontStyle: FontStyle.italic)),
-              const SizedBox(height: 4),
-              Container(
-                height: 38,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                decoration: BoxDecoration(
-                    color: _yellowInput, borderRadius: BorderRadius.circular(8)),
-                child: TextField(
-                  controller: editTotalCtrl,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    RupiahFormatter(),
-                  ],
-                  style:
-                      const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                  decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.only(bottom: 12)),
-                ),
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              TextField(
+                controller: editTotalCtrl,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  RupiahFormatter(),
+                ],
+                style:
+                    const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                decoration: _getInputDecoration('0'),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               const Text('Catatan / Deskripsi',
-                  style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      fontStyle: FontStyle.italic)),
-              const SizedBox(height: 4),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                    color: _yellowInput, borderRadius: BorderRadius.circular(8)),
-                child: TextField(
-                  controller: editCatatanCtrl,
-                  maxLines: 2,
-                  style: const TextStyle(
-                      fontSize: 10, fontWeight: FontWeight.bold),
-                  decoration: const InputDecoration(border: InputBorder.none),
-                ),
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              TextField(
+                controller: editCatatanCtrl,
+                maxLines: 2,
+                style: const TextStyle(fontSize: 12),
+                decoration: _getInputDecoration('Catatan...'),
               ),
             ],
           ),
@@ -466,15 +458,12 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
                 }
               },
               child: const Text('Hapus Data',
-                  style: TextStyle(
-                      color: Colors.red,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold)),
+                  style:
+                      TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF86EFAC),
-                elevation: 0,
+                backgroundColor: _primaryPink,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8)),
               ),
@@ -494,9 +483,7 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
               },
               child: const Text('Update',
                   style: TextStyle(
-                      color: Colors.black87,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold)),
+                      color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         );
@@ -558,602 +545,431 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black26, // Background luar saat di layar besar/web
-      body: Center(
-        child: SizedBox(
-          width: 385, // 👈 Terkunci 385px selebar layar HP
-          child: Scaffold(
-            backgroundColor: Colors.transparent,
-            body: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFFFFF0F5), Color(0xFFFFD1DC)],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
+      backgroundColor: _bgBg,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // HEADER DAFTAR PENGELUARAN & FILTER
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Daftar Pengeluaran',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: _textBlack,
+                  ),
                 ),
+                Container(
+                  height: 32,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _filterPeriode,
+                      isDense: true,
+                      style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: _textBlack),
+                      items: const [
+                        DropdownMenuItem(
+                            value: '7 Hari', child: Text('7 Hari Terakhir')),
+                        DropdownMenuItem(
+                            value: 'Bulan Ini', child: Text('Bulan Ini')),
+                        DropdownMenuItem(
+                            value: 'Semua', child: Text('Semua Data')),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) setState(() => _filterPeriode = val);
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            // TABEL DAFTAR PENGELUARAN
+            Container(
+              height: 200,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade300),
               ),
-              child: SafeArea(
-                child: Column(
-                  children: [
-                    Expanded(
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 8, horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(12),
+                        topRight: Radius.circular(12),
+                      ),
+                      border: Border(
+                          bottom: BorderSide(color: Colors.grey.shade300)),
+                    ),
+                    child: Row(
+                      children: const [
+                        SizedBox(
+                          width: 80,
+                          child: Text('TANGGAL',
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black54)),
+                        ),
+                        Expanded(
+                          child: Text('DESKRIPSI',
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black54)),
+                        ),
+                        SizedBox(
+                          width: 90,
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: Text('TOTAL',
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black54)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: _isLoading
+                        ? const Center(
+                            child: SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: _primaryPink),
+                            ),
+                          )
+                        : _daftarPengeluaran.isEmpty
+                            ? const Center(
+                                child: Text(
+                                  'Belum ada catatan pengeluaran',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.black45,
+                                      fontStyle: FontStyle.italic),
+                                ),
+                              )
+                            : ListView.separated(
+                                padding: EdgeInsets.zero,
+                                itemCount: _filteredDaftarPengeluaran.length,
+                                separatorBuilder: (_, __) => Divider(
+                                    height: 1, color: Colors.grey.shade200),
+                                itemBuilder: (context, index) {
+                                  final item =
+                                      _filteredDaftarPengeluaran[index];
+                                  final dateStr = _formatTanggalItem(
+                                      item['expense_date'] ??
+                                          item['created_at']);
+                                  final descStr = item['notes'] ?? '-';
+                                  final priceVal =
+                                      (item['amount'] as num?) ?? 0;
+                                  final categoryStr = (item['category'] ?? '')
+                                      .toString()
+                                      .trim();
+
+                                  return InkWell(
+                                    onTap: () =>
+                                        _showEditPengeluaranDialog(item),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 8, horizontal: 12),
+                                      child: Row(
+                                        children: [
+                                          SizedBox(
+                                            width: 80,
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(dateStr,
+                                                    style: const TextStyle(
+                                                        fontSize: 10,
+                                                        color: Colors.black87)),
+                                                if (categoryStr.isNotEmpty)
+                                                  Text(
+                                                    categoryStr,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: TextStyle(
+                                                        fontSize: 9,
+                                                        color:
+                                                            Colors.grey.shade600,
+                                                        fontWeight:
+                                                            FontWeight.w500),
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                          Expanded(
+                                            child: Text(
+                                              descStr,
+                                              style: const TextStyle(
+                                                  fontSize: 11,
+                                                  color: Colors.black87),
+                                            ),
+                                          ),
+                                          SizedBox(
+                                            width: 90,
+                                            child: Text(
+                                              _formatRupiah(priceVal),
+                                              textAlign: TextAlign.right,
+                                              style: const TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: _textBlack),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                  ),
+                ],
+              ),
+            ),
+
+            // SUB-TOTAL PENGELUARAN
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text(
+                    'Total Pengeluaran: ',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade700),
+                  ),
+                  Text(
+                    _formatRupiah(_totalPengeluaran),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: _primaryPink,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // CARD FORM INPUT PENGELUARAN
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'INPUT PENGELUARAN BARU',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: _textBlack,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  Row(
+                    children: [
+                      // INPUT TANGGAL
+                      Expanded(
+                        flex: 4,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            
-                            // JUDUL DAFTAR PENGELUARAN + TOMBOL FILTER
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
-                                  children: const [
-                                    Text('📋 ', style: TextStyle(fontSize: 15)),
-                                    Text(
-                                      'Daftar Pengeluaran',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                        fontStyle: FontStyle.italic,
-                                        color: _textBlack,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                // 🔹 Mini Dropdown Filter
-                                Container(
-                                  height: 26,
-                                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: Colors.black12),
-                                  ),
-                                  child: DropdownButtonHideUnderline(
-                                    child: DropdownButton<String>(
-                                      value: _filterPeriode,
-                                      isDense: true,
-                                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _textBlack),
-                                      items: const [
-                                        DropdownMenuItem(value: '7 Hari', child: Text('7 Hari Terakhir')),
-                                        DropdownMenuItem(value: 'Bulan Ini', child: Text('Bulan Ini')),
-                                        DropdownMenuItem(value: 'Semua', child: Text('Semua Data')),
-                                      ],
-                                      onChanged: (val) {
-                                        if (val != null) setState(() => _filterPeriode = val);
-                                      },
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-
-                            // TABEL DAFTAR PENGELUARAN
-                            Container(
-                              height: 195,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: Colors.black12),
-                              ),
-                              child: Column(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 6, horizontal: 8),
-                                    decoration: const BoxDecoration(
-                                      border: Border(
-                                          bottom: BorderSide(
-                                              color: Colors.black, width: 2)),
-                                    ),
-                                    child: Row(
-                                      children: const [
-                                        SizedBox(
-                                          width: 70,
-                                          child: Text('TANGGAL',
-                                              style: TextStyle(
-                                                  fontSize: 9,
-                                                  fontWeight: FontWeight.bold)),
-                                        ),
-                                        Text(' | ',
-                                            style:
-                                                TextStyle(color: Colors.black38)),
-                                        Expanded(
-                                          child: Center(
-                                            child: Text('DESKRIPSI',
-                                                style: TextStyle(
-                                                    fontSize: 9,
-                                                    fontWeight: FontWeight.bold)),
-                                          ),
-                                        ),
-                                        Text(' | ',
-                                            style:
-                                                TextStyle(color: Colors.black38)),
-                                        SizedBox(
-                                          width: 85,
-                                          child: Align(
-                                            alignment: Alignment.centerRight,
-                                            child: Text('TOTAL HARGA',
-                                                style: TextStyle(
-                                                    fontSize: 9,
-                                                    fontWeight: FontWeight.bold)),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: _isLoading
-                                        ? const Center(
-                                            child: SizedBox(
-                                              width: 24,
-                                              height: 24,
-                                              child: CircularProgressIndicator(
-                                                  strokeWidth: 2,
-                                                  color: Colors.black54),
-                                            ),
-                                          )
-                                        : _daftarPengeluaran.isEmpty
-                                            ? const Center(
-                                                child: Text(
-                                                  'Belum ada catatan pengeluaran',
-                                                  style: TextStyle(
-                                                      fontSize: 11,
-                                                      color: Colors.black45,
-                                                      fontStyle: FontStyle.italic),
-                                                ),
-                                              )
-                                            : ListView.separated(
-                                                padding: EdgeInsets.zero,
-                                                physics:
-                                                    const BouncingScrollPhysics(),
-                                                itemCount:
-                                                     _filteredDaftarPengeluaran.length,
-                                                separatorBuilder: (_, __) =>
-                                                    const Divider(
-                                                        height: 1,
-                                                        color: Colors.black12),
-                                                itemBuilder: (context, index) {
-                                                  final item =
-                                                      _filteredDaftarPengeluaran[index];
-                                                  final dateStr =
-                                                      _formatTanggalItem(
-                                                          item['expense_date'] ?? item['created_at']);
-                                                  final descStr =
-                                                      item['notes'] ?? '-';
-                                                  final priceVal =
-                                                      (item['amount'] as num?) ?? 0;
-                                                  final categoryStr =
-                                                      (item['category'] ?? '')
-                                                          .toString()
-                                                          .trim();
-
-                                                  return InkWell(
-                                                    onTap: () =>
-                                                        _showEditPengeluaranDialog(
-                                                            item),
-                                                    child: Padding(
-                                                      padding: const EdgeInsets
-                                                          .symmetric(
-                                                          vertical: 6,
-                                                          horizontal: 8),
-                                                      child: Row(
-                                                        crossAxisAlignment:
-                                                            CrossAxisAlignment
-                                                                .start,
-                                                        children: [
-                                                          SizedBox(
-                                                            width: 75,
-                                                            child: Column(
-                                                              crossAxisAlignment:
-                                                                  CrossAxisAlignment
-                                                                      .start,
-                                                              children: [
-                                                                Text(
-                                                                  dateStr,
-                                                                  style: const TextStyle(
-                                                                      fontSize: 9.5,
-                                                                      color: Colors
-                                                                          .black87),
-                                                                ),
-                                                                const SizedBox(
-                                                                    height: 2),
-                                                                Text(
-                                                                  categoryStr.isEmpty
-                                                                      ? '-'
-                                                                      : categoryStr,
-                                                                  maxLines: 2,
-                                                                  overflow:
-                                                                      TextOverflow
-                                                                          .ellipsis,
-                                                                  style:
-                                                                      const TextStyle(
-                                                                    fontSize: 8,
-                                                                    fontWeight:
-                                                                        FontWeight
-                                                                            .bold,
-                                                                    color: Colors
-                                                                        .black54,
-                                                                    fontStyle:
-                                                                        FontStyle
-                                                                            .italic,
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                          const Text(' | ',
-                                                              style: TextStyle(
-                                                                  color: Colors
-                                                                      .black26)),
-                                                          Expanded(
-                                                            child: Text(
-                                                              descStr,
-                                                              style: const TextStyle(
-                                                                  fontSize: 9.5,
-                                                                  color: Colors
-                                                                      .black87),
-                                                            ),
-                                                          ),
-                                                          const Text(' | ',
-                                                              style: TextStyle(
-                                                                  color: Colors
-                                                                      .black26)),
-                                                          SizedBox(
-                                                            width: 85,
-                                                            child: Text(
-                                                              _formatRupiah(
-                                                                  priceVal),
-                                                              textAlign:
-                                                                  TextAlign.right,
-                                                              style: const TextStyle(
-                                                                  fontSize: 9.5,
-                                                                  color: Colors
-                                                                      .black87),
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  );
-                                                },
-                                              ),
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            // SUB-TOTAL DINAMIS
-                            Padding(
-                              padding: const EdgeInsets.only(top: 6, bottom: 8),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  const Text(
-                                    'Total Pengeluaran : ',
-                                    style: TextStyle(
+                            const Text('Tanggal',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 4),
+                            InkWell(
+                              onTap: () => _selectDate(context),
+                              borderRadius: BorderRadius.circular(10),
+                              child: IgnorePointer(
+                                child: TextField(
+                                  controller: _tanggalController,
+                                  style: const TextStyle(
                                       fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                      fontStyle: FontStyle.italic,
-                                      color: Colors.black87,
-                                    ),
+                                      fontWeight: FontWeight.bold),
+                                  decoration: _getInputDecoration(
+                                    'DD/MM/YYYY',
+                                    suffixIcon: const Icon(
+                                        Icons.calendar_month_rounded,
+                                        size: 18,
+                                        color: Colors.black54),
                                   ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: Colors.black12),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.04),
-                                          blurRadius: 4,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Text(
-                                      _formatRupiah(_totalPengeluaran),
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        fontStyle: FontStyle.italic,
-                                        color: _textBlack,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            // INPUT PENGELUARAN SECTION
-                            const Text(
-                              'INPUT PENGELUARAN',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                fontStyle: FontStyle.italic,
-                                color: _textBlack,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      // INPUT TANGGAL
-                                      Expanded(
-                                        flex: 4,
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            const Text('Tanggal',
-                                                style: TextStyle(
-                                                    fontSize: 10,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontStyle: FontStyle.italic)),
-                                            const SizedBox(height: 4),
-                                            InkWell(
-                                              onTap: () => _selectDate(context),
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                              child: Container(
-                                                height: 36,
-                                                padding: const EdgeInsets.symmetric(
-                                                    horizontal: 8),
-                                                decoration: BoxDecoration(
-                                                  color: _yellowInput,
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
-                                                ),
-                                                child: Row(
-                                                  children: [
-                                                    Expanded(
-                                                      child: TextField(
-                                                        controller:
-                                                            _tanggalController,
-                                                        readOnly: true,
-                                                        onTap: () =>
-                                                            _selectDate(context),
-                                                        style: const TextStyle(
-                                                            fontSize: 10.5,
-                                                            fontWeight:
-                                                                FontWeight.bold,
-                                                            fontStyle:
-                                                                FontStyle.italic),
-                                                        decoration:
-                                                            const InputDecoration(
-                                                                border:
-                                                                    InputBorder.none,
-                                                                contentPadding:
-                                                                    EdgeInsets.only(
-                                                                        bottom: 12)),
-                                                      ),
-                                                    ),
-                                                    const Icon(
-                                                      Icons.calendar_month_rounded,
-                                                      size: 18,
-                                                      color: Colors.black87,
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(width: 10),
-
-                                      // DROPDOWN KATEGORI
-                                      Expanded(
-                                        flex: 6,
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            const Text('Kategori',
-                                                style: TextStyle(
-                                                    fontSize: 10,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontStyle: FontStyle.italic)),
-                                            const SizedBox(height: 4),
-                                            Container(
-                                              height: 36,
-                                              padding: const EdgeInsets.symmetric(
-                                                  horizontal: 10),
-                                              decoration: BoxDecoration(
-                                                color: _yellowInput,
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                              ),
-                                              child: DropdownButton<String>(
-                                                value: _selectedKategori,
-                                                isExpanded: true,
-                                                style: const TextStyle(
-                                                    fontSize: 10,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontStyle: FontStyle.italic,
-                                                    color: _textBlack),
-                                                items: _kategoriList.map((kat) {
-                                                  final String name = kat['name'];
-                                                  return DropdownMenuItem<String>(
-                                                    value: name,
-                                                    child: Text(name),
-                                                  );
-                                                }).toList(),
-                                                onChanged: (val) {
-                                                  if (val != null) {
-                                                    setState(() =>
-                                                        _selectedKategori = val);
-                                                  }
-                                                },
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 10),
-
-                                  // TOTAL PENGELUARAN INPUT
-                                  const Text('Total Pengeluaran',
-                                      style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                          fontStyle: FontStyle.italic)),
-                                  const SizedBox(height: 4),
-                                  Container(
-                                    height: 36,
-                                    padding:
-                                        const EdgeInsets.symmetric(horizontal: 10),
-                                    decoration: BoxDecoration(
-                                      color: _yellowInput,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: TextField(
-                                      controller: _totalController,
-                                      keyboardType: TextInputType.number,
-                                      inputFormatters: [
-                                        FilteringTextInputFormatter.digitsOnly,
-                                        RupiahFormatter(),
-                                      ],
-                                      style: const TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                          fontStyle: FontStyle.italic),
-                                      decoration: const InputDecoration(
-                                        hintText: '17.500',
-                                        hintStyle: TextStyle(
-                                            color: Colors.black38, fontSize: 11),
-                                        border: InputBorder.none,
-                                        contentPadding: EdgeInsets.only(bottom: 12),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 10),
-
-                                  // CATATAN TAMBAHAN
-                                  const Text('Catatan Tambahan',
-                                      style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                          fontStyle: FontStyle.italic)),
-                                  const SizedBox(height: 4),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: _yellowInput,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: TextField(
-                                      controller: _catatanController,
-                                      maxLines: 3,
-                                      style: const TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                          fontStyle: FontStyle.italic),
-                                      decoration: const InputDecoration(
-                                        hintText:
-                                            'Silahkan Tambahkan Deskripsi Pengeluaran',
-                                        hintStyle: TextStyle(
-                                            color: Colors.black38, fontSize: 10),
-                                        border: InputBorder.none,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-
-                                  // TOMBOL "+ Kategori"
-                                  Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: SizedBox(
-                                      height: 30,
-                                      child: ElevatedButton.icon(
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFF111827),
-                                          foregroundColor: Colors.white,
-                                          elevation: 0,
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 10),
-                                          shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(8)),
-                                        ),
-                                        onPressed: _showKelolaKategoriDialog,
-                                        icon: const Icon(
-                                            Icons.add_circle_outline_rounded,
-                                            size: 14),
-                                        label: const Text(
-                                          '+ Kategori',
-                                          style: TextStyle(
-                                              fontSize: 10.5,
-                                              fontWeight: FontWeight.bold),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                                ),
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ),
+                      const SizedBox(width: 10),
 
-                    // FOOTER (HANYA TOMBOL SIMPAN)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
-                      decoration: const BoxDecoration(
-                        border: Border(
-                            top: BorderSide(color: Colors.black, width: 1.5)),
-                      ),
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: SizedBox(
-                          height: 38,
-                          width: 120,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF86EFAC),
-                              foregroundColor: Colors.black87,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10)),
+                      // DROPDOWN KATEGORI
+                      Expanded(
+                        flex: 6,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Kategori',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 4),
+                            Container(
+                              height: 42,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 10),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: Colors.grey.shade300),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: _selectedKategori,
+                                  isExpanded: true,
+                                  style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: _textBlack),
+                                  items: _kategoriList.map((kat) {
+                                    final String name = kat['name'];
+                                    return DropdownMenuItem<String>(
+                                      value: name,
+                                      child: Text(name),
+                                    );
+                                  }).toList(),
+                                  onChanged: (val) {
+                                    if (val != null) {
+                                      setState(() => _selectedKategori = val);
+                                    }
+                                  },
+                                ),
+                              ),
                             ),
-                            onPressed: _isSubmitting ? null : _simpanPengeluaran,
-                            child: _isSubmitting
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                        color: Colors.black, strokeWidth: 2),
-                                  )
-                                : const Text('Simpan',
-                                    style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold)),
-                          ),
+                          ],
                         ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+
+                  // TOTAL PENGELUARAN INPUT
+                  const Text('Total Pengeluaran (Rp)',
+                      style:
+                          TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  TextField(
+                    controller: _totalController,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      RupiahFormatter(),
+                    ],
+                    style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.bold),
+                    decoration: _getInputDecoration('Contoh: 17.500'),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // CATATAN TAMBAHAN
+                  const Text('Catatan Tambahan',
+                      style:
+                          TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  TextField(
+                    controller: _catatanController,
+                    maxLines: 2,
+                    style: const TextStyle(fontSize: 11),
+                    decoration:
+                        _getInputDecoration('Detail / Deskripsi pengeluaran'),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // TOMBOL "+ KATEGORI"
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _textBlack,
+                      side: BorderSide(color: Colors.grey.shade400),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
                     ),
-                  ],
-                ),
+                    onPressed: _showKelolaKategoriDialog,
+                    icon: const Icon(Icons.add_circle_outline_rounded,
+                        size: 16),
+                    label: const Text(
+                      'Kelola Kategori',
+                      style:
+                          TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
+            const SizedBox(height: 16),
+
+            // TOMBOL SIMPAN
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _primaryPink,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: _isSubmitting ? null : _simpanPengeluaran,
+                child: _isSubmitting
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2),
+                      )
+                    : const Text(
+                        'SIMPAN PENGELUARAN',
+                        style: TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+              ),
+            ),
+          ],
         ),
       ),
     );

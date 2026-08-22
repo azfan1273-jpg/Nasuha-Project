@@ -321,17 +321,48 @@ class FormOrderDialogState extends State<FormOrderDialog> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Daftar Layanan (Keranjang)', style: TextStyle(fontSize: 11, color: Colors.black45, fontWeight: FontWeight.w500)),
-                        TextButton.icon(
-                          onPressed: _searchService,
-                          style: TextButton.styleFrom(
-                            foregroundColor: const Color(0xFF159A9C),
-                            padding: EdgeInsets.zero,
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        const Text(
+                          'Daftar Layanan (Keranjang)',
+                          style: TextStyle(
+                            fontSize: 12, 
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF111827),
                           ),
-                          icon: const Icon(Icons.add_circle_outline_rounded, size: 16),
-                          label: const Text('+ Tambah Layanan', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
+                        ),
+                        // Tombol baru: Outlined Soft Chip
+                        InkWell(
+                          onTap: _searchService, // Pastikan nama fungsi sesuai di kode kamu
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE91E63).withOpacity(0.08), // Pink transparan lembut
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: const Color(0xFFE91E63), 
+                                width: 1.2,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                Icon(
+                                  Icons.add_rounded, 
+                                  size: 15, 
+                                  color: Color(0xFFE91E63),
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Tambah Layanan',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFFE91E63),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ],
                     ),

@@ -272,9 +272,10 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => DaftarOrderByStatusScreen(
-          title: title,
-          orders: orders,
+        builder: (context) => BuatOrderDialog(
+          onOrderCreated: () {
+            // Callback untuk refresh data
+          },
         ),
       ),
     );
