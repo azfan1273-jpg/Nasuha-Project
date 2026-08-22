@@ -161,64 +161,113 @@ class FormOrderDialogState extends State<FormOrderDialog> {
   }
 
   Future<void> _submitOrder() async {
-    if (_selectedCustomer == null || _selectedServices.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pilih pelanggan dan minimal 1 layanan!')),
-      );
-      return;
-    }
-
-    setState(() => _isSubmitting = true);
-
-    final String serviceNames = _selectedServices
-        .map((s) => "${s['name']} (${s['quantity']} ${s['unit']})")
-        .join(', ');
-
-    final Map<String, dynamic> payload = {
-      'customer_name': _selectedCustomer!['name'],
-      'customer_phone': _selectedCustomer!['phone'],
-      'service_name': serviceNames,
-      'status': 'Baru',
-      'total_price': _totalPrice,
-      'catatan': _catatanController.text,
-      'parfum': _selectedParfum,
-      'discount_percent': _selectedDiscount,
-    };
-
-    try {
-      await supabase.from('orders').insert(payload);
-
+      if (_selectedCustomer == null || _selectedServices.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pilih pelanggan dan minimal 1 layanan!')),
+        );
+        return;
+      }
+  
+      setState(() => _isSubmitting = true);
+  
+      // Hanya mengambil nama layanan, tanpa menggabungkan quantity dan unit
+      final String serviceNames = _selectedServices
+          .map((s) => (s['name'] ?? '').toString())
+          .join(', ');
+  
+      // HITUNG ESTIMASI SELESAI (Mengambil durasi terbanyak dari layanan yang dipilih)
+          int maxDays = 1;
+          for (var s in _selectedServices) {
+            final String rawEst = (s['estimation'] ?? s['duration'] ?? '1').toString();
+            // Ambil angka saja dari teks (contoh: "3 Hari" diubah menjadi "3")
+            final String cleanEst = rawEst.replaceAll(RegExp(r'[^0-9]'), ''); 
+            final int days = int.tryParse(cleanEst) ?? 1;
+            
+            if (days > maxDays) maxDays = days;
+          }
+          
+          final DateTime estimatedDate = DateTime.now().add(Duration(days: maxDays));
+          
+          final Map<String, dynamic> payload = {
+            'customer_name': _selectedCustomer!['name'],
+            'customer_phone': _selectedCustomer!['phone'],
+            'service_name': serviceNames,
+            'status': 'Antrian',
+            'total_price': _totalPrice,
+            'catatan': _catatanController.text,
+            'parfum': _selectedParfum,
+            'discount_percent': _selectedDiscount,
+            'estimated_at': estimatedDate.toIso8601String(), // 👈 Masukkan nilai ini ke payload
+          };
+  
       try {
-        await DatabaseHelper.instance.insertOrder(payload);
+        // 1. Simpan header nota ke tabel 'orders'
+        final orderResponse = await supabase
+            .from('orders')
+            .insert(payload)
+            .select()
+            .single();
+  
+        final dynamic orderId = orderResponse['id'];
+  
+        // GENERASI NOMOR NOTA (Format: LNDR-00001)
+        final String notaNumber = 'LNDR-${orderId.toString().padLeft(5, '0')}';
+  
+        // Update nota_number ke baris transaksi
+        await supabase
+            .from('orders')
+            .update({'nota_number': notaNumber})
+            .eq('id', orderId);
+  
+        // 2. Petakan array _selectedServices ke tabel 'order_items'
+        final List<Map<String, dynamic>> orderItemsPayload = _selectedServices.map((s) {
+          final double price = (s['price'] as num).toDouble();
+          final double qty = (s['quantity'] as num).toDouble();
+          return {
+            'order_id': orderId,
+            'service_name': s['name'] ?? '',
+            'qty': qty,
+            'price': price,
+            'subtotal': price * qty,
+            'unit': s['unit'] ?? 'Pcs',
+            
+          };
+        }).toList();
+  
+        // 3. Simpan rincian item ke tabel 'order_items'
+        await supabase.from('order_items').insert(orderItemsPayload);
+  
+        try {
+          await DatabaseHelper.instance.insertOrder(payload);
+        } catch (e) {
+          debugPrint('Local SQLite insert skipped: $e');
+        }
+  
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Transaksi Berhasil Disimpan!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          widget.onOrderSuccess();
+          Navigator.pop(context);
+        }
       } catch (e) {
-        debugPrint('Local SQLite insert skipped: $e');
+        debugPrint('Error submit order: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Gagal menyimpan transaksi: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isSubmitting = false);
       }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Transaksi Berhasil Disimpan!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        widget.onOrderSuccess();
-        Navigator.pop(context);
-      }
-    } catch (e) {
-      debugPrint('Error submit order: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal menyimpan transaksi: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSubmitting = false);
     }
-  }
-
+    
   @override
   Widget build(BuildContext context) {
     return Container(

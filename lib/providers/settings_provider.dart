@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+enum AppThemeMode { pink, dark }
 
 class SettingsProvider with ChangeNotifier {
+
+  static const String _themeKey = 'app_theme_mode'; // Key untuk penyimpanan lokal
+
+  // --- KODE LAMA KAMU (namaToko, userRole, dll) TETAP DI SINI ---
   String _namaToko = 'NASUHA LAUNDRY';
   String _userRole = 'OWNER';
   String _emailToko = 'owner@lndr.com';
@@ -10,29 +16,61 @@ class SettingsProvider with ChangeNotifier {
   String get userRole => _userRole;
   String get emailToko => _emailToko;
 
-  void updateToko({required String nama, required String role, required String email}) {
-    _namaToko = nama;
-    _userRole = role;
-    _emailToko = email;
-    notifyListeners();
+  // --- LOGIKA TEMA BARU (2 TEMA) ---
+  AppThemeMode _currentTheme = AppThemeMode.pink;
+  AppThemeMode get currentTheme => _currentTheme;
+
+  // Constructor: Otomatis memuat tema tersimpan saat aplikasi pertama kali dibuka
+    SettingsProvider() {
+      _loadThemeFromPrefs();
+    }
+
+  Color get bgDark {
+    return _currentTheme == AppThemeMode.dark
+        ? const Color(0xFF121212) // Hitam Gelap
+        : const Color(0xFFFAF5F7); // Pink Terang
   }
 
-  void loadFromUser(User? user) {
-    if (user != null) {
-      _emailToko = user.email ?? _emailToko;
-      final meta = user.userMetadata;
-      if (meta != null) {
-        if (meta['nama_toko'] != null) _namaToko = meta['nama_toko'];
-        if (meta['role'] != null) _userRole = meta['role'];
+  Color get cardDark {
+    return _currentTheme == AppThemeMode.dark
+        ? const Color(0xFF1E1E24) // Kartu Gelap
+        : const Color(0xFFFCE7F3); // Kartu Pink
+  }
+
+  Color get accentColor => const Color(0xFFEC4899); // Pink mencolok tetap sama
+
+  Color get textColor {
+    return _currentTheme == AppThemeMode.dark
+        ? Colors.white
+        : const Color(0xFF111827);
+  }
+
+  // 🔹 2. Memuat pilihan tema dari penyimpanan HP/Browser
+  Future<void> _loadThemeFromPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedTheme = prefs.getString(_themeKey);
+      if (savedTheme == 'dark') {
+        _currentTheme = AppThemeMode.dark;
+      } else {
+        _currentTheme = AppThemeMode.pink;
       }
       notifyListeners();
+    } catch (e) {
+      debugPrint('Gagal memuat tema: $e');
     }
   }
 
-  void reset() {
-    _namaToko = 'NASUHA LAUNDRY';
-    _userRole = 'OWNER';
-    _emailToko = 'owner@lndr.com';
+  // 🔹 3. Menyimpan pilihan tema saat tombol diklik
+  Future<void> setTheme(AppThemeMode theme) async {
+    _currentTheme = theme;
     notifyListeners();
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_themeKey, theme == AppThemeMode.dark ? 'dark' : 'pink');
+    } catch (e) {
+      debugPrint('Gagal menyimpan tema: $e');
+    }
   }
 }

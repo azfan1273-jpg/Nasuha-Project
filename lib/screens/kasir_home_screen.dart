@@ -15,11 +15,6 @@ class KasirHomeScreen extends StatefulWidget {
 }
 
 class _KasirHomeScreenState extends State<KasirHomeScreen> {
-  static const Color _bgDark = Color(0xFFFAF5F7);
-  static const Color _cardDark = Color(0xFFFCE7F3);
-  static const Color _goldAccent = Color(0xFFEC4899);
-  static const Color _textBlack = Color(0xFF111827);
-
   final List<Map<String, dynamic>> _ordersHariIni = [];
   bool _isLoading = false;
 
@@ -30,19 +25,19 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
     return 'Rp $result';
   }
 
-	// HELPER FUNCTION PENGECEK TANGGAL HARI INI
-	bool _isHariIni(String? rawDate) {
-	  if (rawDate == null || rawDate.isEmpty) return false;
-	  try {
-	    final dt = DateTime.parse(rawDate).toLocal();
-	    final now = DateTime.now();
-	    return dt.year == now.year &&
-	        dt.month == now.month &&
-	        dt.day == now.day;
-	  } catch (_) {
-	    return false;
-	  }
-	}
+  // HELPER FUNCTION PENGECEK TANGGAL HARI INI
+  bool _isHariIni(String? rawDate) {
+    if (rawDate == null || rawDate.isEmpty) return false;
+    try {
+      final dt = DateTime.parse(rawDate).toLocal();
+      final now = DateTime.now();
+      return dt.year == now.year &&
+          dt.month == now.month &&
+          dt.day == now.day;
+    } catch (_) {
+      return false;
+    }
+  }
 
   @override
   void initState() {
@@ -107,9 +102,9 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
-          
+
     return Container(
-      color: _bgDark,
+      color: settings.bgDark,
       child: Column(
         children: [
           const SizedBox(height: 10),
@@ -121,104 +116,98 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
             onRefresh: _loadOrdersFromSupabase,
           ),
           const SizedBox(height: 10),
-          _buildBannerPromo(),
-          const SizedBox(height: 10),
-  
-          // 🔹 1. RINGKASAN CUCIAN (STATIS)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: _buildOrderSummaryCard(),
-          ),
-          const SizedBox(height: 10),
-  
-          // 🔹 2. KEUANGAN HARI INI (STATIS)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: _buildFinancialSummaryCard(),
-          ),
-          const SizedBox(height: 10),
-  
-          // 🔹 3. MASUK HARI INI (DINAMIS / AREA SCROLL)
+
           Expanded(
             child: RefreshIndicator(
               onRefresh: _loadOrdersFromSupabase,
-              color: _goldAccent,
+              color: settings.accentColor,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: _buildTodayOrdersCard(), // 👈 Hanya widget ini di area scroll
+                child: Column(
+                  children: [
+                    _buildBannerPromo(settings),
+                    const SizedBox(height: 10),
+                    _buildOrderSummaryCard(settings),
+                    const SizedBox(height: 10),
+                    _buildFinancialSummaryCard(settings),
+                    const SizedBox(height: 10),
+                    _buildTodayOrdersCard(settings),
+                    const SizedBox(height: 10),
+                  ],
+                ),
               ),
             ),
           ),
-  
-          _buildTransactionButton(),
+
+          _buildTransactionButton(settings),
         ],
       ),
     );
   }
 
-  Widget _buildBannerPromo() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: _cardDark,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                const Icon(
-                  Icons.campaign_outlined,
-                  color: _goldAccent,
-                  size: 16,
-                ),
-                const SizedBox(width: 8),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      'Promo Cuci Komplit Diskon 10%',
-                      style: TextStyle(
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.bold,
-                        color: _goldAccent,
-                      ),
-                    ),
-                    SizedBox(height: 1),
-                    Text(
-                      'Berlaku sampai akhir bulan.',
-                      style: TextStyle(fontSize: 7.5, color: Colors.black54),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: _goldAccent,
-                borderRadius: BorderRadius.circular(5),
+  Widget _buildBannerPromo(SettingsProvider settings) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: settings.cardDark,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.campaign_outlined,
+                color: settings.accentColor,
+                size: 16,
               ),
-              child: const Text(
-                'NEW',
-                style: TextStyle(
-                  fontSize: 7.5,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Promo Cuci Komplit Diskon 10%',
+                    style: TextStyle(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.bold,
+                      color: settings.accentColor,
+                    ),
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    'Berlaku sampai akhir bulan.',
+                    style: TextStyle(
+                      fontSize: 7.5,
+                      color: settings.textColor.withOpacity(0.6),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: settings.accentColor,
+              borderRadius: BorderRadius.circular(5),
+            ),
+            child: const Text(
+              'NEW',
+              style: TextStyle(
+                fontSize: 7.5,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildOrderSummaryCard() {
+  Widget _buildOrderSummaryCard(SettingsProvider settings) {
     final activeCount = _ordersHariIni
         .where((o) => o['status'] == 'Baru' || o['status'] == 'Proses')
         .length;
@@ -228,7 +217,7 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: _cardDark,
+        color: settings.cardDark,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -237,47 +226,35 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'RINGKASAN CUCIAN',
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
-                  color: _textBlack,
+                  color: settings.textColor,
                 ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Colors.white, Color(0xFFFCE7F3)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  color: settings.bgDark,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.white, width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _goldAccent.withOpacity(0.2),
-                      blurRadius: 6,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(
+                  children: [
+                    const Icon(
                       Icons.fiber_manual_record,
                       color: Colors.green,
                       size: 8,
                     ),
-                    SizedBox(width: 4),
+                    const SizedBox(width: 4),
                     Text(
                       'Realtime',
                       style: TextStyle(
                         fontSize: 9,
                         fontWeight: FontWeight.bold,
-                        color: _textBlack,
+                        color: settings.textColor,
                       ),
                     ),
                   ],
@@ -291,15 +268,15 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
               _buildGridStat(
                 'CUCIAN AKTIF',
                 '$activeCount',
-                _textBlack,
                 Icons.local_laundry_service,
+                settings,
               ),
               const SizedBox(width: 4),
               _buildGridStat(
                 'HARUS SELESAI',
                 '0',
-                _textBlack,
                 Icons.timer_outlined,
+                settings,
               ),
             ],
           ),
@@ -309,15 +286,15 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
               _buildGridStat(
                 'TERLAMBAT',
                 '0',
-                _textBlack,
                 Icons.warning_amber_rounded,
+                settings,
               ),
               const SizedBox(width: 4),
               _buildGridStat(
                 'SELESAI',
                 '$doneCount',
-                _textBlack,
                 Icons.check_circle_outline,
+                settings,
               ),
             ],
           ),
@@ -326,29 +303,32 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
     );
   }
 
-  Widget _buildFinancialSummaryCard() {
+  Widget _buildFinancialSummaryCard(SettingsProvider settings) {
     return Container(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: _cardDark,
+        color: settings.cardDark,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
+            children: [
               Text(
                 '💸 KEUANGAN HARI INI',
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
-                  color: _textBlack,
+                  color: settings.textColor,
                 ),
               ),
               Text(
                 'Hari Ini',
-                style: TextStyle(fontSize: 9, color: Colors.black54),
+                style: TextStyle(
+                  fontSize: 9,
+                  color: settings.textColor.withOpacity(0.6),
+                ),
               ),
             ],
           ),
@@ -356,22 +336,28 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Omset Hari Ini',
-                style: TextStyle(fontSize: 10, color: Colors.black87),
+                style: TextStyle(fontSize: 10, color: settings.textColor),
               ),
-              Text(_formatRupiah(_totalOmsetHariIni)),
+              Text(
+                _formatRupiah(_totalOmsetHariIni),
+                style: TextStyle(color: settings.textColor),
+              ),
             ],
           ),
           const Divider(height: 16, color: Colors.black12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Pengeluaran Hari Ini',
-                style: TextStyle(fontSize: 11, color: Colors.black87),
+                style: TextStyle(fontSize: 11, color: settings.textColor),
               ),
-              Text(_formatRupiah(_totalPengeluaranHariIni)),
+              Text(
+                _formatRupiah(_totalPengeluaranHariIni),
+                style: TextStyle(color: settings.textColor),
+              ),
             ],
           ),
         ],
@@ -379,28 +365,28 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
     );
   }
 
-  Widget _buildTodayOrdersCard() {
+  Widget _buildTodayOrdersCard(SettingsProvider settings) {
     final daftarMasukHariIni = _ordersHariIni
-            .where((item) =>
-                item['status'] != 'Pengeluaran' &&
-                _isHariIni(item['created_at'])) // 👈 Filter tanggal hari ini
-            .toList();
+        .where((item) =>
+            item['status'] != 'Pengeluaran' &&
+            _isHariIni(item['created_at']))
+        .toList();
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _cardDark,
+        color: settings.cardDark,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             '☕ MASUK HARI INI',
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.bold,
-              color: _textBlack,
+              color: settings.textColor,
             ),
           ),
           const SizedBox(height: 12),
@@ -410,28 +396,31 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: _bgDark,
+                      color: settings.bgDark,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(
-                      children: const [
+                      children: [
                         Icon(
                           Icons.shopping_basket_outlined,
-                          color: _goldAccent,
+                          color: settings.accentColor,
                           size: 30,
                         ),
-                        SizedBox(height: 6),
+                        const SizedBox(height: 6),
                         Text(
                           'Belum Ada Masuk Hari Ini',
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
-                            color: _textBlack,
+                            color: settings.textColor,
                           ),
                         ),
                         Text(
                           'Tekan "MENU TRANSAKSI" untuk buat order',
-                          style: TextStyle(fontSize: 9, color: Colors.black54),
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: settings.textColor.withOpacity(0.6),
+                          ),
                         ),
                       ],
                     ),
@@ -447,7 +436,7 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
                       margin: const EdgeInsets.only(bottom: 8),
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: _bgDark,
+                        color: settings.bgDark,
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Row(
@@ -459,8 +448,8 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
                               children: [
                                 Text(
                                   order['customer'] ?? '-',
-                                  style: const TextStyle(
-                                    color: _textBlack,
+                                  style: TextStyle(
+                                    color: settings.textColor,
                                     fontWeight: FontWeight.bold,
                                     fontSize: 11,
                                   ),
@@ -469,8 +458,8 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
                                 Text(
                                   order['services'] ?? '-',
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Colors.black54,
+                                  style: TextStyle(
+                                    color: settings.textColor.withOpacity(0.6),
                                     fontSize: 9,
                                   ),
                                 ),
@@ -481,7 +470,10 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              Text(_formatRupiah(order['total'] ?? 0)),
+                              Text(
+                                _formatRupiah(order['total'] ?? 0),
+                                style: TextStyle(color: settings.textColor),
+                              ),
                               const SizedBox(height: 2),
                               Container(
                                 padding: const EdgeInsets.symmetric(
@@ -489,15 +481,15 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
                                   vertical: 2,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: Colors.white,
+                                  color: settings.cardDark,
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
                                   order['status'] ?? 'Baru',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 8,
                                     fontWeight: FontWeight.bold,
-                                    color: _goldAccent,
+                                    color: settings.accentColor,
                                   ),
                                 ),
                               ),
@@ -516,14 +508,14 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
   Widget _buildGridStat(
     String title,
     String value,
-    Color textColor,
     IconData icon,
+    SettingsProvider settings,
   ) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: _bgDark,
+          color: settings.bgDark,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
@@ -534,38 +526,38 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 7,
                     fontWeight: FontWeight.bold,
-                    color: Colors.black54,
+                    color: settings.textColor.withOpacity(0.6),
                   ),
                 ),
                 const SizedBox(height: 1),
                 Text(
                   value,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
-                    color: _textBlack,
+                    color: settings.textColor,
                   ),
                 ),
               ],
             ),
-            Icon(icon, size: 15, color: _goldAccent),
+            Icon(icon, size: 15, color: settings.accentColor),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildTransactionButton() {
+  Widget _buildTransactionButton(SettingsProvider settings) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
       child: SizedBox(
         width: double.infinity,
         child: ElevatedButton.icon(
           style: ElevatedButton.styleFrom(
-            backgroundColor: _goldAccent,
+            backgroundColor: settings.accentColor,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(

@@ -6,6 +6,8 @@ import 'printer_screen.dart';
 import 'kasir_screen.dart';
 import 'owner_screen.dart';
 import 'cari_pelanggan_screen.dart';
+import 'package:provider/provider.dart'; // 👈 Supaya context.watch() tidak error
+import '../providers/settings_provider.dart'; // 👈 Supaya AppThemeMode & SettingsProvider terbaca
 
 class SettingScreen extends StatelessWidget {
   const SettingScreen({super.key});
@@ -94,6 +96,7 @@ class SettingScreen extends StatelessWidget {
       ),
     );
   }
+ 
 
   @override
   Widget build(BuildContext context) {
@@ -122,6 +125,10 @@ class SettingScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                  
+                  		_buildThemeSelector(context), 
+                  		  const SizedBox(height: 16),
+                  
 					  // KATEGORI 1: TOKO & AKUN
 					  const Text(
 					    'TOKO & AKUN',
@@ -256,4 +263,58 @@ class SettingScreen extends StatelessWidget {
 	    ),
 	  );
     }
+  
+
+Widget _buildThemeSelector(BuildContext context) {
+    final settings = context.watch<SettingsProvider>();
+
+    return Card(
+      color: settings.cardDark,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Pilih Tema Aplikasi', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildThemeCircle(
+                  context, 
+                  color: const Color(0xFFEC4899), 
+                  mode: AppThemeMode.pink, 
+                  isSelected: settings.currentTheme == AppThemeMode.pink,
+                ),
+                _buildThemeCircle(
+                  context, 
+                  color: const Color(0xFF0284C7), 
+                  mode: AppThemeMode.dark, 
+                  isSelected: settings.currentTheme == AppThemeMode.dark,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
+
+  Widget _buildThemeCircle(BuildContext context, {required Color color, required AppThemeMode mode, required bool isSelected}) {
+    return GestureDetector(
+      onTap: () => context.read<SettingsProvider>().setTheme(mode),
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: isSelected ? Border.all(color: Colors.black, width: 3) : null,
+        ),
+        child: isSelected ? const Icon(Icons.check, color: Colors.white) : null,
+      ),
+    );
+  }
+
+}
+

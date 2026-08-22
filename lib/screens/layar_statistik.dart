@@ -4,6 +4,7 @@ import 'package:remixicon/remixicon.dart';
 import '../main.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/buat_order_dialog.dart';
+import '../widgets/order_detail_dialog.dart';
 import '../screens/report_screen.dart';
 import 'setting_screen.dart';
 import '../widgets/toko_header_widget.dart';
@@ -16,9 +17,6 @@ class LayarStatistik extends StatefulWidget {
 }
 
 class _LayarStatistikState extends State<LayarStatistik> {
-  static const Color _bgDark = Color(0xFFFAF5F7);
-  static const Color _cardDark = Color(0xFFFCE7F3);
-  static const Color _goldAccent = Color(0xFFEC4899);
   static const Color _textBlack = Color(0xFF111827);
 
   final List<Map<String, dynamic>> _allOrders = [];
@@ -47,7 +45,7 @@ class _LayarStatistikState extends State<LayarStatistik> {
     try {
       final List<dynamic> data = await supabase
           .from('orders')
-          .select('*')
+          .select('*, order_items(*)')
           .order('created_at', ascending: false);
 
       if (mounted) {
@@ -97,12 +95,12 @@ class _LayarStatistikState extends State<LayarStatistik> {
   }
 
   String _formatTanggal(String? rawDate) {
-    if (rawDate == null || rawDate.isEmpty) return '17/09/2026';
+    if (rawDate == null || rawDate.isEmpty) return '-';
     try {
-      final dt = DateTime.parse(rawDate);
+      final dt = DateTime.parse(rawDate).toLocal();
       return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
     } catch (_) {
-      return '17/09/2026';
+      return '-';
     }
   }
 
@@ -128,7 +126,7 @@ class _LayarStatistikState extends State<LayarStatistik> {
     return Center(
       child: Container(
         width: 385,
-        color: _bgDark,
+        color: settings.bgDark,
         child: Column(
           children: [
             const SizedBox(height: 10),
@@ -147,14 +145,14 @@ class _LayarStatistikState extends State<LayarStatistik> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildLeftSidebar(),
+                    _buildLeftSidebar(settings),
 
                     const SizedBox(width: 6),
                     Container(
                       width: 2.5,
                       margin: const EdgeInsets.symmetric(vertical: 4),
                       decoration: BoxDecoration(
-                        color: _goldAccent.withOpacity(0.5),
+                        color: settings.accentColor.withOpacity(0.5),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -169,10 +167,10 @@ class _LayarStatistikState extends State<LayarStatistik> {
                                 flex: 5,
                                 child: Text(
                                   _getJudulListBar(),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
-                                    color: _textBlack,
+                                    color: settings.textColor,
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -185,7 +183,7 @@ class _LayarStatistikState extends State<LayarStatistik> {
                                   decoration: BoxDecoration(
                                     color: Colors.white,
                                     borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: _cardDark),
+                                    border: Border.all(color: settings.cardDark),
                                   ),
                                   child: TextField(
                                     controller: _searchController,
@@ -194,11 +192,13 @@ class _LayarStatistikState extends State<LayarStatistik> {
                                       setState(() => _searchQuery = val);
                                     },
                                     decoration: const InputDecoration(
+                                      isDense: true,
                                       hintText: 'Pencarian list bar...',
                                       hintStyle: TextStyle(fontSize: 8, color: Colors.black38),
                                       prefixIcon: Icon(Icons.search, size: 14, color: Colors.grey),
+                                      prefixIconConstraints: BoxConstraints(minWidth: 24, minHeight: 28),
                                       border: InputBorder.none,
-                                      contentPadding: EdgeInsets.only(bottom: 12),
+                                      contentPadding: EdgeInsets.symmetric(vertical: 7),
                                     ),
                                   ),
                                 ),
@@ -211,13 +211,13 @@ class _LayarStatistikState extends State<LayarStatistik> {
                             child: Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: _cardDark.withOpacity(0.6),
+                                color: settings.cardDark.withOpacity(0.6),
                                 borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: _cardDark),
+                                border: Border.all(color: settings.cardDark),
                               ),
                               child: _isLoading
-                                  ? const Center(
-                                      child: CircularProgressIndicator(color: _goldAccent, strokeWidth: 2),
+                                  ? Center(
+                                      child: CircularProgressIndicator(color: settings.accentColor, strokeWidth: 2),
                                     )
                                   : _filteredOrders.isEmpty
                                       ? const Center(
@@ -233,7 +233,7 @@ class _LayarStatistikState extends State<LayarStatistik> {
                                         )
                                       : RefreshIndicator(
                                           onRefresh: _fetchOrders,
-                                          color: _goldAccent,
+                                          color: settings.accentColor,
                                           child: ListView.builder(
                                             itemCount: _filteredOrders.length,
                                             itemBuilder: (context, index) {
@@ -252,30 +252,31 @@ class _LayarStatistikState extends State<LayarStatistik> {
               ),
             ),
 
-            _buildTransactionButton(),
+            _buildTransactionButton(settings),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildLeftSidebar() {
+  Widget _buildLeftSidebar(SettingsProvider settings) {
     return SizedBox(
       width: 46,
       child: Column(
         children: [
-          _buildFilterButton('ANTRIAN', Remix.time_line),
+          _buildFilterButton('ANTRIAN', Remix.time_line, settings),
           const SizedBox(height: 8),
-          _buildFilterButton('PROSES', Remix.loader_2_line),
+          _buildFilterButton('PROSES', Remix.loader_2_line, settings),
           const SizedBox(height: 8),
-          _buildFilterButton('SELESAI', Remix.shield_check_line),
+          _buildFilterButton('SELESAI', Remix.shield_check_line, settings),
           const SizedBox(height: 8),
-          _buildFilterButton('BATAL', Remix.close_circle_line),
+          _buildFilterButton('BATAL', Remix.close_circle_line, settings),
           
           const Spacer(),
 
           _buildSideMenuItem(
             icon: Icons.assignment_outlined,
+            settings: settings,
             onTap: () {
               Navigator.push(
                 context,
@@ -290,11 +291,12 @@ class _LayarStatistikState extends State<LayarStatistik> {
           
           _buildSideMenuItem(
             icon: Icons.settings_outlined,
+            settings: settings,
             onTap: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => const  SettingScreen(),
+                  builder: (context) => const SettingScreen(),
                 ),
               );
             },
@@ -304,7 +306,7 @@ class _LayarStatistikState extends State<LayarStatistik> {
     );  
   }
 
-  Widget _buildFilterButton(String filterKey, IconData icon) {
+  Widget _buildFilterButton(String filterKey, IconData icon, SettingsProvider settings) {
     final bool isSelected = _selectedFilter == filterKey;
   
     return GestureDetector(
@@ -313,7 +315,7 @@ class _LayarStatistikState extends State<LayarStatistik> {
         width: 46,
         height: 46,
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF22C55E) : const Color(0xFFFCE7F3),
+          color: isSelected ? const Color(0xFF22C55E) : settings.cardDark,
           borderRadius: BorderRadius.circular(14),
           boxShadow: isSelected
               ? [
@@ -328,13 +330,13 @@ class _LayarStatistikState extends State<LayarStatistik> {
         child: Icon(
           icon,
           size: 20,
-          color: isSelected ? Colors.white : const Color(0xFF111827),
+          color: isSelected ? Colors.white : settings.textColor,
         ),
       ),
     );
   }
 
-  Widget _buildSideMenuItem({required IconData icon, required VoidCallback onTap}) {
+  Widget _buildSideMenuItem({required IconData icon, required VoidCallback onTap, required SettingsProvider settings}) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
@@ -342,96 +344,124 @@ class _LayarStatistikState extends State<LayarStatistik> {
         width: 46,
         height: 46,
         decoration: BoxDecoration(
-          color: _cardDark,
+          color: settings.cardDark,
           borderRadius: BorderRadius.circular(14),
         ),
-        child: Icon(icon, size: 20, color: _textBlack),
+        child: Icon(icon, size: 20, color: settings.textColor),
       ),
     );
   }
 
   Widget _buildOrderCardBar(Map<String, dynamic> item) {
-    final name = item['customer_name'] ?? 'Pelanggan';
-    final total = (item['total_price'] as num?)?.toDouble() ?? 0.0;
-    final dateStr = _formatTanggal(item['created_at']);
-    final service = item['service_name'] ?? '1 order';
+    final String customerName = (item['customer_name'] ?? item['nama_pelanggan'] ?? 'Pelanggan').toString();
+    final num totalPrice = num.tryParse(item['total_price']?.toString() ?? '0') ?? 0;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFFFF3B0), Color(0xFFFFC7E8)],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
+    int serviceCount = 0;
+    if (item['order_items'] is List && (item['order_items'] as List).isNotEmpty) {
+      serviceCount = (item['order_items'] as List).length;
+    } else if (item['service_name'] != null && item['service_name'].toString().isNotEmpty) {
+      serviceCount = item['service_name'].toString().split(',').length;
+    }
+    final String serviceText = '$serviceCount layanan';
+
+    String estText = 'Est: -';
+    final dynamic rawEst = item['estimated_at'] ?? item['estimasi_selesai'] ?? item['estimasi'];
+    
+    if (rawEst != null && rawEst.toString().isNotEmpty && rawEst.toString() != 'null') {
+      try {
+        final targetDate = DateTime.parse(rawEst.toString());
+        estText = 'Est: ${_formatTanggal(targetDate.toIso8601String())}';
+      } catch (_) {}
+    }
+
+    return InkWell(
+      onTap: () {
+        showDialog(
+          context: context,
+          builder: (context) => OrderDetailDialog(
+            order: item,
+            onOrderUpdated: _fetchOrders,
           ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        );
+      },
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [
+              Color(0xFFFFF3B0),
+              Color(0xFFFFC7E8),
+            ],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    customerName,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: Colors.black87,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    estText,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontStyle: FontStyle.italic,
+                      color: Colors.black54,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  name,
-                  overflow: TextOverflow.ellipsis,
+                  serviceText,
                   style: const TextStyle(
-                    fontSize: 12,
                     fontWeight: FontWeight.bold,
-                    color: _textBlack,
+                    fontSize: 12,
+                    color: Colors.black87,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Est selesai - $dateStr',
+                  _formatRupiah(totalPrice),
                   style: const TextStyle(
-                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
                     fontStyle: FontStyle.italic,
                     color: Colors.black87,
                   ),
                 ),
               ],
             ),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                service.contains('(') ? service.split('(').first : service,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: _textBlack,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                _formatRupiah(total),
-                style: const TextStyle(
-                  fontSize: 10,
-                  fontStyle: FontStyle.italic,
-                  fontWeight: FontWeight.w600,
-                  color: _textBlack,
-                ),
-              ),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildTransactionButton() {
+  Widget _buildTransactionButton(SettingsProvider settings) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
       child: SizedBox(
@@ -439,7 +469,7 @@ class _LayarStatistikState extends State<LayarStatistik> {
         height: 44,
         child: ElevatedButton.icon(
           style: ElevatedButton.styleFrom(
-            backgroundColor: _goldAccent,
+            backgroundColor: settings.accentColor,
             foregroundColor: Colors.white,
             elevation: 2,
             shape: RoundedRectangleBorder(
