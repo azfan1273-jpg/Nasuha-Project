@@ -4,17 +4,17 @@ import '../main.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/buat_order_dialog.dart';
 import 'login_screen.dart';
-import '../widgets/toko_header_widget.dart';
 import '../screens/report_screen.dart';
+import 'daftar_order_by_status_screen.dart';
 
 class KasirHomeScreen extends StatefulWidget {
   const KasirHomeScreen({super.key});
 
   @override
-  State<KasirHomeScreen> createState() => _KasirHomeScreenState();
+  State<KasirHomeScreen> createState() => KasirHomeScreenState();
 }
 
-class _KasirHomeScreenState extends State<KasirHomeScreen> {
+class KasirHomeScreenState extends State<KasirHomeScreen> {
   final List<Map<String, dynamic>> _ordersHariIni = [];
   bool _isLoading = false;
 
@@ -39,11 +39,30 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
     }
   }
 
+  // HELPER FUNCTION PENGECEK TERLAMBAT
+  bool _isTerlambat(String? rawDate) {
+    if (rawDate == null || rawDate.isEmpty) return false;
+    try {
+      final est = DateTime.parse(rawDate).toLocal();
+      final now = DateTime.now();
+      // Bandingkan apakah tanggal estimasi lebih kecil dari tanggal hari ini (00:00)
+      final todayStart = DateTime(now.year, now.month, now.day);
+      return est.isBefore(todayStart);
+    } catch (_) {
+      return false;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     _loadOrdersFromSupabase();
   }
+
+	// Method publik yang bisa dipanggil dari KasirPageManager
+	Future<void> refreshData() async {
+	  await _loadOrdersFromSupabase();
+	}
 
   Future<void> _loadOrdersFromSupabase() async {
     if (!mounted) return;
@@ -66,6 +85,7 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
               'status': record['status'] ?? 'Baru',
               'total': (record['total_price'] as num?)?.toDouble() ?? 0.0,
               'created_at': record['created_at'],
+              'estimated_at': record['estimated_at'],
             };
           }));
         });
@@ -104,19 +124,10 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
     final settings = context.watch<SettingsProvider>();
 
     return Container(
+      width: double.infinity,
       color: settings.bgDark,
       child: Column(
         children: [
-          const SizedBox(height: 10),
-          TokoHeaderWidget(
-            namaToko: settings.namaToko,
-            userRole: settings.userRole,
-            emailToko: settings.emailToko,
-            isLoading: _isLoading,
-            onRefresh: _loadOrdersFromSupabase,
-          ),
-          const SizedBox(height: 10),
-
           Expanded(
             child: RefreshIndicator(
               onRefresh: _loadOrdersFromSupabase,
@@ -126,8 +137,7 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Column(
                   children: [
-                    _buildBannerPromo(settings),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 6),
                     _buildOrderSummaryCard(settings),
                     const SizedBox(height: 10),
                     _buildFinancialSummaryCard(settings),
@@ -146,73 +156,23 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
     );
   }
 
-  Widget _buildBannerPromo(SettingsProvider settings) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: settings.cardDark,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.campaign_outlined,
-                color: settings.accentColor,
-                size: 16,
-              ),
-              const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Promo Cuci Komplit Diskon 10%',
-                    style: TextStyle(
-                      fontSize: 9.5,
-                      fontWeight: FontWeight.bold,
-                      color: settings.accentColor,
-                    ),
-                  ),
-                  const SizedBox(height: 1),
-                  Text(
-                    'Berlaku sampai akhir bulan.',
-                    style: TextStyle(
-                      fontSize: 7.5,
-                      color: settings.textColor.withOpacity(0.6),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: settings.accentColor,
-              borderRadius: BorderRadius.circular(5),
-            ),
-            child: const Text(
-              'NEW',
-              style: TextStyle(
-                fontSize: 7.5,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildOrderSummaryCard(SettingsProvider settings) {
-    final activeCount = _ordersHariIni
-        .where((o) => o['status'] == 'Baru' || o['status'] == 'Proses')
-        .length;
-    final doneCount =
-        _ordersHariIni.where((o) => o['status'] == 'Selesai').length;
+          // 1. Filter Data
+          final cucianAktifList = _ordersHariIni
+              .where((o) => o['status'] != 'Selesai' && o['status'] != 'Pengeluaran')
+              .toList();
+        
+          final harusSelesaiList = _ordersHariIni
+              .where((o) => o['status'] != 'Selesai' && _isHariIni(o['estimated_at']))
+              .toList();
+        
+          final terlambatList = _ordersHariIni
+              .where((o) => o['status'] != 'Selesai' && _isTerlambat(o['estimated_at']))
+              .toList();
+        
+          final selesaiList = _ordersHariIni
+              .where((o) => o['status'] == 'Selesai')
+              .toList();
 
     return Container(
       padding: const EdgeInsets.all(10),
@@ -264,41 +224,58 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
           ),
           const SizedBox(height: 6),
           Row(
-            children: [
-              _buildGridStat(
-                'CUCIAN AKTIF',
-                '$activeCount',
-                Icons.local_laundry_service,
-                settings,
-              ),
-              const SizedBox(width: 4),
-              _buildGridStat(
-                'HARUS SELESAI',
-                '0',
-                Icons.timer_outlined,
-                settings,
-              ),
-            ],
+        children: [
+          _buildGridStat(
+            'CUCIAN AKTIF',
+            '${cucianAktifList.length}',
+            Icons.local_laundry_service,
+            settings,
+            onTap: () => _bukaDetailOrderByStatus('Cucian Aktif', cucianAktifList),
           ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              _buildGridStat(
-                'TERLAMBAT',
-                '0',
-                Icons.warning_amber_rounded,
-                settings,
-              ),
-              const SizedBox(width: 4),
-              _buildGridStat(
-                'SELESAI',
-                '$doneCount',
-                Icons.check_circle_outline,
-                settings,
-              ),
-            ],
+          const SizedBox(width: 4),
+          _buildGridStat(
+            'HARUS SELESAI',
+            '${harusSelesaiList.length}',
+            Icons.timer_outlined,
+            settings,
+            onTap: () => _bukaDetailOrderByStatus('Harus Selesai Hari Ini', harusSelesaiList),
           ),
         ],
+      ),
+      	const SizedBox(height: 4),
+	      Row(
+	        children: [
+	          _buildGridStat(
+	            'TERLAMBAT',
+	            '${terlambatList.length}',
+	            Icons.warning_amber_rounded,
+	            settings,
+	            onTap: () => _bukaDetailOrderByStatus('Orderan Terlambat', terlambatList),
+	          ),
+	          const SizedBox(width: 4),
+	          _buildGridStat(
+	            'SELESAI',
+	            '${selesaiList.length}',
+	            Icons.check_circle_outline,
+	            settings,
+	            onTap: () => _bukaDetailOrderByStatus('Orderan Selesai', selesaiList),
+	          ),
+	        ],
+	      ),
+	    ],
+	  ),
+    );
+  }
+  
+  // Function Helper Navigasi Ke Screen Baru
+  void _bukaDetailOrderByStatus(String title, List<Map<String, dynamic>> orders) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => DaftarOrderByStatusScreen(
+          title: title,
+          orders: orders,
+        ),
       ),
     );
   }
@@ -506,13 +483,17 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
   }
 
   Widget _buildGridStat(
-    String title,
-    String value,
-    IconData icon,
-    SettingsProvider settings,
-  ) {
+      String title,
+      String value,
+      IconData icon,
+      SettingsProvider settings, { 
+      VoidCallback? onTap,
+    }) {
     return Expanded(
-      child: Container(
+      child: InkWell(
+      	onTap: onTap,
+	        borderRadius: BorderRadius.circular(8),
+	        child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: settings.bgDark,
@@ -547,8 +528,9 @@ class _KasirHomeScreenState extends State<KasirHomeScreen> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildTransactionButton(SettingsProvider settings) {
     return Padding(

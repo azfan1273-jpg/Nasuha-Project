@@ -7,7 +7,7 @@ import '../widgets/buat_order_dialog.dart';
 import '../widgets/order_detail_dialog.dart';
 import '../screens/report_screen.dart';
 import 'setting_screen.dart';
-import '../widgets/toko_header_widget.dart';
+
 
 class LayarStatistik extends StatefulWidget {
   const LayarStatistik({Key? key}) : super(key: key);
@@ -125,18 +125,11 @@ class _LayarStatistikState extends State<LayarStatistik> {
 
     return Center(
       child: Container(
-        width: 385,
+        width: double.infinity,
         color: settings.bgDark,
         child: Column(
           children: [
-            const SizedBox(height: 10),
-            TokoHeaderWidget(
-              namaToko: settings.namaToko,
-              userRole: settings.userRole,
-              emailToko: settings.emailToko,
-              isLoading: _isLoading,
-              onRefresh: _fetchOrders,
-            ),
+            
             const SizedBox(height: 10),
 
             Expanded(
