@@ -267,19 +267,21 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
     );
   }
   
-  // Function Helper Navigasi Ke Screen Baru
-  void _bukaDetailOrderByStatus(String title, List<Map<String, dynamic>> orders) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => BuatOrderDialog(
-          onOrderCreated: () {
-            // Callback untuk refresh data
-          },
+ // Function Helper Navigasi Ke Screen Baru dengan Callback Refresh Data
+    Future<void> _bukaDetailOrderByStatus(String title, List<Map<String, dynamic>> orders) async {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => DaftarOrderByStatusScreen(
+            title: title,
+            orders: orders,
+          ),
         ),
-      ),
-    );
-  }
+      );
+  
+      // Callback: Otomatis dipanggil untuk reload data Supabase setelah user menutup layar detail
+      _loadOrdersFromSupabase();
+    }
 
   Widget _buildFinancialSummaryCard(SettingsProvider settings) {
     return Container(
@@ -320,7 +322,10 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
               ),
               Text(
                 _formatRupiah(_totalOmsetHariIni),
-                style: TextStyle(color: settings.textColor),
+                style: const TextStyle(
+                  color: Colors.green, // 🟢 Hijau untuk Omset
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),
@@ -334,7 +339,10 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
               ),
               Text(
                 _formatRupiah(_totalPengeluaranHariIni),
-                style: TextStyle(color: settings.textColor),
+                style: const TextStyle(
+                  color: Colors.red, // 🔴 Merah untuk Pengeluaran
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),

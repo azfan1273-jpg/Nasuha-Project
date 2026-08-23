@@ -244,15 +244,13 @@ class _ReportScreenState extends State<ReportScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black26,
-      body: Center(
-        child: SizedBox(
-          width: 385,
-          child: Scaffold(
+
+     /* backgroundColor: Colors.black26,body: Center(child: SizedBox(width: 385,child: Scaffold(  */
+          
             backgroundColor: _bgSoft,
             body: SafeArea(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Column(
                   children: [
                     // 1. HEADER
@@ -595,18 +593,15 @@ class _ReportScreenState extends State<ReportScreen> {
                               fontWeight: FontWeight.bold,
                               fontStyle: FontStyle.italic,
                               color: _textDark,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+                           ),
+                         ),
+                       ),
+                     ],
+                   ),
+                 ],
+               ),
+             ),
+           ),
+         );
+       }
+ }       

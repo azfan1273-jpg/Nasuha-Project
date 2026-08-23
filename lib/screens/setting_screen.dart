@@ -98,34 +98,29 @@ class SettingScreen extends StatelessWidget {
   }
  
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black26,
-      body: Center(
-        child: SizedBox(
-          width: 385,
-          child: Scaffold(
-            backgroundColor: _bgDark,
-            appBar: AppBar(
-              backgroundColor: Colors.white,
-              elevation: 0,
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back_rounded, color: _textBlack),
-                onPressed: () => Navigator.pop(context),
-              ),
-              title: const Text(
-                'Pengaturan Aplikasi',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _textBlack),
-              ),
-            ),
-            body: SafeArea(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                  
+	  @override
+	  Widget build(BuildContext context) {
+	    return Scaffold(
+	        backgroundColor: _bgDark,
+	        appBar: AppBar(
+	          backgroundColor: Colors.white,
+	          elevation: 0,
+	          leading: IconButton(
+	            icon: const Icon(Icons.arrow_back_rounded, color: _textBlack),
+	            onPressed: () => Navigator.pop(context),
+	          ),
+	          title: const Text(
+	            'Pengaturan Aplikasi',
+	            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _textBlack),
+	          ),
+	        ),
+	        body: SafeArea(
+	          child: SingleChildScrollView(
+	            padding: const EdgeInsets.all(16),
+	            child: Column(
+	              crossAxisAlignment: CrossAxisAlignment.start,
+	              children: [
+	              
                   		_buildThemeSelector(context), 
                   		  const SizedBox(height: 16),
                   
@@ -257,9 +252,7 @@ class SettingScreen extends StatelessWidget {
 					],               
 			      ),
 	            ),
-	          ),
-	        ),
-	      ),
+	          
 	    ),
 	  );
     }
