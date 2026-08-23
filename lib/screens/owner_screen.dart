@@ -32,7 +32,7 @@ class _OwnerScreenState extends State<OwnerScreen> {
                 icon: const Icon(Icons.arrow_back_rounded, color: _textBlack),
                 onPressed: () => Navigator.pop(context),
               ),
-              title: const Text('Profil Toko / Owner', style: TextStyle(color: _textBlack, fontSize: 16, fontWeight: FontWeight.bold)),
+              title: const Text('Profil Toko', style: TextStyle(color: _textBlack, fontSize: 16, fontWeight: FontWeight.bold)),
             ),
             body: SingleChildScrollView(
               padding: const EdgeInsets.all(16),

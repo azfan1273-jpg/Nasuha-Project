@@ -125,7 +125,7 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
 
     return Container(
       width: double.infinity,
-      color: settings.bgDark,
+      color: const Color(0xFFFAF5F7),
       child: Column(
         children: [
           Expanded(
@@ -325,6 +325,7 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                 style: const TextStyle(
                   color: Colors.green, // 🟢 Hijau untuk Omset
                   fontWeight: FontWeight.bold,
+                  fontSize: 11,
                 ),
               ),
             ],
@@ -342,6 +343,7 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                 style: const TextStyle(
                   color: Colors.red, // 🔴 Merah untuk Pengeluaran
                   fontWeight: FontWeight.bold,
+                  fontSize: 11,
                 ),
               ),
             ],
@@ -492,49 +494,52 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
   }
 
   Widget _buildGridStat(
-      String title,
-      String value,
-      IconData icon,
-      SettingsProvider settings, { 
-      VoidCallback? onTap,
-    }) {
-    return Expanded(
+    String title,
+    String value,
+    IconData icon,
+    SettingsProvider settings, { 
+    VoidCallback? onTap,
+  }) {
+  return Expanded(
+    child: Material( // 👈 TANGKAP DENGAN MATERIAL DI SINI
+      color: Colors.transparent,
       child: InkWell(
-      	onTap: onTap,
-	        borderRadius: BorderRadius.circular(8),
-	        child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: settings.bgDark,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 7,
-                    fontWeight: FontWeight.bold,
-                    color: settings.textColor.withOpacity(0.6),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: settings.bgDark,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 7,
+                      fontWeight: FontWeight.bold,
+                      color: settings.textColor.withOpacity(0.6),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: settings.textColor,
+                  const SizedBox(height: 1),
+                  Text(
+                    value,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: settings.textColor,
+                    ),
                   ),
-                ),
-              ],
-            ),
-            Icon(icon, size: 15, color: settings.accentColor),
-          ],
+                ],
+              ),
+              Icon(icon, size: 15, color: settings.accentColor),
+            ],
+          ),
         ),
       ),
     ),

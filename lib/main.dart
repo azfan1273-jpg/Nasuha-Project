@@ -35,8 +35,6 @@ class NasuhaApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final session = supabase.auth.currentSession;
-
     return MaterialApp(
       title: 'NASUHA Kasir',
       debugShowCheckedModeBanner: false,
@@ -45,7 +43,16 @@ class NasuhaApp extends StatelessWidget {
         fontFamily: 'Roboto',
         scaffoldBackgroundColor: const Color(0xFFFAF5F7),
       ),
-      home: session != null ? const KasirPageManager() : const LoginScreen(),
+      home: StreamBuilder<AuthState>(
+        stream: Supabase.instance.client.auth.onAuthStateChange,
+        builder: (context, snapshot) {
+          final session = Supabase.instance.client.auth.currentSession;
+          if (session != null) {
+            return const KasirPageManager();
+          }
+          return const LoginScreen();
+        },
+      ),
     );
   }
 }

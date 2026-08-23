@@ -243,7 +243,7 @@ class _LoginScreenState extends State<LoginScreen> {
     void _navigateToHome() {
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (context) => const KasirHomeScreen()),
+      MaterialPageRoute(builder: (context) => const KasirPageManager()),
     );
   }
 

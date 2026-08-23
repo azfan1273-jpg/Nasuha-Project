@@ -33,6 +33,29 @@ class FormOrderDialogState extends State<FormOrderDialog> {
   String _selectedParfum = 'Standard / Original';
   double _selectedDiscount = 0;
   bool _isSubmitting = false;
+  List<String> _parfums = [];
+
+  @override
+    void initState() {
+      super.initState();
+      _fetchParfums(); // 👈 Panggil fungsi fetch saat dialog dibuka
+    }
+  
+    Future<void> _fetchParfums() async {
+      try {
+        final response = await supabase.from('parfums').select('name');
+        if (mounted) {
+          setState(() {
+            _parfums = List<String>.from(response.map((e) => e['name'] as String));
+            if (_parfums.isNotEmpty && !_parfums.contains(_selectedParfum)) {
+              _selectedParfum = _parfums.first;
+            }
+          });
+        }
+      } catch (e) {
+        debugPrint('Error fetch parfum: $e');
+      }
+    }
 
   @override
   void dispose() {
@@ -464,13 +487,14 @@ class FormOrderDialogState extends State<FormOrderDialog> {
                           isExpanded: true,
                           icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
                           style: const TextStyle(color: _textBlack, fontSize: 12),
-                          items: const [
-                            DropdownMenuItem(value: 'Standard / Original', child: Text('Standard / Original')),
-                            DropdownMenuItem(value: 'Sakura', child: Text('Sakura')),
-                            DropdownMenuItem(value: 'Lavender', child: Text('Lavender')),
-                            DropdownMenuItem(value: 'Melati', child: Text('Melati')),
-                            DropdownMenuItem(value: 'Ocean Fresh', child: Text('Ocean Fresh')),
-                          ],
+						// ITEM PARFUME DARI SUPABASE
+                          items: _parfums.map((parfum) {
+                            return DropdownMenuItem<String>(
+                              value: parfum,
+                              child: Text(parfum),
+                            );
+                          }).toList(),
+                          
                           onChanged: (val) {
                             if (val != null) setState(() => _selectedParfum = val);
                           },

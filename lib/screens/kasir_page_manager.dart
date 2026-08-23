@@ -23,6 +23,13 @@ class _KasirPageManagerState extends State<KasirPageManager> {
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: 0);
+  
+    // 👈 Tambahkan ini agar saat pertama masuk/login, settings & session dipaksa refresh
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   @override
@@ -36,72 +43,76 @@ class _KasirPageManagerState extends State<KasirPageManager> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    const Color creamLightColor = Color(0xFFFAF5F7);
-    const Color goldAccent = Color(0xFFEC4899);
-    final settings = context.watch<SettingsProvider>();
-
-    // Ambil data user yang sedang login dari Supabase Auth
-        final currentUser = Supabase.instance.client.auth.currentUser;
-        final String emailReal = currentUser?.email ?? 'Belum Login';
-        final String namaTokoReal = settings.namaToko.isEmpty 
-            ? 'NASUHA LAUNDRY' 
-            : settings.namaToko;
-
-    return Scaffold(
-      backgroundColor: creamLightColor, // Background luar (samping)
-      body: SafeArea(         
-              child: Column(
-                children: [
-                
-                  const SizedBox(height: 6),
-
-                  // 1. HEADER TOKO GRADASI
-                  _buildTokoHeader(
-                    namaToko: namaTokoReal,
-                    userRole: settings.userRole,
-                    emailToko: emailReal, // <-- Menggunakan email real dari Supabase Auth
-                    onRefresh: () {
-                      _kasirHomeKey.currentState?.refreshData();
-                    },
-                  ),
-                  const SizedBox(height: 6),
-
-                  // 2. BANNER PROMO
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: _buildBannerPromo(settings),
-                  ),
-                  const SizedBox(height: 8),
-
-                  // 3. TAB BAR NAVIGASI (Di bawah Banner)
-                  Container(
-                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _buildTabButton(0, 'Beranda Kasir', Icons.home_rounded, goldAccent),
-                        const SizedBox(width: 12),
-                        _buildTabButton(1, 'Laporan & Statistik', Icons.bar_chart_rounded, goldAccent),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-
-                  // 4. HALAMAN UTAMA (PageView)
-                  Expanded(
-                    child: PageView(
-                      controller: _pageController,
-                      onPageChanged: _onPageChanged,
-                      children: [
-                        KasirHomeScreen(key: _kasirHomeKey),
-                        const LayarStatistik(),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),  
+	    Widget build(BuildContext context) {
+	      const Color creamLightColor = Color(0xFFFAF5F7);
+	      const Color goldAccent = Color(0xFFEC4899);
+	      final settings = context.watch<SettingsProvider>();
+	    
+	      final currentUser = Supabase.instance.client.auth.currentUser;
+	      final String emailReal = currentUser?.email ?? 'Belum Login';
+	      final String namaTokoReal = settings.namaToko.isEmpty
+	          ? 'NASUHA LAUNDRY'
+	          : settings.namaToko;
+	    
+	      return Scaffold(
+	        backgroundColor: creamLightColor,
+	        body: SafeArea(
+	          child: Column(
+	            children: [
+	              const SizedBox(height: 6),
+	    
+	              // 1. HEADER TOKO GRADASI (Kepala Utama)
+	              _buildTokoHeader(
+	                namaToko: namaTokoReal,
+	                userRole: settings.userRole,
+	                emailToko: emailReal,
+	                onRefresh: () {
+	                  _kasirHomeKey.currentState?.refreshData();
+	                },
+	              ),
+	              const SizedBox(height: 6),
+	    
+	              // 2. BANNER PROMO
+	              Padding(
+	                padding: const EdgeInsets.symmetric(horizontal: 12),
+	                child: _buildBannerPromo(settings),
+	              ),
+	              const SizedBox(height: 8),
+	    
+	              // 3. TAB BAR NAVIGASI
+	              Container(
+	                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
+	                child: Row(
+	                  mainAxisAlignment: MainAxisAlignment.center,
+	                  children: [
+	                    _buildTabButton(0, 'Beranda Kasir', Icons.home_rounded, goldAccent),
+	                    const SizedBox(width: 12),
+	                    _buildTabButton(1, 'Laporan & Statistik', Icons.bar_chart_rounded, goldAccent),
+	                  ],
+	                ),
+	              ),
+	              const SizedBox(height: 6),
+	    
+	              // 4. HALAMAN UTAMA (PageView di paling bawah)
+	              Expanded(
+	                child: PageView(
+	                  controller: _pageController,
+	                  onPageChanged: _onPageChanged,
+	                  children: [
+	                    Material(
+	                      color: Colors.transparent,
+	                      child: KasirHomeScreen(key: _kasirHomeKey),
+	                    ),
+	                    const Material(
+	                      color: Colors.transparent,
+	                      child: LayarStatistik(),
+	                    ),
+	                  ],
+	                ),
+	              ),
+	            ],
+	          ),
+	        ),
 	      );
 	    }
 
@@ -129,65 +140,75 @@ class _KasirPageManagerState extends State<KasirPageManager> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFFCE7F3),
-                  shape: BoxShape.circle,
+          Expanded( // 👈 Tambahkan Expanded di sini agar teks panjang/null tidak bikin overflow/hilang
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFFCE7F3),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.storefront_rounded,
+                    color: Color(0xFFEC4899),
+                    size: 20,
+                  ),
                 ),
-                child: const Icon(
-                  Icons.storefront_rounded,
-                  color: Color(0xFFEC4899),
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+                const SizedBox(width: 10),
+                Flexible( // 👈 Pake Flexible supaya teks nama toko aman dari error layout
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        namaToko,
-                        style: const TextStyle(
-                          color: Color(0xFF111827),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEC4899),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          userRole.toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              namaToko.isEmpty ? 'NASUHA LAUNDRY' : namaToko,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Color(0xFF111827),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
                           ),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEC4899),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              userRole.isEmpty ? 'KASIR' : userRole.toUpperCase(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      Text(
+                        emailToko.isEmpty ? 'kasir@nasuha.com' : emailToko,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.grey[700],
+                          fontSize: 11,
                         ),
                       ),
                     ],
                   ),
-                  Text(
-                    emailToko,
-                    style: TextStyle(
-                      color: Colors.grey[700],
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: Color(0xFF111827)),
@@ -261,42 +282,51 @@ class _KasirPageManagerState extends State<KasirPageManager> {
   }
 
   // HELPER WIDGET 3: Tombol Tab
-  Widget _buildTabButton(int index, String label, IconData icon, Color activeColor) {
-    final bool isActive = _currentIndex == index;
-    return GestureDetector(
+  Widget _buildTabButton(int index, String title, IconData icon, Color activeColor) {
+  final isSelected = _currentIndex == index;
+
+  // 🔴 BUNGKUS DENGAN MATERIAL DI SINI
+  return Material(
+    color: Colors.transparent, // Agar background Container di bawahnya tetap kelihatan
+    child: InkWell(
+      borderRadius: BorderRadius.circular(10),
       onTap: () {
-        _pageController.animateToPage(
-          index,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-        );
+        setState(() {
+          _currentIndex = index;
+          _pageController.animateToPage(
+            index,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          );
+        });
       },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isActive ? activeColor.withOpacity(0.15) : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isActive ? activeColor : Colors.transparent,
-            width: 1,
-          ),
+          color: isSelected ? activeColor.withOpacity(0.15) : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
           children: [
-            Icon(icon, size: 16, color: isActive ? activeColor : Colors.grey),
+            Icon(
+              icon,
+              size: 18,
+              color: isSelected ? activeColor : Colors.grey,
+            ),
             const SizedBox(width: 6),
             Text(
-              label,
+              title,
               style: TextStyle(
-                fontSize: 11,
-                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                color: isActive ? activeColor : Colors.grey.shade700,
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isSelected ? activeColor : Colors.grey,
               ),
             ),
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
+
 }

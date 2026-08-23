@@ -149,26 +149,36 @@ class _KelolaLayananScreenState extends State<KelolaLayananScreen> {
   Widget build(BuildContext context) {
     final groupedData = _groupedServices;
 
-    return Scaffold(
-      backgroundColor: Colors.black26,
-      body: Center(
-        child: SizedBox(
-          width: 385,
-          child: Scaffold(
-            backgroundColor: _bgDark,
-            // 👈 AppBar & Panah Kembali Dihapus Total
-            floatingActionButton: FloatingActionButton.extended(
-              backgroundColor: _goldAccent,
-              elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              icon: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
-              label: const Text(
-                'Tambah Layanan',
-                style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-              ),
-              onPressed: () => _openFormLayananScreen(),
-            ),
-            body: SafeArea(
+    			return Scaffold(
+			       backgroundColor: _bgDark,
+			       appBar: AppBar(
+			         backgroundColor: Colors.white,
+			         elevation: 0,
+			         leading: IconButton(
+			           icon: const Icon(Icons.arrow_back_rounded, color: Colors.black87),
+			           onPressed: () => Navigator.pop(context),
+			         ),
+			         title: const Text(
+			           'Kelola Layanan',
+			           style: TextStyle(
+			             fontSize: 16,
+			             fontWeight: FontWeight.bold,
+			             color: Colors.black87,
+			           ),
+			         ),
+			       ),
+                  floatingActionButton: FloatingActionButton.extended(
+                    backgroundColor: _goldAccent,
+                    elevation: 4,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    icon: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
+                    label: const Text(
+                      'Tambah Layanan',
+                      style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: () => _openFormLayananScreen(),
+                  ),
+                  body: SafeArea(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Column(
@@ -342,9 +352,7 @@ class _KelolaLayananScreenState extends State<KelolaLayananScreen> {
                   ],
                 ),
               ),
-            ),
-          ),
-        ),
+           
       ),
     );
   }

@@ -1,65 +1,184 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../providers/settings_provider.dart';
 import '../screens/report_screen.dart';
+import 'cari_pelanggan_screen.dart';
+import 'kasir_screen.dart';
 import 'kelola_layanan_screen.dart';
+import 'owner_screen.dart';
 import 'parfum_screen.dart';
 import 'printer_screen.dart';
-import 'kasir_screen.dart';
-import 'owner_screen.dart';
-import 'cari_pelanggan_screen.dart';
-import 'package:provider/provider.dart'; // 👈 Supaya context.watch() tidak error
-import '../providers/settings_provider.dart'; // 👈 Supaya AppThemeMode & SettingsProvider terbaca
+
 
 class SettingScreen extends StatelessWidget {
   const SettingScreen({super.key});
 
-  static const Color _bgDark = Color(0xFFFAF5F7);
-  static const Color _textBlack = Color(0xFF111827);
+  static const Color _bgLight = Color(0xFFF8F9FA);
+  static const Color _textBlack = Color(0xFF1E293B);
 
-  Widget _buildSquareCard({
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required Color iconBg,
-    required Color iconColor,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.black.withOpacity(0.06)),
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _bgLight,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded, color: _textBlack),
+          onPressed: () => Navigator.pop(context),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: iconBg,
-                borderRadius: BorderRadius.circular(8),
+        title: const Text(
+          'Pengaturan Aplikasi',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: _textBlack,
+          ),
+        ),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 🎨 SEKSI TEMA
+              _buildSectionHeader('TEMA APLIKASI'),
+              _buildThemeSelector(context),
+
+              const SizedBox(height: 20),
+
+              // 🏪 SEKSI TOKO & AKUN
+              _buildSectionHeader('TOKO & AKUN'),
+              _buildModernTile(
+                title: 'Profil Toko',
+                subtitle: 'Nama, alamat, & informasi bisnis',
+                icon: Icons.storefront_rounded,
+                iconBg: const Color(0xFFE0F2FE),
+                iconColor: const Color(0xFF0284C7),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const OwnerScreen(),
+                    ),
+                  );
+                },
               ),
-              child: Icon(icon, color: iconColor, size: 20),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              title,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _textBlack),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              subtitle,
-              style: const TextStyle(fontSize: 10, color: Colors.black45),
-            ),
-          ],
+              _buildModernTile(
+                title: 'Kelola Kasir',
+                subtitle: 'Pengaturan akun & hak akses kasir',
+                icon: Icons.badge_rounded,
+                iconBg: const Color(0xFFFEF3C7),
+                iconColor: const Color(0xFFD97706),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const KasirScreen(),
+                    ),
+                  );
+                },
+              ),
+
+              const SizedBox(height: 20),
+
+              // 📦 SEKSI KATALOG & OPERASIONAL
+              _buildSectionHeader('KATALOG & OPERASIONAL'),
+              _buildModernTile(
+                title: 'Kelola Layanan',
+                subtitle: 'Tarif & paket cuci',
+                icon: Icons.dry_cleaning_rounded,
+                iconBg: const Color(0xFFFCE7F3),
+                iconColor: const Color(0xFFEC4899),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const KelolaLayananScreen(),
+                    ),
+                  );
+                },
+              ),
+              _buildModernTile(
+                title: 'Kelola Parfum',
+                subtitle: 'Aroma parfum yang tersedia',
+                icon: Icons.local_florist_rounded,
+                iconBg: const Color(0xFFFFF3E0),
+                iconColor: const Color(0xFFFF9200),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ParfumScreen(),
+                    ),
+                  );
+                },
+              ),
+              _buildModernTile(
+                title: 'Kelola Pelanggan',
+                subtitle: 'Database member & riwayat',
+                icon: Icons.people_alt_rounded,
+                iconBg: const Color(0xFFDCFCE7),
+                iconColor: const Color(0xFF16A34A),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const CariPelangganScreen(),
+                    ),
+                  );
+                },
+              ),
+              _buildModernTile(
+                title: 'Printer Bluetooth',
+                subtitle: 'Koneksi & pengaturan cetak struk',
+                icon: Icons.print_rounded,
+                iconBg: const Color(0xFFF3E8FF),
+                iconColor: const Color(0xFF9333EA),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const PrinterScreen(),
+                    ),
+                  );
+                },
+              ),
+
+              const SizedBox(height: 20),
+
+              // 🚪 SEKSI SISTEM & AKUN (LOGOUT)
+              _buildSectionHeader('SISTEM & AKUN'),
+              _buildLogoutTile(context),
+
+              const SizedBox(height: 16),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildWideCard({
+  // WIDGET JUDUL KATEGORI
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 8),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          color: Colors.grey.shade600,
+          letterSpacing: 0.8,
+        ),
+      ),
+    );
+  }
+
+  // WIDGET CARD LIST ITEM ELEGAN
+  Widget _buildModernTile({
     required String title,
     required String subtitle,
     required IconData icon,
@@ -68,246 +187,218 @@ class SettingScreen extends StatelessWidget {
     required VoidCallback onTap,
   }) {
     return Container(
+      margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.black.withOpacity(0.06)),
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: ListTile(
         onTap: onTap,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
         leading: Container(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             color: iconBg,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, color: iconColor, size: 20),
         ),
         title: Text(
           title,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _textBlack),
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+            color: _textBlack,
+          ),
         ),
         subtitle: Text(
           subtitle,
-          style: const TextStyle(fontSize: 10, color: Colors.black45),
+          style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
         ),
-        trailing: const Icon(Icons.chevron_right_rounded, color: Colors.black26),
+        trailing: const Icon(
+          Icons.chevron_right_rounded,
+          size: 20,
+          color: Colors.black26,
+        ),
       ),
     );
   }
- 
 
-	  @override
-	  Widget build(BuildContext context) {
-	    return Scaffold(
-	        backgroundColor: _bgDark,
-	        appBar: AppBar(
-	          backgroundColor: Colors.white,
-	          elevation: 0,
-	          leading: IconButton(
-	            icon: const Icon(Icons.arrow_back_rounded, color: _textBlack),
-	            onPressed: () => Navigator.pop(context),
-	          ),
-	          title: const Text(
-	            'Pengaturan Aplikasi',
-	            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _textBlack),
-	          ),
-	        ),
-	        body: SafeArea(
-	          child: SingleChildScrollView(
-	            padding: const EdgeInsets.all(16),
-	            child: Column(
-	              crossAxisAlignment: CrossAxisAlignment.start,
-	              children: [
-	              
-                  		_buildThemeSelector(context), 
-                  		  const SizedBox(height: 16),
-                  
-					  // KATEGORI 1: TOKO & AKUN
-					  const Text(
-					    'TOKO & AKUN',
-					    style: TextStyle(
-					      fontSize: 10,
-					      fontWeight: FontWeight.bold,
-					      color: Colors.black45,
-					      letterSpacing: 0.5,
-					    ),
-					  ),
-					  const SizedBox(height: 8),
-					  Row(
-					    children: [
-					      Expanded(
-					        child: _buildSquareCard(
-					          title: 'Profil Toko',
-					          subtitle: 'Nama & Alamat',
-					          icon: Icons.storefront_rounded,
-					          iconBg: const Color(0xFFE0F2FE),
-					          iconColor: const Color(0xFF0284C7),
-					          onTap: () {
-					            Navigator.push(
-					              context,
-					              MaterialPageRoute(builder: (context) => const OwnerScreen()),
-					            );
-					          },
-					        ),
-					      ),
-					      const SizedBox(width: 10),
-					      Expanded(
-					        child: _buildSquareCard(
-					          title: 'Kelola Kasir',
-					          subtitle: 'Akun & Akses Kasir',
-					          icon: Icons.badge_rounded,
-					          iconBg: const Color(0xFFFEF3C7),
-					          iconColor: const Color(0xFFD97706),
-					          onTap: () {
-					            Navigator.push(
-					              context,
-					              MaterialPageRoute(builder: (context) => const KasirScreen()),
-					            );
-					          },
-					        ),
-					      ),
-					    ],
-					  ),
+  // WIDGET CARD LOGOUT ELEGAN
+  Widget _buildLogoutTile(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFECACA)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.red.withOpacity(0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ListTile(
+        onTap: () => _showLogoutDialog(context),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+        leading: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFEE2E2),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(Icons.logout_rounded, color: Color(0xFFDC2626), size: 20),
+        ),
+        title: const Text(
+          'Keluar dari Akun',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+            color: Color(0xFFDC2626),
+          ),
+        ),
+        subtitle: const Text(
+          'Akhiri sesi dan kembali ke halaman login',
+          style: TextStyle(fontSize: 10, color: Color(0xFFEF4444)),
+        ),
+        trailing: const Icon(
+          Icons.chevron_right_rounded,
+          size: 20,
+          color: Color(0xFFFCA5A5),
+        ),
+      ),
+    );
+  }
 
-					  const SizedBox(height: 18),
+  // DIALOG KONFIRMASI LOGOUT
+  void _showLogoutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Konfirmasi Keluar',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        content: const Text('Apakah kamu yakin ingin keluar dari akun ini?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Batal', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await Supabase.instance.client.auth.signOut();
+              if (context.mounted) {
+                // Mengarahkan kembali ke halaman login & menghapus stack halaman sebelumnya
+                Navigator.of(context).popUntil((route) => route.isFirst);
+              }
+            },
+            child: const Text('Ya, Keluar', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
 
-					  // KATEGORI 2: KATALOG & OPERASIONAL
-					  const Text(
-					    'KATALOG & OPERASIONAL',
-					    style: TextStyle(
-					      fontSize: 10,
-					      fontWeight: FontWeight.bold,
-					      color: Colors.black45,
-					      letterSpacing: 0.5,
-					    ),
-					  ),
-					  const SizedBox(height: 8),
-					  Row(
-					    children: [
-					      Expanded(
-					        child: _buildSquareCard(
-					          title: 'Kelola Layanan',
-					          subtitle: 'Tarif & Paket',
-					          icon: Icons.dry_cleaning_rounded,
-					          iconBg: const Color(0xFFFCE7F3),
-					          iconColor: const Color(0xFFEC4899),
-					          onTap: () {
-					            Navigator.push(
-					              context,
-					              MaterialPageRoute(builder: (context) => const KelolaLayananScreen()),
-					            );
-					          },
-					        ),
-					      ),
-					      const SizedBox(width: 10),
-					      Expanded(
-					        child: _buildSquareCard(
-					          title: 'Kelola Parfum',
-					          subtitle: 'Aroma Aktif',
-					          icon: Icons.local_florist_rounded,
-					          iconBg: const Color(0xFFFFF3E0),
-					          iconColor: const Color(0xFFFF9200),
-					          onTap: () {
-					            Navigator.push(
-					              context,
-					              MaterialPageRoute(builder: (context) => const ParfumScreen()),
-					            );
-					          },
-					        ),
-					      ),
-					    ],
-					  ),
-					  const SizedBox(height: 10),
-					  _buildWideCard(
-					    title: 'Kelola Pelanggan',
-					    subtitle: 'Database Member & Transaksi',
-					    icon: Icons.people_alt_rounded,
-					    iconBg: const Color(0xFFDCFCE7),
-					    iconColor: const Color(0xFF16A34A),
-					    onTap: () {
-					      Navigator.push(
-					        context,
-					        MaterialPageRoute(builder: (context) => const CariPelangganScreen()),
-					      );
-					    },
-					  ),
-					  const SizedBox(height: 10),
-
-					  // 🔹 PRINTER BLUETOOTH DIPINDAHKAN KE SINI (DI BAWAH PELANGGAN)
-					  _buildWideCard(
-					    title: 'Printer Bluetooth',
-					    subtitle: 'Koneksi & Cetak Struk',
-					    icon: Icons.print_rounded,
-					    iconBg: const Color(0xFFF3E8FF),
-					    iconColor: const Color(0xFF9333EA),
-					    onTap: () {
-					      Navigator.push(
-					        context,
-					        MaterialPageRoute(builder: (context) => const PrinterScreen()),
-					      );
-					    },
-					  ),
-					],               
-			      ),
-	            ),
-	          
-	    ),
-	  );
-    }
-  
-
-Widget _buildThemeSelector(BuildContext context) {
+  // WIDGET PILIH TEMA ELEGAN
+  Widget _buildThemeSelector(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
 
-    return Card(
-      color: settings.cardDark,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Pilih Tema Aplikasi', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildThemeCircle(
-                  context, 
-                  color: const Color(0xFFEC4899), 
-                  mode: AppThemeMode.pink, 
-                  isSelected: settings.currentTheme == AppThemeMode.pink,
-                ),
-                _buildThemeCircle(
-                  context, 
-                  color: const Color(0xFF0284C7), 
-                  mode: AppThemeMode.dark, 
-                  isSelected: settings.currentTheme == AppThemeMode.dark,
-                ),
-              ],
-            ),
-          ],
-        ),
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildThemeOption(
+            context,
+            color: const Color(0xFFEC4899),
+            label: 'Pink Tema',
+            mode: AppThemeMode.pink,
+            isSelected: settings.currentTheme == AppThemeMode.pink,
+          ),
+          _buildThemeOption(
+            context,
+            color: const Color(0xFF0284C7),
+            label: 'Dark Tema',
+            mode: AppThemeMode.dark,
+            isSelected: settings.currentTheme == AppThemeMode.dark,
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildThemeCircle(BuildContext context, {required Color color, required AppThemeMode mode, required bool isSelected}) {
+  Widget _buildThemeOption(
+    BuildContext context, {
+    required Color color,
+    required String label,
+    required AppThemeMode mode,
+    required bool isSelected,
+  }) {
     return GestureDetector(
       onTap: () => context.read<SettingsProvider>().setTheme(mode),
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          border: isSelected ? Border.all(color: Colors.black, width: 3) : null,
-        ),
-        child: isSelected ? const Icon(Icons.check, color: Colors.white) : null,
+      child: Row(
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: isSelected ? color : Colors.transparent,
+                width: 2,
+              ),
+            ),
+            child: CircleAvatar(
+              backgroundColor: color,
+              radius: 14,
+              child: isSelected
+                  ? const Icon(Icons.check, size: 14, color: Colors.white)
+                  : null,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              color: isSelected ? _textBlack : Colors.grey,
+            ),
+          ),
+        ],
       ),
     );
   }
-
 }
-
