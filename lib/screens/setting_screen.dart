@@ -309,6 +309,7 @@ class SettingScreen extends StatelessWidget {
               Navigator.pop(ctx);
               await Supabase.instance.client.auth.signOut();
               if (context.mounted) {
+              	context.read<SettingsProvider>().clearSettings();
                 // Mengarahkan kembali ke halaman login & menghapus stack halaman sebelumnya
                 Navigator.of(context).popUntil((route) => route.isFirst);
               }

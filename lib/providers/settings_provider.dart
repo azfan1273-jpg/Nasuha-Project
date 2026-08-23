@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 enum AppThemeMode { pink, dark }
 
@@ -16,14 +17,12 @@ class SettingsProvider with ChangeNotifier {
   String get userRole => _userRole;
   String get emailToko => _emailToko;
 
+  String? _storeId;
+  String? get storeId => _storeId;
+
   // --- LOGIKA TEMA BARU (2 TEMA) ---
   AppThemeMode _currentTheme = AppThemeMode.pink;
   AppThemeMode get currentTheme => _currentTheme;
-
-  // Constructor: Otomatis memuat tema tersimpan saat aplikasi pertama kali dibuka
-    SettingsProvider() {
-      _loadThemeFromPrefs();
-    }
 
   Color get bgDark {
     return _currentTheme == AppThemeMode.dark
@@ -44,6 +43,32 @@ class SettingsProvider with ChangeNotifier {
         ? Colors.white
         : const Color(0xFF111827);
   }
+
+  // Constructor: Otomatis memuat tema tersimpan saat aplikasi pertama kali dibuka
+    SettingsProvider() {
+    _loadThemeFromPrefs();
+  }
+
+  Future<void> fetchStoreId() async {
+      try {
+        final user = Supabase.instance.client.auth.currentUser;
+        if (user == null) return;
+  
+        final response = await Supabase.instance.client
+            .from('profiles')
+            .select('store_id')
+            .eq('id', user.id)
+            .maybeSingle();
+  
+        if (response != null && response['store_id'] != null) {
+          _storeId = response['store_id'].toString();
+          notifyListeners();
+        }
+      } catch (e) {
+        debugPrint('Error fetching store_id: $e');
+      }
+    }
+  
 
   // 🔹 2. Memuat pilihan tema dari penyimpanan HP/Browser
   Future<void> _loadThemeFromPrefs() async {
@@ -69,7 +94,8 @@ class SettingsProvider with ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_themeKey, theme == AppThemeMode.dark ? 'dark' : 'pink');
-    } catch (e) {
+    } 
+      catch (e) {
       debugPrint('Gagal menyimpan tema: $e');
     }
   }

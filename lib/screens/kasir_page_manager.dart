@@ -27,6 +27,8 @@ class _KasirPageManagerState extends State<KasirPageManager> {
     // 👈 Tambahkan ini agar saat pertama masuk/login, settings & session dipaksa refresh
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
+      	// Ambil store_id user yang sedang login
+      	context.read<SettingsProvider>().fetchStoreId();
         setState(() {});
       }
     });
@@ -41,8 +43,8 @@ class _KasirPageManagerState extends State<KasirPageManager> {
   void _onPageChanged(int index) {
     setState(() => _currentIndex = index);
   }
-
-  @override
+  
+  		@override
 	    Widget build(BuildContext context) {
 	      const Color creamLightColor = Color(0xFFFAF5F7);
 	      const Color goldAccent = Color(0xFFEC4899);

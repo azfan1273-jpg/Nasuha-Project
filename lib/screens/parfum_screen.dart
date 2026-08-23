@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../providers/settings_provider.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -76,10 +78,12 @@ class _ParfumScreenState extends State<ParfumScreen> {
               onPressed: () async {
                 final val = nameController.text.trim();
                 if (val.isEmpty) return;
-  
+
+                final settings = context.read<SettingsProvider>(); // 👈 Ambil settings
+
                 Navigator.pop(ctx);
                 setState(() => _isLoading = true);
-  
+
                 try {
                   if (isEdit) {
                     await supabase
@@ -89,7 +93,10 @@ class _ParfumScreenState extends State<ParfumScreen> {
                   } else {
                     await supabase
                         .from('parfums')
-                        .insert({'name': val});
+                        .insert({
+                          'name': val,
+                          'store_id': settings.storeId, // 👈 Pastikan ada koma (,) di ujung baris
+                        });
                   }
                   _fetchParfums();
                 } catch (e) {

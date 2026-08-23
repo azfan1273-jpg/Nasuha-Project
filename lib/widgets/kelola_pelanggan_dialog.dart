@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart'; // 👈 TAMBAHKAN INI
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../providers/settings_provider.dart'; // 👈 TAMBAHKAN INI (Sesuaikan path folder provider kamu)
 
 final supabase = Supabase.instance.client;
 
@@ -139,11 +141,12 @@ class _KelolaPelangganDialogState extends State<KelolaPelangganDialog> {
                   );
                   return;
                 }
-
+				final settings = context.read<SettingsProvider>();
                 final payload = {
                   'name': name,
                   'phone': phone.isEmpty ? '-' : phone,
                   'address': address.isEmpty ? '-' : address,
+                  if (!isEdit) 'store_id': settings.storeId,
                 };
 
                 try {

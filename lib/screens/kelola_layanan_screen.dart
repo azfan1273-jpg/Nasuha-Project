@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart'; // 👈 TAMBAHKAN INI
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../providers/settings_provider.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -456,6 +458,7 @@ class _FormLayananScreenState extends State<FormLayananScreen> {
     final String estimationFull = _estValController.text.trim().isNotEmpty
         ? '${_estValController.text.trim()} $_selectedEstUnit'
         : '';
+    final settings = context.read<SettingsProvider>();    
 
     final payload = {
       'name': name,
@@ -463,6 +466,7 @@ class _FormLayananScreenState extends State<FormLayananScreen> {
       'unit': _selectedUnit,
       'price': price,
       'estimation': estimationFull,
+      if (widget.existingService == null) 'store_id': settings.storeId,
     };
 
     try {

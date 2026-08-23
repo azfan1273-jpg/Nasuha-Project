@@ -42,6 +42,8 @@ class _LayarStatistikState extends State<LayarStatistik> {
     if (!mounted) return;
     setState(() => _isLoading = true);
 
+    final settings = context.read<SettingsProvider>();
+
     try {
       final List<dynamic> data = await supabase
           .from('orders')

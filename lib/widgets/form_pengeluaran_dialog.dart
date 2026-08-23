@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart'; // 👈 TAMBAHKAN INI
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../providers/settings_provider.dart'; // 👈 TAMBAHKAN INI
 
 final supabase = Supabase.instance.client;
 
@@ -268,9 +270,12 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
                           onPressed: () async {
                             final val = newKategoriCtrl.text.trim();
                             if (val.isNotEmpty) {
+                              final settings = context.read<SettingsProvider>();
                               await supabase
                                   .from('expense_categories')
-                                  .insert({'name': val});
+                                  .insert({'name': val,
+                                  'store_id':settings.storeId,
+                                });
                               newKategoriCtrl.clear();
                               await _fetchKategori();
                               setDialogState(() {});
@@ -505,6 +510,7 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
     setState(() => _isSubmitting = true);
 
     try {
+      final settings = context.read<SettingsProvider>();
       await supabase.from('expenses').insert({
         'category': _selectedKategori,
         'amount': totalHarga,

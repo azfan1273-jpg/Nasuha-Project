@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart'; // 👈 TAMBAHKAN INI
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../helpers/database_helper.dart';
+import '../providers/settings_provider.dart'; // 👈 TAMBAHKAN INI
 import '../screens/cari_pelanggan_screen.dart';
 import '../screens/cari_layanan_screen.dart';
 
@@ -210,8 +212,9 @@ class FormOrderDialogState extends State<FormOrderDialog> {
           }
           
           final DateTime estimatedDate = DateTime.now().add(Duration(days: maxDays));
-          
+          final settings = context.read<SettingsProvider>();
           final Map<String, dynamic> payload = {
+          
             'customer_name': _selectedCustomer!['name'],
             'customer_phone': _selectedCustomer!['phone'],
             'service_name': serviceNames,
@@ -220,7 +223,8 @@ class FormOrderDialogState extends State<FormOrderDialog> {
             'catatan': _catatanController.text,
             'parfum': _selectedParfum,
             'discount_percent': _selectedDiscount,
-            'estimated_at': estimatedDate.toIso8601String(), // 👈 Masukkan nilai ini ke payload
+            'estimated_at': estimatedDate.toIso8601String(),
+             
           };
   
       try {
