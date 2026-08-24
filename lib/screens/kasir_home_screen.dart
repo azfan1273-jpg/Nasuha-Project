@@ -59,19 +59,39 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
     _loadOrdersFromSupabase();
   }
 
-	// Method publik yang bisa dipanggil dari KasirPageManager
-	Future<void> refreshData() async {
-	  await _loadOrdersFromSupabase();
-	}
+  // Method publik yang bisa dipanggil dari KasirPageManager
+  Future<void> refreshData() async {
+    await _loadOrdersFromSupabase();
+  }
 
+  // AMBIL DATA TERISOLASI BERDASARKAN STORE_ID
   Future<void> _loadOrdersFromSupabase() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
 
     try {
+      final user = supabase.auth.currentUser;
+      if (user == null) return;
+
+      // 1. Ambil store_id dari profiles milik user yang sedang login
+      final profileRes = await supabase
+          .from('profiles')
+          .select('store_id')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      final String? currentStoreId = profileRes?['store_id']?.toString();
+
+      if (currentStoreId == null) {
+        debugPrint('Log: store_id tidak ditemukan');
+        return;
+      }
+
+      // 2. Filter query Supabase hanya untuk toko ini
       final List<dynamic> data = await supabase
           .from('orders')
           .select('*')
+          .eq('store_id', currentStoreId) // <-- ISOLASI DATA STORE ID
           .order('created_at', ascending: false);
 
       if (mounted) {
@@ -97,7 +117,7 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
     }
   }
 
-  // 🔹 1. Getter Total Omset
+  // Getter Total Omset
   double get _totalOmsetHariIni {
     double total = 0.0;
     for (var item in _ordersHariIni) {
@@ -108,7 +128,7 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
     return total;
   }
 
-  // 🔹 2. Getter Total Pengeluaran
+  // Getter Total Pengeluaran
   double get _totalPengeluaranHariIni {
     double total = 0.0;
     for (var item in _ordersHariIni) {
@@ -149,7 +169,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
               ),
             ),
           ),
-
           _buildTransactionButton(settings),
         ],
       ),
@@ -157,22 +176,21 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
   }
 
   Widget _buildOrderSummaryCard(SettingsProvider settings) {
-          // 1. Filter Data
-          final cucianAktifList = _ordersHariIni
-              .where((o) => o['status'] != 'Selesai' && o['status'] != 'Pengeluaran')
-              .toList();
-        
-          final harusSelesaiList = _ordersHariIni
-              .where((o) => o['status'] != 'Selesai' && _isHariIni(o['estimated_at']))
-              .toList();
-        
-          final terlambatList = _ordersHariIni
-              .where((o) => o['status'] != 'Selesai' && _isTerlambat(o['estimated_at']))
-              .toList();
-        
-          final selesaiList = _ordersHariIni
-              .where((o) => o['status'] == 'Selesai')
-              .toList();
+    final cucianAktifList = _ordersHariIni
+        .where((o) => o['status'] != 'Selesai' && o['status'] != 'Pengeluaran')
+        .toList();
+
+    final harusSelesaiList = _ordersHariIni
+        .where((o) => o['status'] != 'Selesai' && _isHariIni(o['estimated_at']))
+        .toList();
+
+    final terlambatList = _ordersHariIni
+        .where((o) => o['status'] != 'Selesai' && _isTerlambat(o['estimated_at']))
+        .toList();
+
+    final selesaiList = _ordersHariIni
+        .where((o) => o['status'] == 'Selesai')
+        .toList();
 
     return Container(
       padding: const EdgeInsets.all(10),
@@ -224,64 +242,62 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
           ),
           const SizedBox(height: 6),
           Row(
-        children: [
-          _buildGridStat(
-            'CUCIAN AKTIF',
-            '${cucianAktifList.length}',
-            Icons.local_laundry_service,
-            settings,
-            onTap: () => _bukaDetailOrderByStatus('Cucian Aktif', cucianAktifList),
+            children: [
+              _buildGridStat(
+                'CUCIAN AKTIF',
+                '${cucianAktifList.length}',
+                Icons.local_laundry_service,
+                settings,
+                onTap: () => _bukaDetailOrderByStatus('Cucian Aktif', cucianAktifList),
+              ),
+              const SizedBox(width: 4),
+              _buildGridStat(
+                'HARUS SELESAI',
+                '${harusSelesaiList.length}',
+                Icons.timer_outlined,
+                settings,
+                onTap: () => _bukaDetailOrderByStatus('Harus Selesai Hari Ini', harusSelesaiList),
+              ),
+            ],
           ),
-          const SizedBox(width: 4),
-          _buildGridStat(
-            'HARUS SELESAI',
-            '${harusSelesaiList.length}',
-            Icons.timer_outlined,
-            settings,
-            onTap: () => _bukaDetailOrderByStatus('Harus Selesai Hari Ini', harusSelesaiList),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              _buildGridStat(
+                'TERLAMBAT',
+                '${terlambatList.length}',
+                Icons.warning_amber_rounded,
+                settings,
+                onTap: () => _bukaDetailOrderByStatus('Orderan Terlambat', terlambatList),
+              ),
+              const SizedBox(width: 4),
+              _buildGridStat(
+                'SELESAI',
+                '${selesaiList.length}',
+                Icons.check_circle_outline,
+                settings,
+                onTap: () => _bukaDetailOrderByStatus('Orderan Selesai', selesaiList),
+              ),
+            ],
           ),
         ],
       ),
-      	const SizedBox(height: 4),
-	      Row(
-	        children: [
-	          _buildGridStat(
-	            'TERLAMBAT',
-	            '${terlambatList.length}',
-	            Icons.warning_amber_rounded,
-	            settings,
-	            onTap: () => _bukaDetailOrderByStatus('Orderan Terlambat', terlambatList),
-	          ),
-	          const SizedBox(width: 4),
-	          _buildGridStat(
-	            'SELESAI',
-	            '${selesaiList.length}',
-	            Icons.check_circle_outline,
-	            settings,
-	            onTap: () => _bukaDetailOrderByStatus('Orderan Selesai', selesaiList),
-	          ),
-	        ],
-	      ),
-	    ],
-	  ),
     );
   }
-  
- // Function Helper Navigasi Ke Screen Baru dengan Callback Refresh Data
-    Future<void> _bukaDetailOrderByStatus(String title, List<Map<String, dynamic>> orders) async {
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => DaftarOrderByStatusScreen(
-            title: title,
-            orders: orders,
-          ),
+
+  Future<void> _bukaDetailOrderByStatus(String title, List<Map<String, dynamic>> orders) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => DaftarOrderByStatusScreen(
+          title: title,
+          orders: orders,
         ),
-      );
-  
-      // Callback: Otomatis dipanggil untuk reload data Supabase setelah user menutup layar detail
-      _loadOrdersFromSupabase();
-    }
+      ),
+    );
+
+    _loadOrdersFromSupabase();
+  }
 
   Widget _buildFinancialSummaryCard(SettingsProvider settings) {
     return Container(
@@ -296,7 +312,7 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '💸 KEUANGAN HARI INI',
+                'KEUANGAN HARI INI',
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
@@ -323,7 +339,7 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
               Text(
                 _formatRupiah(_totalOmsetHariIni),
                 style: const TextStyle(
-                  color: Colors.green, // 🟢 Hijau untuk Omset
+                  color: Colors.green,
                   fontWeight: FontWeight.bold,
                   fontSize: 11,
                 ),
@@ -341,7 +357,7 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
               Text(
                 _formatRupiah(_totalPengeluaranHariIni),
                 style: const TextStyle(
-                  color: Colors.red, // 🔴 Merah untuk Pengeluaran
+                  color: Colors.red,
                   fontWeight: FontWeight.bold,
                   fontSize: 11,
                 ),
@@ -370,7 +386,7 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '☕ MASUK HARI INI',
+            'MASUK HARI INI',
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.bold,
@@ -497,54 +513,54 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
     String title,
     String value,
     IconData icon,
-    SettingsProvider settings, { 
+    SettingsProvider settings, {
     VoidCallback? onTap,
   }) {
-  return Expanded(
-    child: Material( // 👈 TANGKAP DENGAN MATERIAL DI SINI
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: settings.bgDark,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 7,
-                      fontWeight: FontWeight.bold,
-                      color: settings.textColor.withOpacity(0.6),
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: settings.bgDark,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 7,
+                        fontWeight: FontWeight.bold,
+                        color: settings.textColor.withOpacity(0.6),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 1),
-                  Text(
-                    value,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: settings.textColor,
+                    const SizedBox(height: 1),
+                    Text(
+                      value,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: settings.textColor,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              Icon(icon, size: 15, color: settings.accentColor),
-            ],
+                  ],
+                ),
+                Icon(icon, size: 15, color: settings.accentColor),
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildTransactionButton(SettingsProvider settings) {
     return Padding(

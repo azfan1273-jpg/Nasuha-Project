@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart'; // 👈 TAMBAHKAN INI
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/settings_provider.dart';
 
@@ -76,7 +76,6 @@ class _KelolaLayananScreenState extends State<KelolaLayananScreen> {
     }
   }
 
-  // 🔹 Grouping Services by Category
   Map<String, List<Map<String, dynamic>>> get _groupedServices {
     final query = _searchQuery.toLowerCase();
     final filtered = _services.where((item) {
@@ -151,41 +150,45 @@ class _KelolaLayananScreenState extends State<KelolaLayananScreen> {
   Widget build(BuildContext context) {
     final groupedData = _groupedServices;
 
-    			return Scaffold(
-			       backgroundColor: _bgDark,
-			       appBar: AppBar(
-			         backgroundColor: Colors.white,
-			         elevation: 0,
-			         leading: IconButton(
-			           icon: const Icon(Icons.arrow_back_rounded, color: Colors.black87),
-			           onPressed: () => Navigator.pop(context),
-			         ),
-			         title: const Text(
-			           'Kelola Layanan',
-			           style: TextStyle(
-			             fontSize: 16,
-			             fontWeight: FontWeight.bold,
-			             color: Colors.black87,
-			           ),
-			         ),
-			       ),
-                  floatingActionButton: FloatingActionButton.extended(
-                    backgroundColor: _goldAccent,
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    icon: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
-                    label: const Text(
-                      'Tambah Layanan',
-                      style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                    ),
-                    onPressed: () => _openFormLayananScreen(),
-                  ),
-                  body: SafeArea(
+    return Scaffold(
+      backgroundColor: Colors.black26,
+      body: Center(
+        child: SizedBox(
+          width: 385,
+          child: Scaffold(
+            backgroundColor: _bgDark,
+            appBar: AppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back_rounded, color: Colors.black87),
+                onPressed: () => Navigator.pop(context),
+              ),
+              title: const Text(
+                'Kelola Layanan',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+            ),
+            floatingActionButton: FloatingActionButton.extended(
+              backgroundColor: _goldAccent,
+              elevation: 4,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              icon: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
+              label: const Text(
+                'Tambah Layanan',
+                style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+              onPressed: () => _openFormLayananScreen(),
+            ),
+            body: SafeArea(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Column(
                   children: [
-                    // 1. INPUT PENCARIAN
                     TextField(
                       controller: _searchController,
                       onChanged: (val) => setState(() => _searchQuery = val.trim()),
@@ -203,8 +206,6 @@ class _KelolaLayananScreenState extends State<KelolaLayananScreen> {
                       ),
                     ),
                     const SizedBox(height: 14),
-
-                    // 2. DAFTAR TERKELOMPOK BERDASARKAN KATEGORI
                     Expanded(
                       child: RefreshIndicator(
                         onRefresh: _fetchKategoriAndServices,
@@ -238,7 +239,6 @@ class _KelolaLayananScreenState extends State<KelolaLayananScreen> {
                                       return Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          // HEADER JUDUL KATEGORI (KILOAN, SATUAN, DLL)
                                           Padding(
                                             padding: const EdgeInsets.only(top: 8, bottom: 8, left: 2),
                                             child: Text(
@@ -252,8 +252,6 @@ class _KelolaLayananScreenState extends State<KelolaLayananScreen> {
                                               ),
                                             ),
                                           ),
-
-                                          // LIST CARD LAYANAN DALAM KATEGORI TERSEBUT
                                           ...items.map((item) {
                                             final price = (item['price'] as num).toDouble();
                                             final unit = item['unit'] ?? 'Kg';
@@ -294,16 +292,15 @@ class _KelolaLayananScreenState extends State<KelolaLayananScreen> {
                                                       ),
                                                     ),
                                                     const SizedBox(width: 6),
-                                                    // BADGE KATEGORI (Misal: Umum / Kiloan)
                                                     Container(
                                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                                       decoration: BoxDecoration(
                                                         color: _cardDark,
                                                         borderRadius: BorderRadius.circular(8),
                                                       ),
-                                                      child: const Text(
-                                                        'Umum',
-                                                        style: TextStyle(
+                                                      child: Text(
+                                                        item['category'] ?? 'Umum', // 🔹 Badge dinamis
+                                                        style: const TextStyle(
                                                           fontSize: 9,
                                                           fontWeight: FontWeight.bold,
                                                           color: _goldAccent,
@@ -354,7 +351,9 @@ class _KelolaLayananScreenState extends State<KelolaLayananScreen> {
                   ],
                 ),
               ),
-           
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -505,6 +504,18 @@ class _FormLayananScreenState extends State<FormLayananScreen> {
           width: 385,
           child: Scaffold(
             backgroundColor: _bgDark,
+            appBar: AppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back_rounded, color: Colors.black87),
+                onPressed: () => Navigator.pop(context),
+              ),
+              title: Text(
+                isEdit ? 'Edit Layanan' : 'Tambah Layanan',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
+              ),
+            ),
             body: SafeArea(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
@@ -534,8 +545,7 @@ class _FormLayananScreenState extends State<FormLayananScreen> {
                           ),
                           const SizedBox(height: 14),
 
-                          // 1. KATEGORI LAYANAN
-                          const Text('Kategory Layanan', style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, fontWeight: FontWeight.bold, color: _textBlack)),
+                          const Text('Kategori Layanan', style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, fontWeight: FontWeight.bold, color: _textBlack)),
                           const SizedBox(height: 4),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -560,7 +570,6 @@ class _FormLayananScreenState extends State<FormLayananScreen> {
                           ),
                           const SizedBox(height: 12),
 
-                          // 2. LAYANAN & SATUAN
                           const Text('Layanan', style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, fontWeight: FontWeight.bold, color: _textBlack)),
                           const SizedBox(height: 4),
                           Row(
@@ -601,7 +610,6 @@ class _FormLayananScreenState extends State<FormLayananScreen> {
                           ),
                           const SizedBox(height: 12),
 
-                          // 3. BIAYA LAYANAN
                           const Text('Biaya Layanan', style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, fontWeight: FontWeight.bold, color: _textBlack)),
                           const SizedBox(height: 4),
                           TextField(
@@ -619,7 +627,6 @@ class _FormLayananScreenState extends State<FormLayananScreen> {
                           ),
                           const SizedBox(height: 12),
 
-                          // 4. ESTIMASI PEKERJAAN & WAKTU
                           const Text('Estimasi Pekerjaan', style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, fontWeight: FontWeight.bold, color: _textBlack)),
                           const SizedBox(height: 4),
                           Row(
@@ -664,7 +671,6 @@ class _FormLayananScreenState extends State<FormLayananScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // TOMBOL SIMPAN LAYANAN
                     Align(
                       alignment: Alignment.centerRight,
                       child: SizedBox(

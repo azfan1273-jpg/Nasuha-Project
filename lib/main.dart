@@ -1,34 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'providers/settings_provider.dart';
-import 'screens/login_screen.dart';
-import 'screens/kasir_page_manager.dart';
-import 'package:provider/provider.dart';
+
 import 'providers/settings_provider.dart';
 import 'providers/order_provider.dart';
-
+import 'screens/login_screen.dart';
+import 'screens/kasir_page_manager.dart';
 
 const String supabaseUrl = 'https://elesjrpswpppbliaifbw.supabase.co';
 const String supabaseAnonKey = 'sb_publishable_iX0RtTSOEZjtsyz_wj4-aw_hgPjOIUZ';
 
 SupabaseClient get supabase => Supabase.instance.client;
 
-								void main() async {
-								  WidgetsFlutterBinding.ensureInitialized();
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
 
-								  await Supabase.initialize(
-								    url: supabaseUrl,
-								    anonKey: supabaseAnonKey,
-								  );
+  await Supabase.initialize(
+    url: supabaseUrl,
+    anonKey: supabaseAnonKey,
+  );
 
-								  runApp(
-								    ChangeNotifierProvider(
-								      create: (_) => SettingsProvider(),
-								      child: const NasuhaApp(),
-								    ),
-								  );
-								}
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => SettingsProvider()),
+        ChangeNotifierProvider(create: (_) => OrderProvider()),
+      ],
+      child: const NasuhaApp(),
+    ),
+  );
+}
 
 class NasuhaApp extends StatelessWidget {
   const NasuhaApp({super.key});
@@ -44,13 +45,18 @@ class NasuhaApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFFFAF5F7),
       ),
       home: StreamBuilder<AuthState>(
-        stream: Supabase.instance.client.auth.onAuthStateChange,
+        stream: supabase.auth.onAuthStateChange,
         builder: (context, snapshot) {
-          final session = Supabase.instance.client.auth.currentSession;
-          if (session != null) {
-            return const KasirPageManager();
+          // Membaca session aktif secara akurat dari stream update
+          final session = snapshot.data?.session ?? supabase.auth.currentSession;
+
+          // Jika session kosong (setelah logout), lempar langsung ke LoginScreen
+          if (session == null) {
+            return const LoginScreen();
           }
-          return const LoginScreen();
+
+          // Jika session ada, masuk ke Halaman Utama
+          return const KasirPageManager();
         },
       ),
     );

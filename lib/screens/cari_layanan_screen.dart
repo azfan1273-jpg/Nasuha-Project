@@ -47,13 +47,11 @@ class _CariLayananScreenState extends State<CariLayananScreen> {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
-      // 1. Fetch data layanan dari Supabase
       final servicesData = await supabase
           .from('services')
           .select('*')
           .order('name', ascending: true);
 
-      // 2. Fetch kategori dari tabel service_categories (jika ada) atau ekstrak dari data layanan
       List<String> categories = ['Semua'];
       try {
         final catData = await supabase
@@ -67,7 +65,6 @@ class _CariLayananScreenState extends State<CariLayananScreen> {
           }
         }
       } catch (_) {
-        // Fallback jika tabel service_categories belum dibuat
         for (var item in servicesData) {
           final catName = (item['category'] ?? '').toString().trim();
           if (catName.isNotEmpty && !categories.contains(catName)) {
@@ -107,7 +104,7 @@ class _CariLayananScreenState extends State<CariLayananScreen> {
     final qtyController = TextEditingController(text: '1');
     final unit = service['unit'] ?? 'Kg';
 
-    return showDialog<double>(
+    final result = await showDialog<double>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
         backgroundColor: _bgDark,
@@ -161,6 +158,9 @@ class _CariLayananScreenState extends State<CariLayananScreen> {
         ],
       ),
     );
+
+    qtyController.dispose(); // 🔹 Dispose controller dialog setelah digunakan
+    return result;
   }
 
   @override
@@ -168,166 +168,169 @@ class _CariLayananScreenState extends State<CariLayananScreen> {
     final filteredList = _filteredServices;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFAF5F7),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black87, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Cari Layanan',
-          style: TextStyle(color: Colors.black87, fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true,
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            children: [
-              // 1. INPUT PENCARIAN
-              TextField(
-                controller: _searchController,
-                autofocus: true,
-                onChanged: (val) {
-                  setState(() => _searchQuery = val.trim());
-                },
-                style: const TextStyle(fontSize: 12),
-                decoration: InputDecoration(
-                  hintText: 'Cari layanan...',
-                  prefixIcon: const Icon(Icons.search_rounded, color: Colors.grey),
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
+      backgroundColor: Colors.black26,
+      body: Center(
+        child: SizedBox(
+          width: 385,
+          child: Scaffold(
+            backgroundColor: _bgDark,
+            appBar: AppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back_rounded, color: _textBlack),
+                onPressed: () => Navigator.pop(context),
               ),
-              const SizedBox(height: 12),
-
-              // 2. HORIZONTAL FILTER CHIPS
-              SizedBox(
-                height: 34,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _categoriesList.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (context, index) {
-                    final category = _categoriesList[index];
-                    final bool isSelected = _selectedCategory == category;
-
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() => _selectedCategory = category);
+              title: const Text(
+                'Cari Layanan',
+                style: TextStyle(color: _textBlack, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              centerTitle: true,
+            ),
+            body: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    TextField(
+                      controller: _searchController,
+                      autofocus: true,
+                      onChanged: (val) {
+                        setState(() => _searchQuery = val.trim());
                       },
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: isSelected ? _goldAccent : Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: isSelected ? _goldAccent : Colors.black12,
-                          ),
-                          boxShadow: isSelected
-                              ? [
-                                  BoxShadow(
-                                    color: _goldAccent.withOpacity(0.3),
-                                    blurRadius: 6,
-                                    offset: const Offset(0, 2),
-                                  )
-                                ]
-                              : [],
-                        ),
-                        child: Text(
-                          category,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                            color: isSelected ? Colors.white : _textBlack,
-                          ),
+                      style: const TextStyle(fontSize: 12),
+                      decoration: InputDecoration(
+                        hintText: 'Cari layanan...',
+                        prefixIcon: const Icon(Icons.search_rounded, color: Colors.grey),
+                        filled: true,
+                        fillColor: Colors.white,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
                         ),
                       ),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 14),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 34,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _categoriesList.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 8),
+                        itemBuilder: (context, index) {
+                          final category = _categoriesList[index];
+                          final bool isSelected = _selectedCategory == category;
 
-              // 3. DAFTAR LAYANAN
-              Expanded(
-                child: _isLoading
-                    ? const Center(child: CircularProgressIndicator(color: _goldAccent))
-                    : filteredList.isEmpty
-                        ? const Center(
-                            child: Text(
-                              'Layanan tidak ditemukan',
-                              style: TextStyle(fontSize: 12, color: Colors.black45),
-                            ),
-                          )
-                        : ListView.separated(
-                            itemCount: filteredList.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 8),
-                            itemBuilder: (context, index) {
-                              final item = filteredList[index];
-                              final price = (item['price'] as num?) ?? 0;
-                              final unit = item['unit'] ?? 'Kg';
-
-                              return Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(12),
+                          return GestureDetector(
+                            onTap: () {
+                              setState(() => _selectedCategory = category);
+                            },
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: isSelected ? _goldAccent : Colors.white,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: isSelected ? _goldAccent : Colors.black12,
                                 ),
-                                child: ListTile(
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  leading: Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: _cardDark,
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: const Icon(
-                                      Icons.local_laundry_service_rounded,
-                                      color: _goldAccent,
-                                      size: 20,
-                                    ),
+                                boxShadow: isSelected
+                                    ? [
+                                        BoxShadow(
+                                          color: _goldAccent.withOpacity(0.3),
+                                          blurRadius: 6,
+                                          offset: const Offset(0, 2),
+                                        )
+                                      ]
+                                    : [],
+                              ),
+                              child: Text(
+                                category,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                  color: isSelected ? Colors.white : _textBlack,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Expanded(
+                      child: _isLoading
+                          ? const Center(child: CircularProgressIndicator(color: _goldAccent))
+                          : filteredList.isEmpty
+                              ? const Center(
+                                  child: Text(
+                                    'Layanan tidak ditemukan',
+                                    style: TextStyle(fontSize: 12, color: Colors.black45),
                                   ),
-                                  title: Text(
-                                    item['name'] ?? '-',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _textBlack),
-                                  ),
-                                  subtitle: Text(
-                                    '${_formatRupiah(price)} / $unit',
-                                    style: const TextStyle(fontSize: 10, color: Colors.black54),
-                                  ),
-                                  trailing: Container(
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: BoxDecoration(
-                                      color: _goldAccent.withOpacity(0.12),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(
-                                      Icons.add_rounded,
-                                      color: _goldAccent,
-                                      size: 18,
-                                    ),
-                                  ),
-                                  onTap: () async {
-                                    final qty = await _showQtyDialog(item);
-                                    if (qty != null && qty > 0 && mounted) {
-                                      Navigator.pop(context, {...item, 'quantity': qty});
-                                    }
+                                )
+                              : ListView.separated(
+                                  itemCount: filteredList.length,
+                                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                                  itemBuilder: (context, index) {
+                                    final item = filteredList[index];
+                                    final price = (item['price'] as num?) ?? 0;
+                                    final unit = item['unit'] ?? 'Kg';
+
+                                    return Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: ListTile(
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                        leading: Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: _cardDark,
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          child: const Icon(
+                                            Icons.local_laundry_service_rounded,
+                                            color: _goldAccent,
+                                            size: 20,
+                                          ),
+                                        ),
+                                        title: Text(
+                                          item['name'] ?? '-',
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _textBlack),
+                                        ),
+                                        subtitle: Text(
+                                          '${_formatRupiah(price)} / $unit',
+                                          style: const TextStyle(fontSize: 10, color: Colors.black54),
+                                        ),
+                                        trailing: Container(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: BoxDecoration(
+                                            color: _goldAccent.withOpacity(0.12),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(
+                                            Icons.add_rounded,
+                                            color: _goldAccent,
+                                            size: 18,
+                                          ),
+                                        ),
+                                        onTap: () async {
+                                          final qty = await _showQtyDialog(item);
+                                          if (qty != null && qty > 0 && mounted) {
+                                            Navigator.pop(context, {...item, 'quantity': qty});
+                                          }
+                                        },
+                                      ),
+                                    );
                                   },
                                 ),
-                              );
-                            },
-                          ),
+                    ),
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
         ),
       ),

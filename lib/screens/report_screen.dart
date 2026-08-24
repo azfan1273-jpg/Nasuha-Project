@@ -244,9 +244,11 @@ class _ReportScreenState extends State<ReportScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-
-     /* backgroundColor: Colors.black26,body: Center(child: SizedBox(width: 385,child: Scaffold(  */
-          
+      backgroundColor: Colors.black26,
+      body: Center(
+        child: SizedBox(
+          width: 385,
+          child: Scaffold(
             backgroundColor: _bgSoft,
             body: SafeArea(
               child: Padding(
@@ -505,7 +507,7 @@ class _ReportScreenState extends State<ReportScreen> {
                                       itemBuilder: (context, index) {
                                         final item = _reportItems[index];
                                         final double amount =
-                                            (item['total_price'] ?? item['amount'] ?? 0).toDouble();
+                                            ((item['total_price'] ?? item['amount'] ?? 0) as num).toDouble();
                                         final String title = item['customer_name'] ??
                                             item['title'] ??
                                             'Transaksi #${item['id']}';
@@ -593,15 +595,18 @@ class _ReportScreenState extends State<ReportScreen> {
                               fontWeight: FontWeight.bold,
                               fontStyle: FontStyle.italic,
                               color: _textDark,
-                           ),
-                         ),
-                       ),
-                     ],
-                   ),
-                 ],
-               ),
-             ),
-           ),
-         );
-       }
- }       
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

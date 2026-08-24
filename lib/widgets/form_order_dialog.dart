@@ -213,87 +213,101 @@ class FormOrderDialogState extends State<FormOrderDialog> {
           
           final DateTime estimatedDate = DateTime.now().add(Duration(days: maxDays));
           final settings = context.read<SettingsProvider>();
-          final Map<String, dynamic> payload = {
-          
-            'customer_name': _selectedCustomer!['name'],
-            'customer_phone': _selectedCustomer!['phone'],
-            'service_name': serviceNames,
-            'status': 'Antrian',
-            'total_price': _totalPrice,
-            'catatan': _catatanController.text,
-            'parfum': _selectedParfum,
-            'discount_percent': _selectedDiscount,
-            'estimated_at': estimatedDate.toIso8601String(),
-             
-          };
-  
+
+         try {
+      final user = supabase.auth.currentUser;
+      if (user == null) throw Exception('User belum login');
+    
+      // 1. Ambil store_id langsung dari tabel profiles
+      final profileRes = await supabase
+          .from('profiles')
+          .select('store_id')
+          .eq('id', user.id)
+          .maybeSingle();
+    
+      final String? currentStoreId = profileRes?['store_id']?.toString();
+    
+      // 2. Susun Payload Header Order
+      final Map<String, dynamic> payload = {
+        'user_id': user.id,
+        'store_id': currentStoreId,
+        'customer_name': _selectedCustomer!['name'],
+        'customer_phone': _selectedCustomer!['phone'],
+        'service_name': serviceNames,
+        'status': 'Antrian',
+        'total_price': _totalPrice,
+        'catatan': _catatanController.text,
+        'parfum': _selectedParfum,
+        'discount_percent': _selectedDiscount,
+        'estimated_at': estimatedDate.toIso8601String(),
+      };
+    
+      // 3. Insert ke tabel orders Supabase
+      final orderResponse = await supabase
+          .from('orders')
+          .insert(payload)
+          .select()
+          .single();
+    
+      final dynamic orderId = orderResponse['id'];
+      final String notaNumber = 'LNDR-${orderId.toString().padLeft(5, '0')}';
+    
+      await supabase
+          .from('orders')
+          .update({'nota_number': notaNumber})
+          .eq('id', orderId);
+    
+      // 4. Susun Payload Items
+      final List<Map<String, dynamic>> orderItemsPayload = _selectedServices.map((s) {
+        final double price = (s['price'] as num).toDouble();
+        final double qty = (s['quantity'] as num).toDouble();
+        return {
+          'user_id': user.id,
+          'store_id': currentStoreId,
+          'order_id': orderId,
+          'service_name': s['name'] ?? '',
+          'qty': qty,
+          'price': price,
+          'subtotal': price * qty,
+          'unit': s['unit'] ?? 'Pcs',
+        };
+      }).toList();
+    
+      // 5. Insert ke order_items Supabase
+      await supabase.from('order_items').insert(orderItemsPayload);
+    
+      // 6. Simpan opsional ke SQLite Lokal
       try {
-        // 1. Simpan header nota ke tabel 'orders'
-        final orderResponse = await supabase
-            .from('orders')
-            .insert(payload)
-            .select()
-            .single();
-  
-        final dynamic orderId = orderResponse['id'];
-  
-        // GENERASI NOMOR NOTA (Format: LNDR-00001)
-        final String notaNumber = 'LNDR-${orderId.toString().padLeft(5, '0')}';
-  
-        // Update nota_number ke baris transaksi
-        await supabase
-            .from('orders')
-            .update({'nota_number': notaNumber})
-            .eq('id', orderId);
-  
-        // 2. Petakan array _selectedServices ke tabel 'order_items'
-        final List<Map<String, dynamic>> orderItemsPayload = _selectedServices.map((s) {
-          final double price = (s['price'] as num).toDouble();
-          final double qty = (s['quantity'] as num).toDouble();
-          return {
-            'order_id': orderId,
-            'service_name': s['name'] ?? '',
-            'qty': qty,
-            'price': price,
-            'subtotal': price * qty,
-            'unit': s['unit'] ?? 'Pcs',
-            
-          };
-        }).toList();
-  
-        // 3. Simpan rincian item ke tabel 'order_items'
-        await supabase.from('order_items').insert(orderItemsPayload);
-  
-        try {
-          await DatabaseHelper.instance.insertOrder(payload);
-        } catch (e) {
-          debugPrint('Local SQLite insert skipped: $e');
-        }
-  
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Transaksi Berhasil Disimpan!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-          widget.onOrderSuccess();
-          Navigator.pop(context);
-        }
+        await DatabaseHelper.instance.insertOrder(payload);
       } catch (e) {
-        debugPrint('Error submit order: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Gagal menyimpan transaksi: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      } finally {
-        if (mounted) setState(() => _isSubmitting = false);
+        debugPrint('Local SQLite insert skipped: $e');
       }
+    
+      // 7. Notifikasi Berhasil & Tutup Dialog
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Transaksi Berhasil Disimpan!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        widget.onOrderSuccess();
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      debugPrint('Error submit order: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal menyimpan transaksi: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
+  }
     
   @override
   Widget build(BuildContext context) {

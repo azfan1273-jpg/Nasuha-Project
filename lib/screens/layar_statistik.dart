@@ -8,7 +8,6 @@ import '../widgets/order_detail_dialog.dart';
 import '../screens/report_screen.dart';
 import 'setting_screen.dart';
 
-
 class LayarStatistik extends StatefulWidget {
   const LayarStatistik({Key? key}) : super(key: key);
 
@@ -38,16 +37,34 @@ class _LayarStatistikState extends State<LayarStatistik> {
     super.dispose();
   }
 
+  // AMBIL DATA TERISOLASI BERDASARKAN STORE_ID
   Future<void> _fetchOrders() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
 
-    final settings = context.read<SettingsProvider>();
-
     try {
+      final user = supabase.auth.currentUser;
+      if (user == null) return;
+
+      // 1. Ambil store_id dari profiles milik user yang login
+      final profileRes = await supabase
+          .from('profiles')
+          .select('store_id')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      final String? currentStoreId = profileRes?['store_id']?.toString();
+
+      if (currentStoreId == null) {
+        debugPrint('Log: store_id tidak ditemukan');
+        return;
+      }
+
+      // 2. Filter query Supabase menggunakan .eq('store_id', currentStoreId)
       final List<dynamic> data = await supabase
           .from('orders')
           .select('*, order_items(*)')
+          .eq('store_id', currentStoreId) // <-- ISOLASI DATA STORE ID
           .order('created_at', ascending: false);
 
       if (mounted) {
@@ -131,9 +148,7 @@ class _LayarStatistikState extends State<LayarStatistik> {
         color: settings.bgDark,
         child: Column(
           children: [
-            
             const SizedBox(height: 10),
-
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -141,7 +156,6 @@ class _LayarStatistikState extends State<LayarStatistik> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildLeftSidebar(settings),
-
                     const SizedBox(width: 6),
                     Container(
                       width: 2.5,
@@ -152,7 +166,6 @@ class _LayarStatistikState extends State<LayarStatistik> {
                       ),
                     ),
                     const SizedBox(width: 8),
-
                     Expanded(
                       child: Column(
                         children: [
@@ -201,7 +214,6 @@ class _LayarStatistikState extends State<LayarStatistik> {
                             ],
                           ),
                           const SizedBox(height: 8),
-
                           Expanded(
                             child: Container(
                               padding: const EdgeInsets.all(8),
@@ -246,7 +258,6 @@ class _LayarStatistikState extends State<LayarStatistik> {
                 ),
               ),
             ),
-
             _buildTransactionButton(settings),
           ],
         ),
@@ -266,9 +277,7 @@ class _LayarStatistikState extends State<LayarStatistik> {
           _buildFilterButton('SELESAI', Remix.shield_check_line, settings),
           const SizedBox(height: 8),
           _buildFilterButton('BATAL', Remix.close_circle_line, settings),
-          
           const Spacer(),
-
           _buildSideMenuItem(
             icon: Icons.assignment_outlined,
             settings: settings,
@@ -281,9 +290,7 @@ class _LayarStatistikState extends State<LayarStatistik> {
               );
             },
           ),
-          
           const SizedBox(height: 8),
-          
           _buildSideMenuItem(
             icon: Icons.settings_outlined,
             settings: settings,
@@ -425,7 +432,6 @@ class _LayarStatistikState extends State<LayarStatistik> {
               ),
             ),
             const SizedBox(width: 8),
-
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               mainAxisSize: MainAxisSize.min,

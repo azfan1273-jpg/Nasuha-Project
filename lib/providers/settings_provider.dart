@@ -49,6 +49,11 @@ class SettingsProvider with ChangeNotifier {
     _loadThemeFromPrefs();
   }
 
+	void clearSettings() {
+	  _storeId = null; // Atau '' (sesuai tipe data storeId kamu, misal String/UUID)
+	 	  notifyListeners();
+	}
+
   Future<void> fetchStoreId() async {
       try {
         final user = Supabase.instance.client.auth.currentUser;
@@ -60,8 +65,8 @@ class SettingsProvider with ChangeNotifier {
             .eq('id', user.id)
             .maybeSingle();
   
-        if (response != null && response['store_id'] != null) {
-          _storeId = response['store_id'].toString();
+        if (response != null) {
+          _storeId = response['store_id']?.toString();
           notifyListeners();
         }
       } catch (e) {

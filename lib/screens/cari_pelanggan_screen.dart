@@ -1,3 +1,4 @@
+import 'dart:async'; // Impor Timer untuk Debounce
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -19,6 +20,7 @@ class _CariPelangganScreenState extends State<CariPelangganScreen> {
   final TextEditingController _searchController = TextEditingController();
   List<Map<String, dynamic>> _customersList = [];
   bool _isLoading = true;
+  Timer? _debounceTimer; // 🔹 Tambahkan timer untuk debounce pencarian
 
   @override
   void initState() {
@@ -29,7 +31,16 @@ class _CariPelangganScreenState extends State<CariPelangganScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _debounceTimer?.cancel(); // 🔹 Batalkan timer saat widget di-dispose
     super.dispose();
+  }
+
+  // 🔹 Implementasi Debounce pada pencarian
+  void _onSearchChanged(String value) {
+    if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      _loadCustomers(value.trim());
+    });
   }
 
   Future<void> _loadCustomers([String keyword = '']) async {
@@ -52,7 +63,6 @@ class _CariPelangganScreenState extends State<CariPelangganScreen> {
     }
   }
 
-  // 🔹 Getter untuk Mengurutkan (A-Z) dan Menyisipkan Header Abjad
   List<dynamic> get _displayList {
     final List<dynamic> list = [];
     String currentHeader = '';
@@ -71,9 +81,9 @@ class _CariPelangganScreenState extends State<CariPelangganScreen> {
 
       if (letter != currentHeader) {
         currentHeader = letter;
-        list.add(currentHeader); // Masukkan penanda huruf (String)
+        list.add(currentHeader);
       }
-      list.add(item); // Masukkan data pelanggan (Map)
+      list.add(item);
     }
     return list;
   }
@@ -161,7 +171,10 @@ class _CariPelangganScreenState extends State<CariPelangganScreen> {
               } catch (e) {
                 debugPrint('Error inserting customer: $e');
                 if (dialogContext.mounted) {
-                  Navigator.pop(dialogContext, newCustomerData);
+                  // 🔹 Tampilkan pesan error alih-alih mengembalikan data gagal ke layar utama
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(content: Text('Gagal menyimpan data pelanggan')),
+                  );
                 }
               }
             },
@@ -222,7 +235,7 @@ class _CariPelangganScreenState extends State<CariPelangganScreen> {
                     TextField(
                       controller: _searchController,
                       autofocus: true,
-                      onChanged: (val) => _loadCustomers(val.trim()),
+                      onChanged: _onSearchChanged, // 🔹 Menggunakan fungsi debounce
                       style: const TextStyle(fontSize: 12),
                       decoration: InputDecoration(
                         hintText: 'Nama / No. HP',
@@ -252,7 +265,6 @@ class _CariPelangganScreenState extends State<CariPelangganScreen> {
                                   itemBuilder: (context, index) {
                                     final item = displayItems[index];
 
-                                    // 🔹 TAMPILKAN HEADER ABJAD (A, B, C...)
                                     if (item is String) {
                                       return Padding(
                                         padding: const EdgeInsets.only(top: 10, bottom: 4, left: 4),
@@ -267,7 +279,6 @@ class _CariPelangganScreenState extends State<CariPelangganScreen> {
                                       );
                                     }
 
-                                    // 🔹 TAMPILKAN CARD PELANGGAN
                                     final cust = item as Map<String, dynamic>;
                                     return Container(
                                       margin: const EdgeInsets.only(bottom: 8),
