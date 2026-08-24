@@ -45,20 +45,20 @@ class NasuhaApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFFFAF5F7),
       ),
       home: StreamBuilder<AuthState>(
-        stream: supabase.auth.onAuthStateChange,
-        builder: (context, snapshot) {
-          // Membaca session aktif secara akurat dari stream update
-          final session = snapshot.data?.session ?? supabase.auth.currentSession;
-
-          // Jika session kosong (setelah logout), lempar langsung ke LoginScreen
-          if (session == null) {
-            return const LoginScreen();
-          }
-
-          // Jika session ada, masuk ke Halaman Utama
-          return const KasirPageManager();
-        },
-      ),
+              stream: supabase.auth.onAuthStateChange,
+              builder: (context, snapshot) {
+                // Membaca session aktif secara akurat dari stream update
+                final session = snapshot.data?.session ?? supabase.auth.currentSession;
+      
+                // Jika session kosong (setelah logout), lempar langsung ke LoginScreen
+                if (session == null) {
+                  return const LoginScreen();
+                }
+      
+                // Jika session ada (sudah login), tampilkan halaman utama
+                return const KasirPageManager();
+              },
+            ),
     );
   }
 }

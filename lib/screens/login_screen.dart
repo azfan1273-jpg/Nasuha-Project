@@ -1,10 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../main.dart';
-import '../providers/settings_provider.dart';
-import 'kasir_page_manager.dart';
-import 'kasir_home_screen.dart';
 import 'package:flutter/foundation.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -21,8 +17,6 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
 
   static const Color _bgDark = Color(0xFFFAF5F7);
-  static const Color _cardDark = Color(0xFFFCE7F3);
-  static const Color _goldAccent = Color(0xFFEC4899);
   static const Color _textBlack = Color(0xFF111827);
   static const Color _pinkAccent = Color(0xFFEC4899);
 
@@ -53,7 +47,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (response.user != null && mounted) {
         _showSnackBar('Login berhasil! Selamat datang.');
-        _navigateToHome();
+        // StreamBuilder di main.dart otomatis memindahkan halaman ke KasirPageManager
       }
     } on AuthException catch (e) {
       if (mounted) _showSnackBar(e.message, isError: true);
@@ -88,7 +82,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // 3. DIALOG LUPA PASSWORD (KIRIM RESET LINK VIA SUPABASE)
+  // 3. DIALOG LUPA PASSWORD
   void _showLupaPasswordDialog() {
     final resetEmailController = TextEditingController(text: _emailController.text);
 
@@ -149,101 +143,92 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-	 
-  // DIALOG REGISTRASI OWNER BARU
-    void _showDaftarTokoDialog() {
-      final namaTokoController = TextEditingController();
-      final emailRegController = TextEditingController();
-      final passwordRegController = TextEditingController();
-  
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Daftar Toko Baru (Owner)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildDialogInput(namaTokoController, 'Nama Toko / Laundry'),
-              const SizedBox(height: 10),
-              _buildDialogInput(emailRegController, 'Email Owner', isEmail: true),
-              const SizedBox(height: 10),
-              _buildDialogInput(passwordRegController, 'Password', isPassword: true),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Batal', style: TextStyle(color: Colors.black54)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _pinkAccent,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              onPressed: () async {
-                final namaToko = namaTokoController.text.trim();
-                final email = emailRegController.text.trim();
-                final password = passwordRegController.text.trim();
-  
-                if (namaToko.isEmpty || email.isEmpty || password.isEmpty) {
-                  _showSnackBar('Semua data wajib diisi!', isError: true);
-                  return;
-                }
-  
-                Navigator.pop(ctx);
-                setState(() => _isLoading = true);
-  
-                try {
-                  // Register ke Supabase Auth dengan metadata nama toko
-                  final res = await supabase.auth.signUp(
-                    email: email,
-                    password: password,
-                    data: {'nama_toko': namaToko, 'role': 'Owner'},
-                  );
-  
-                  if (res.user != null && mounted) {
-                    _showSnackBar('Pendaftaran berhasil! Silakan login dengan akun baru.');
-                  }
-                } catch (e) {
-                  if (mounted) _showSnackBar('Gagal mendaftar: $e', isError: true);
-                } finally {
-                  if (mounted) setState(() => _isLoading = false);
-                }
-              },
-              child: const Text('Daftar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
+  // 4. DIALOG REGISTRASI OWNER BARU
+  void _showDaftarTokoDialog() {
+    final namaTokoController = TextEditingController();
+    final emailRegController = TextEditingController();
+    final passwordRegController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Daftar Toko Baru (Owner)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildDialogInput(namaTokoController, 'Nama Toko / Laundry'),
+            const SizedBox(height: 10),
+            _buildDialogInput(emailRegController, 'Email Owner', isEmail: true),
+            const SizedBox(height: 10),
+            _buildDialogInput(passwordRegController, 'Password', isPassword: true),
           ],
         ),
-      );
-    }
-  
-    // HELPER INPUT DIALOG
-    Widget _buildDialogInput(TextEditingController controller, String hint, {bool isEmail = false, bool isPassword = false}) {
-      return Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFFF9FAFB),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.black12),
-        ),
-        child: TextField(
-          controller: controller,
-          obscureText: isPassword,
-          keyboardType: isEmail ? TextInputType.emailAddress : TextInputType.text,
-          style: const TextStyle(fontSize: 12),
-          decoration: InputDecoration(
-            hintText: hint,
-            border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Batal', style: TextStyle(color: Colors.black54)),
           ),
-        ),
-      );
-    }
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _pinkAccent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () async {
+              final namaToko = namaTokoController.text.trim();
+              final email = emailRegController.text.trim();
+              final password = passwordRegController.text.trim();
 
-    void _navigateToHome() {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const KasirPageManager()),
+              if (namaToko.isEmpty || email.isEmpty || password.isEmpty) {
+                _showSnackBar('Semua data wajib diisi!', isError: true);
+                return;
+              }
+
+              Navigator.pop(ctx);
+              setState(() => _isLoading = true);
+
+              try {
+                final res = await supabase.auth.signUp(
+                  email: email,
+                  password: password,
+                  data: {'nama_toko': namaToko, 'role': 'Owner'},
+                );
+
+                if (res.user != null && mounted) {
+                  _showSnackBar('Pendaftaran berhasil! Silakan login dengan akun baru.');
+                }
+              } catch (e) {
+                if (mounted) _showSnackBar('Gagal mendaftar: $e', isError: true);
+              } finally {
+                if (mounted) setState(() => _isLoading = false);
+              }
+            },
+            child: const Text('Daftar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // HELPER INPUT DIALOG
+  Widget _buildDialogInput(TextEditingController controller, String hint, {bool isEmail = false, bool isPassword = false}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: TextField(
+        controller: controller,
+        obscureText: isPassword,
+        keyboardType: isEmail ? TextInputType.emailAddress : TextInputType.text,
+        style: const TextStyle(fontSize: 12),
+        decoration: InputDecoration(
+          hintText: hint,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        ),
+      ),
     );
   }
 
@@ -267,33 +252,8 @@ class _LoginScreenState extends State<LoginScreen> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 400),
             child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  // 1. CARD FORM LOGIN (Taruh paling atas agar jadi background)
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.06),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      // ... isi form login kamu tetap sama ...
-                    ),
-                  ),
-                // DEKORASI MAWAR ATAS KIRI
-                const Positioned(
-                  top: -16,
-                  left: -10,
-                  child: Text('🌹🌿', style: TextStyle(fontSize: 26)),
-                ),
-
+              clipBehavior: Clip.none,
+              children: [
                 // CARD FORM LOGIN
                 Container(
                   padding: const EdgeInsets.all(24),
@@ -343,7 +303,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 20),
 
                       // INPUT EMAIL
-                      Align(
+                      const Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
                           'Email Akun',
@@ -425,7 +385,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 20),
 
-                      // TOMBOL LOG IN (EMAIL)
+                      // TOMBOL LOG IN
                       SizedBox(
                         width: double.infinity,
                         height: 44,
@@ -454,8 +414,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 14),
 
                       // SEPARATOR "ATAU"
-                      Row(
-                        children: const [
+                      const Row(
+                        children: [
                           Expanded(child: Divider(color: Colors.black12)),
                           Padding(
                             padding: EdgeInsets.symmetric(horizontal: 8),
@@ -466,7 +426,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 14),
 
-                      // TOMBOL LOGIN BY GOOGLE EMAIL
+                      // TOMBOL GOOGLE
                       SizedBox(
                         width: double.infinity,
                         height: 44,
@@ -494,7 +454,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // LINK DAFTAR TOKO BARU
+                      // LINK DAFTAR TOKO
                       GestureDetector(
                         onTap: _showDaftarTokoDialog,
                         child: const Text(
@@ -510,11 +470,16 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
 
-                // DEKORASI MAWAR BAWAH KANAN
+                // DEKORASI MAWAR ATAS KIRI & BAWAH KANAN
                 const Positioned(
-                 bottom: -16,
-                 right: -10,
-                 child: Text('🌹🌿', style: TextStyle(fontSize: 26)),
+                  top: -16,
+                  left: -10,
+                  child: Text('🌹🌿', style: TextStyle(fontSize: 26)),
+                ),
+                const Positioned(
+                  bottom: -16,
+                  right: -10,
+                  child: Text('🌹🌿', style: TextStyle(fontSize: 26)),
                 ),
               ],
             ),
