@@ -9,9 +9,9 @@ class SettingsProvider with ChangeNotifier {
   static const String _themeKey = 'app_theme_mode'; // Key untuk penyimpanan lokal
 
   // --- KODE LAMA KAMU (namaToko, userRole, dll) TETAP DI SINI ---
-  String _namaToko = 'NASUHA LAUNDRY';
-  String _userRole = 'OWNER';
-  String _emailToko = 'owner@lndr.com';
+  String _namaToko = '';
+  String _userRole = '';
+  String _emailToko = '';
 
   String get namaToko => _namaToko;
   String get userRole => _userRole;
@@ -58,16 +58,17 @@ class SettingsProvider with ChangeNotifier {
       try {
         final user = Supabase.instance.client.auth.currentUser;
         if (user == null) return;
-  
+    
         final response = await Supabase.instance.client
             .from('profiles')
-            .select('store_id')
+            .select('store_id, nama_toko') // 👈 Tambahkan 'nama_toko'
             .eq('id', user.id)
             .maybeSingle();
-  
+    
         if (response != null) {
           _storeId = response['store_id']?.toString();
-          notifyListeners();
+          _namaToko = response['nama_toko']?.toString() ?? ''; // 👈 Simpan nama toko
+          notifyListeners(); // 👈 Trigger UI update
         }
       } catch (e) {
         debugPrint('Error fetching store_id: $e');
