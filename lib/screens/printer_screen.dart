@@ -15,14 +15,9 @@ class _PrinterScreenState extends State<PrinterScreen> {
   bool _isSearching = false;
   String? _connectedDevice;
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black26,
-      body: Center(
-        child: SizedBox(
-          width: 385,
-          child: Scaffold(
+	  @override
+	  Widget build(BuildContext context) {
+	    return Scaffold(
             backgroundColor: _bgDark,
             appBar: AppBar(
               backgroundColor: Colors.white,
@@ -95,11 +90,8 @@ class _PrinterScreenState extends State<PrinterScreen> {
                     ),
                   ),
                 ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+              ),           
+		    ),
+		  );
+		}
+      }

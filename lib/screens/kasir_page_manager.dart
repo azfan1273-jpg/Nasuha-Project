@@ -4,7 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart'; // Jangan lupa install url_launcher
 import '../providers/settings_provider.dart';
 import 'kasir_home_screen.dart';
-import 'layar_statistik.dart';
+import 'order_status_screen.dart';
 
 import 'owner_screen.dart';
 import 'kasir_screen.dart';
@@ -152,7 +152,7 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                   ),
                   const Material(
                     color: Colors.transparent,
-                    child: LayarStatistik(),
+                    child: OrderStatusScreen(),
                   ),
                 ],
               ),

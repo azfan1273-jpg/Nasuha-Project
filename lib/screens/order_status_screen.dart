@@ -5,14 +5,14 @@ import '../providers/settings_provider.dart';
 import '../widgets/buat_order_dialog.dart';
 import '../widgets/order_detail_dialog.dart';
 
-class LayarStatistik extends StatefulWidget {
-  const LayarStatistik({Key? key}) : super(key: key);
+class OrderStatusScreen extends StatefulWidget {
+  const OrderStatusScreen({Key? key}) : super(key: key);
 
   @override
-  State<LayarStatistik> createState() => _LayarStatistikState();
+  State<OrderStatusScreen> createState() => _OrderStatusScreenState();
 }
 
-class _LayarStatistikState extends State<LayarStatistik> {
+class _OrderStatusScreenState extends State<OrderStatusScreen> {
   final List<Map<String, dynamic>> _allOrders = [];
   final TextEditingController _searchController = TextEditingController();
 
@@ -67,7 +67,7 @@ class _LayarStatistikState extends State<LayarStatistik> {
         });
       }
     } catch (e) {
-      debugPrint('Error fetch orders di LayarStatistik: $e');
+      debugPrint('Error fetch orders di OrderStatusScreen: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

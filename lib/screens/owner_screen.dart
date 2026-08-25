@@ -56,16 +56,11 @@ class _OwnerScreenState extends State<OwnerScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black26,
-      body: Center(
-        child: SizedBox(
-          width: 385,
-          child: Scaffold(
-            backgroundColor: _bgDark,
-            appBar: AppBar(
+		  @override
+		  Widget build(BuildContext context) {
+		    return Scaffold(
+		      backgroundColor: _bgDark,
+              appBar: AppBar(
               backgroundColor: Colors.white,
               elevation: 0,
               leading: IconButton(
@@ -171,9 +166,6 @@ class _OwnerScreenState extends State<OwnerScreen> {
                 ],
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+	      );
+	    }
+	  }
