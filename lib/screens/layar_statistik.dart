@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:remixicon/remixicon.dart';
 import '../main.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/buat_order_dialog.dart';
 import '../widgets/order_detail_dialog.dart';
-import '../screens/report_screen.dart';
-import 'setting_screen.dart';
 
 class LayarStatistik extends StatefulWidget {
   const LayarStatistik({Key? key}) : super(key: key);
@@ -16,12 +13,10 @@ class LayarStatistik extends StatefulWidget {
 }
 
 class _LayarStatistikState extends State<LayarStatistik> {
-  static const Color _textBlack = Color(0xFF111827);
-
   final List<Map<String, dynamic>> _allOrders = [];
   final TextEditingController _searchController = TextEditingController();
 
-  String _selectedFilter = 'ANTRIAN';
+  String _selectedFilter = 'PENDING';
   String _searchQuery = '';
   bool _isLoading = false;
 
@@ -46,7 +41,6 @@ class _LayarStatistikState extends State<LayarStatistik> {
       final user = supabase.auth.currentUser;
       if (user == null) return;
 
-      // 1. Ambil store_id dari profiles milik user yang login
       final profileRes = await supabase
           .from('profiles')
           .select('store_id')
@@ -60,11 +54,10 @@ class _LayarStatistikState extends State<LayarStatistik> {
         return;
       }
 
-      // 2. Filter query Supabase menggunakan .eq('store_id', currentStoreId)
       final List<dynamic> data = await supabase
           .from('orders')
           .select('*, order_items(*)')
-          .eq('store_id', currentStoreId) // <-- ISOLASI DATA STORE ID
+          .eq('store_id', currentStoreId)
           .order('created_at', ascending: false);
 
       if (mounted) {
@@ -80,6 +73,23 @@ class _LayarStatistikState extends State<LayarStatistik> {
     }
   }
 
+  // HITUNG JUMLAH ORDER UNTUK COUNTER TAB
+  int _countOrdersByStatus(String filterKey) {
+    return _allOrders.where((order) {
+      final status = (order['status'] ?? 'BARU').toString().toUpperCase();
+      switch (filterKey) {
+        case 'PENDING':
+          return status == 'ANTRIAN' || status == 'BARU' || status == 'PENDING';
+        case 'PREPARED':
+          return status == 'PROSES' || status == 'PREPARED';
+        case 'DELIVERED':
+          return status == 'SELESAI' || status == 'DELIVERED';
+        default:
+          return false;
+      }
+    }).length;
+  }
+
   List<Map<String, dynamic>> get _filteredOrders {
     return _allOrders.where((order) {
       final name = (order['customer_name'] ?? '').toString().toLowerCase();
@@ -89,17 +99,15 @@ class _LayarStatistikState extends State<LayarStatistik> {
 
       if (!matchesSearch) return false;
 
-      final status = (order['status'] ?? 'Baru').toString().toUpperCase();
+      final status = (order['status'] ?? 'BARU').toString().toUpperCase();
 
       switch (_selectedFilter) {
-        case 'ANTRIAN':
-          return status == 'ANTRIAN' || status == 'BARU';
-        case 'PROSES':
-          return status == 'PROSES';
-        case 'SELESAI':
-          return status == 'SELESAI';
-        case 'BATAL':
-          return status == 'BATAL' || status == 'CANCEL';
+        case 'PENDING':
+          return status == 'ANTRIAN' || status == 'BARU' || status == 'PENDING';
+        case 'PREPARED':
+          return status == 'PROSES' || status == 'PREPARED';
+        case 'DELIVERED':
+          return status == 'SELESAI' || status == 'DELIVERED';
         default:
           return true;
       }
@@ -123,233 +131,141 @@ class _LayarStatistikState extends State<LayarStatistik> {
     }
   }
 
-  String _getJudulListBar() {
-    switch (_selectedFilter) {
-      case 'ANTRIAN':
-        return 'Antrian';
-      case 'PROSES':
-        return 'Proses';
-      case 'SELESAI':
-        return 'Selesai';
-      case 'BATAL':
-        return 'Transaksi Batal';
-      default:
-        return 'Antrian';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
 
-    return Center(
-      child: Container(
-        width: double.infinity,
-        color: settings.bgDark,
-        child: Column(
-          children: [
-            const SizedBox(height: 10),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildLeftSidebar(settings),
-                    const SizedBox(width: 6),
-                    Container(
-                      width: 2.5,
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      decoration: BoxDecoration(
-                        color: settings.accentColor.withOpacity(0.5),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
+    return Scaffold(
+      backgroundColor: settings.bgDark,
+      body: Column(
+        children: [
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              children: [
+                // SEARCH BAR TOP
+                Container(
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    style: TextStyle(fontSize: 13, color: settings.textColor),
+                    onChanged: (val) {
+                      setState(() => _searchQuery = val);
+                    },
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      hintText: 'Search orders',
+                      hintStyle: TextStyle(fontSize: 13, color: Colors.black45),
+                      prefixIcon: Icon(Icons.search, size: 20, color: Colors.black45),
+                      prefixIconConstraints: BoxConstraints(minWidth: 40, minHeight: 40),
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(vertical: 10),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                flex: 5,
-                                child: Text(
-                                  _getJudulListBar(),
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: settings.textColor,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                flex: 5,
-                                child: Container(
-                                  height: 28,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: settings.cardDark),
-                                  ),
-                                  child: TextField(
-                                    controller: _searchController,
-                                    style: const TextStyle(fontSize: 9),
-                                    onChanged: (val) {
-                                      setState(() => _searchQuery = val);
-                                    },
-                                    decoration: const InputDecoration(
-                                      isDense: true,
-                                      hintText: 'Pencarian list bar...',
-                                      hintStyle: TextStyle(fontSize: 8, color: Colors.black38),
-                                      prefixIcon: Icon(Icons.search, size: 14, color: Colors.grey),
-                                      prefixIconConstraints: BoxConstraints(minWidth: 24, minHeight: 28),
-                                      border: InputBorder.none,
-                                      contentPadding: EdgeInsets.symmetric(vertical: 7),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Expanded(
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: settings.cardDark.withOpacity(0.6),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: settings.cardDark),
-                              ),
-                              child: _isLoading
-                                  ? Center(
-                                      child: CircularProgressIndicator(color: settings.accentColor, strokeWidth: 2),
-                                    )
-                                  : _filteredOrders.isEmpty
-                                      ? const Center(
-                                          child: Text(
-                                            '(Belum Ada Data)',
-                                            textAlign: TextAlign.center,
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w500,
-                                              color: Colors.black38,
-                                            ),
-                                          ),
-                                        )
-                                      : RefreshIndicator(
-                                          onRefresh: _fetchOrders,
-                                          color: settings.accentColor,
-                                          child: ListView.builder(
-                                            itemCount: _filteredOrders.length,
-                                            itemBuilder: (context, index) {
-                                              final item = _filteredOrders[index];
-                                              return _buildOrderCardBar(item);
-                                            },
-                                          ),
-                                        ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                
+                // HORIZONTAL TAB FILTER (PENDING, PREPARED, DELIVERED)
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(25),
+                  ),
+                  child: Row(
+                    children: [
+                      _buildTabButton('PENDING', 'Pending', settings),
+                      _buildTabButton('PREPARED', 'Prepared', settings),
+                      _buildTabButton('DELIVERED', 'Delivered', settings),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // LIST ORDER DATA
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _isLoading
+                  ? Center(
+                      child: CircularProgressIndicator(
+                        color: settings.accentColor,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : _filteredOrders.isEmpty
+                      ? const Center(
+                          child: Text(
+                            '(Belum Ada Data)',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.black38,
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+                        )
+                      : RefreshIndicator(
+                          onRefresh: _fetchOrders,
+                          color: settings.accentColor,
+                          child: ListView.builder(
+                            itemCount: _filteredOrders.length,
+                            itemBuilder: (context, index) {
+                              final item = _filteredOrders[index];
+                              return _buildOrderCardBar(item);
+                            },
+                          ),
+                        ),
             ),
-            _buildTransactionButton(settings),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLeftSidebar(SettingsProvider settings) {
-    return SizedBox(
-      width: 46,
-      child: Column(
-        children: [
-          _buildFilterButton('ANTRIAN', Remix.time_line, settings),
-          const SizedBox(height: 8),
-          _buildFilterButton('PROSES', Remix.loader_2_line, settings),
-          const SizedBox(height: 8),
-          _buildFilterButton('SELESAI', Remix.shield_check_line, settings),
-          const SizedBox(height: 8),
-          _buildFilterButton('BATAL', Remix.close_circle_line, settings),
-          const Spacer(),
-          _buildSideMenuItem(
-            icon: Icons.assignment_outlined,
-            settings: settings,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ReportScreen(),
-                ),
-              );
-            },
           ),
-          const SizedBox(height: 8),
-          _buildSideMenuItem(
-            icon: Icons.settings_outlined,
-            settings: settings,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const SettingScreen(),
-                ),
-              );
-            },
-          ),
+          
+          // TOMBOL MENU TRANSAKSI
+          _buildTransactionButton(settings),
         ],
       ),
-    );  
-  }
-
-  Widget _buildFilterButton(String filterKey, IconData icon, SettingsProvider settings) {
-    final bool isSelected = _selectedFilter == filterKey;
-  
-    return GestureDetector(
-      onTap: () => setState(() => _selectedFilter = filterKey),
-      child: Container(
-        width: 46,
-        height: 46,
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF22C55E) : settings.cardDark,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: const Color(0xFF22C55E).withOpacity(0.4),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ]
-              : [],
-        ),
-        child: Icon(
-          icon,
-          size: 20,
-          color: isSelected ? Colors.white : settings.textColor,
-        ),
-      ),
     );
   }
 
-  Widget _buildSideMenuItem({required IconData icon, required VoidCallback onTap, required SettingsProvider settings}) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        width: 46,
-        height: 46,
-        decoration: BoxDecoration(
-          color: settings.cardDark,
-          borderRadius: BorderRadius.circular(14),
+  Widget _buildTabButton(String filterKey, String label, SettingsProvider settings) {
+    final bool isSelected = _selectedFilter == filterKey;
+    final int count = _countOrdersByStatus(filterKey);
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedFilter = filterKey),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : [],
+          ),
+          child: Text(
+            '$label ($count)',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              color: isSelected ? Colors.black87 : Colors.black54,
+            ),
+          ),
         ),
-        child: Icon(icon, size: 20, color: settings.textColor),
       ),
     );
   }
@@ -388,18 +304,18 @@ class _LayarStatistikState extends State<LayarStatistik> {
       },
       child: Container(
         width: double.infinity,
-        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [
-              Color(0xFFFFF3B0),
-              Color(0xFFFFC7E8),
-            ],
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-          ),
-          borderRadius: BorderRadius.circular(10),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
+            ),
+          ],
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -414,16 +330,16 @@ class _LayarStatistikState extends State<LayarStatistik> {
                     customerName,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 13,
+                      fontSize: 14,
                       color: Colors.black87,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 4),
                   Text(
                     estText,
                     style: const TextStyle(
-                      fontSize: 10,
+                      fontSize: 11,
                       fontStyle: FontStyle.italic,
                       color: Colors.black54,
                     ),
@@ -439,18 +355,17 @@ class _LayarStatistikState extends State<LayarStatistik> {
                 Text(
                   serviceText,
                   style: const TextStyle(
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w600,
                     fontSize: 12,
                     color: Colors.black87,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 Text(
                   _formatRupiah(totalPrice),
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                    fontStyle: FontStyle.italic,
+                    fontSize: 13,
                     color: Colors.black87,
                   ),
                 ),
@@ -464,17 +379,17 @@ class _LayarStatistikState extends State<LayarStatistik> {
 
   Widget _buildTransactionButton(SettingsProvider settings) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       child: SizedBox(
         width: double.infinity,
-        height: 44,
+        height: 48,
         child: ElevatedButton.icon(
           style: ElevatedButton.styleFrom(
             backgroundColor: settings.accentColor,
             foregroundColor: Colors.white,
-            elevation: 2,
+            elevation: 0,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(24),
             ),
           ),
           onPressed: () {

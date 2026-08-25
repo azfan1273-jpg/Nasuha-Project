@@ -134,7 +134,7 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                 children: [
                   _buildTabButton(0, 'Beranda Kasir', Icons.home_rounded, goldAccent),
                   const SizedBox(width: 8),
-                  _buildTabButton(1, 'Laporan & Statistik', Icons.bar_chart_rounded, goldAccent),
+                  _buildTabButton(1, 'Order Status', Icons.bar_chart_rounded, goldAccent),
                 ],
               ),
             ),
