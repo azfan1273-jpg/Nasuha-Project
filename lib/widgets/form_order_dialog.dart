@@ -4,7 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../helpers/database_helper.dart';
 import '../providers/settings_provider.dart'; // 👈 TAMBAHKAN INI
 import '../screens/cari_pelanggan_screen.dart';
-import '../screens/cari_layanan_screen.dart';
+import '../screens/daftar_layanan_screen.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -168,7 +168,7 @@ class FormOrderDialogState extends State<FormOrderDialog> {
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
-        builder: (context) => const CariLayananScreen(),
+        builder: (context) => const DaftarLayananScreen(),
       ),
     );
   

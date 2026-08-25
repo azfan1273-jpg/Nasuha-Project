@@ -8,7 +8,7 @@ import 'order_status_screen.dart';
 
 import 'owner_screen.dart';
 import 'kasir_screen.dart';
-import 'kelola_layanan_screen.dart';
+import 'edit_layanan_screen.dart';
 import 'parfum_screen.dart';
 import 'cari_pelanggan_screen.dart';
 import 'printer_screen.dart';
@@ -461,7 +461,7 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                     title: 'Daftar Layanan',
                     onTap: () {
                       Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const KelolaLayananScreen()));
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const EditLayananScreen()));
                     },
                   ),
                   _buildSidebarItem(

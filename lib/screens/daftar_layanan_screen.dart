@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-// 🔹 Import halaman Kelola Layanan kamu (sesuaikan path-nya jika beda folder)
-import 'kelola_layanan_screen.dart';
+import 'edit_layanan_screen.dart';
 
 final supabase = Supabase.instance.client;
 
-class CariLayananScreen extends StatefulWidget {
-  const CariLayananScreen({super.key});
+class DaftarLayananScreen extends StatefulWidget {
+  const DaftarLayananScreen({super.key});
 
   @override
-  State<CariLayananScreen> createState() => _CariLayananScreenState();
+  State<DaftarLayananScreen> createState() => _DaftarLayananScreenState();
 }
 
-class _CariLayananScreenState extends State<CariLayananScreen> {
+class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
   static const Color _bgDark = Color(0xFFFAF5F7);
   static const Color _cardDark = Color(0xFFFCE7F3);
   static const Color _goldAccent = Color(0xFFEC4899);
@@ -49,43 +48,30 @@ class _CariLayananScreenState extends State<CariLayananScreen> {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
-      // 🔹 Ambil hanya layanan yang AKTIF (is_active == true)
       final servicesData = await supabase
           .from('services')
           .select('*')
           .eq('is_active', true)
+          .order('category_order', ascending: true)
           .order('name', ascending: true);
 
-      List<String> categories = ['Semua'];
-      try {
-        final catData = await supabase
-            .from('service_categories')
-            .select('name')
-            .order('name', ascending: true);
-        for (var item in catData) {
-          final catName = item['name'].toString().trim();
-          if (catName.isNotEmpty && !categories.contains(catName)) {
-            categories.add(catName);
-          }
-        }
-      } catch (_) {
-        for (var item in servicesData) {
-          final catName = (item['category'] ?? '').toString().trim();
-          if (catName.isNotEmpty && !categories.contains(catName)) {
-            categories.add(catName);
-          }
+      List<String> rawCategories = [];
+      for (var item in servicesData) {
+        final catName = (item['category'] ?? '').toString().trim();
+        if (catName.isNotEmpty && !rawCategories.contains(catName)) {
+          rawCategories.add(catName);
         }
       }
 
       if (mounted) {
         setState(() {
           _servicesList = List<Map<String, dynamic>>.from(servicesData);
-          _categoriesList = categories;
+          _categoriesList = ['Semua', ...rawCategories];
           _isLoading = false;
         });
       }
     } catch (e) {
-      debugPrint('Error fetch services & categories: $e');
+      debugPrint('Error fetch services: $e');
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -104,13 +90,11 @@ class _CariLayananScreenState extends State<CariLayananScreen> {
     }).toList();
   }
 
-  // 🔹 Fungsi Navigasi ke Layar Tambah/Kelola Layanan
-  Future<void> _navigateToTambahLayanan() async {
+  Future<void> _navigateToEditLayanan() async {
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const KelolaLayananScreen()),
+      MaterialPageRoute(builder: (context) => const EditLayananScreen()),
     );
-    // Refresh list setelah kembali dari menu Tambah Layanan
     _loadData();
   }
 
@@ -190,16 +174,15 @@ class _CariLayananScreenState extends State<CariLayananScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          'Cari Layanan',
+          'Daftar Layanan',
           style: TextStyle(color: _textBlack, fontSize: 16, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
-        // 🔹 Action Button untuk Tambah Layanan Baru
         actions: [
           IconButton(
-            tooltip: 'Tambah Layanan Baru',
-            icon: const Icon(Icons.add_circle_outline_rounded, color: _goldAccent, size: 26),
-            onPressed: _navigateToTambahLayanan,
+            tooltip: 'Kelola & Edit Layanan',
+            icon: const Icon(Icons.edit_note_rounded, color: _goldAccent, size: 26),
+            onPressed: _navigateToEditLayanan,
           ),
           const SizedBox(width: 4),
         ],
@@ -212,9 +195,7 @@ class _CariLayananScreenState extends State<CariLayananScreen> {
               TextField(
                 controller: _searchController,
                 autofocus: true,
-                onChanged: (val) {
-                  setState(() => _searchQuery = val.trim());
-                },
+                onChanged: (val) => setState(() => _searchQuery = val.trim()),
                 style: const TextStyle(fontSize: 12),
                 decoration: InputDecoration(
                   hintText: 'Cari layanan...',
@@ -240,9 +221,7 @@ class _CariLayananScreenState extends State<CariLayananScreen> {
                     final bool isSelected = _selectedCategory == category;
 
                     return GestureDetector(
-                      onTap: () {
-                        setState(() => _selectedCategory = category);
-                      },
+                      onTap: () => setState(() => _selectedCategory = category),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -252,15 +231,6 @@ class _CariLayananScreenState extends State<CariLayananScreen> {
                           border: Border.all(
                             color: isSelected ? _goldAccent : Colors.black12,
                           ),
-                          boxShadow: isSelected
-                              ? [
-                                  BoxShadow(
-                                    color: _goldAccent.withOpacity(0.3),
-                                    blurRadius: 6,
-                                    offset: const Offset(0, 2),
-                                  )
-                                ]
-                              : [],
                         ),
                         child: Text(
                           category,
@@ -280,28 +250,10 @@ class _CariLayananScreenState extends State<CariLayananScreen> {
                 child: _isLoading
                     ? const Center(child: CircularProgressIndicator(color: _goldAccent))
                     : filteredList.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Text(
-                                  'Layanan tidak ditemukan',
-                                  style: TextStyle(fontSize: 12, color: Colors.black45),
-                                ),
-                                const SizedBox(height: 8),
-                                OutlinedButton.icon(
-                                  onPressed: _navigateToTambahLayanan,
-                                  icon: const Icon(Icons.add, size: 16, color: _goldAccent),
-                                  label: const Text(
-                                    'Buat Layanan Baru',
-                                    style: TextStyle(fontSize: 11, color: _goldAccent),
-                                  ),
-                                  style: OutlinedButton.styleFrom(
-                                    side: const BorderSide(color: _goldAccent),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                  ),
-                                ),
-                              ],
+                        ? const Center(
+                            child: Text(
+                              'Layanan aktif tidak ditemukan',
+                              style: TextStyle(fontSize: 12, color: Colors.black45),
                             ),
                           )
                         : ListView.separated(

@@ -5,7 +5,7 @@ import '../providers/settings_provider.dart';
 import '../screens/report_screen.dart';
 import 'cari_pelanggan_screen.dart';
 import 'kasir_screen.dart';
-import 'kelola_layanan_screen.dart';
+import 'edit_layanan_screen.dart';
 import 'owner_screen.dart';
 import 'parfum_screen.dart';
 import 'printer_screen.dart';
@@ -96,7 +96,7 @@ class SettingScreen extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const KelolaLayananScreen(),
+                      builder: (context) => const EditLayananScreen(),
                     ),
                   );
                 },
