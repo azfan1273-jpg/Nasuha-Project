@@ -33,45 +33,40 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
   }
 
   // AMBIL DATA TERISOLASI BERDASARKAN STORE_ID
-  Future<void> _fetchOrders() async {
-    if (!mounted) return;
-    setState(() => _isLoading = true);
-
-    try {
-      final user = supabase.auth.currentUser;
-      if (user == null) return;
-
-      final profileRes = await supabase
-          .from('profiles')
-          .select('store_id')
-          .eq('id', user.id)
-          .maybeSingle();
-
-      final String? currentStoreId = profileRes?['store_id']?.toString();
-
-      if (currentStoreId == null) {
-        debugPrint('Log: store_id tidak ditemukan');
-        return;
+    Future<void> _fetchOrders() async {
+      if (!mounted) return;
+      setState(() => _isLoading = true);
+  
+      try {
+        // 1. Ambil store_id langsung dari SettingsProvider
+        final currentStoreId = context.read<SettingsProvider>().storeId;
+  
+        if (currentStoreId == null) {
+          debugPrint('Log: store_id tidak ditemukan');
+          return;
+        }
+  
+        // 2. Ambil data orders berdasarkan store_id
+        final List<dynamic> data = await supabase
+            .from('orders')
+            .select('*, order_items(*)')
+            .eq('store_id', currentStoreId)
+            .order('created_at', ascending: false);
+  
+        if (mounted) {
+          setState(() {
+            _allOrders.clear();
+            _allOrders.addAll(List<Map<String, dynamic>>.from(data));
+          });
+        }
+      } catch (e) {
+        debugPrint('Error fetch orders: $e');
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
       }
-
-      final List<dynamic> data = await supabase
-          .from('orders')
-          .select('*, order_items(*)')
-          .eq('store_id', currentStoreId)
-          .order('created_at', ascending: false);
-
-      if (mounted) {
-        setState(() {
-          _allOrders.clear();
-          _allOrders.addAll(List<Map<String, dynamic>>.from(data));
-        });
-      }
-    } catch (e) {
-      debugPrint('Error fetch orders di OrderStatusScreen: $e');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
-  }
 
   // HITUNG JUMLAH ORDER UNTUK COUNTER TAB
   int _countOrdersByStatus(String filterKey) {

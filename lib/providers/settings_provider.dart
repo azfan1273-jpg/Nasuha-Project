@@ -1,108 +1,88 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-enum AppThemeMode { pink, dark }
-
 class SettingsProvider with ChangeNotifier {
-
-  static const String _themeKey = 'app_theme_mode'; // Key untuk penyimpanan lokal
-
-  // --- KODE LAMA KAMU (namaToko, userRole, dll) TETAP DI SINI ---
+  // --- STORE & PROFILE DATA ---
   String _namaToko = '';
   String _userRole = '';
   String _emailToko = '';
+  String? _storeId;
 
+  Map<String, dynamic>? _storeSettings;
+  bool _isLoading = false;
+
+  // Getters Data Store
   String get namaToko => _namaToko;
   String get userRole => _userRole;
   String get emailToko => _emailToko;
-
-  String? _storeId;
   String? get storeId => _storeId;
+  Map<String, dynamic>? get storeSettings => _storeSettings;
+  bool get isLoading => _isLoading;
 
-  // --- LOGIKA TEMA BARU (2 TEMA) ---
-  AppThemeMode _currentTheme = AppThemeMode.pink;
-  AppThemeMode get currentTheme => _currentTheme;
+  // --- GETTER WARNA UTUH (UNTUK MENCEGAH ERROR UI) ---
+  Color get bgDark => const Color(0xFFFAF5F7);
+  Color get cardDark => const Color(0xFFFCE7F3);
+  Color get accentColor => const Color(0xFFEC4899);
+  Color get textColor => const Color(0xFF111827);
 
-  Color get bgDark {
-    return _currentTheme == AppThemeMode.dark
-        ? const Color(0xFF121212) // Hitam Gelap
-        : const Color(0xFFFAF5F7); // Pink Terang
-  }
-
-  Color get cardDark {
-    return _currentTheme == AppThemeMode.dark
-        ? const Color(0xFF1E1E24) // Kartu Gelap
-        : const Color(0xFFFCE7F3); // Kartu Pink
-  }
-
-  Color get accentColor => const Color(0xFFEC4899); // Pink mencolok tetap sama
-
-  Color get textColor {
-    return _currentTheme == AppThemeMode.dark
-        ? Colors.white
-        : const Color(0xFF111827);
-  }
-
-  // Constructor: Otomatis memuat tema tersimpan saat aplikasi pertama kali dibuka
-    SettingsProvider() {
-    _loadThemeFromPrefs();
-  }
-
-	void clearSettings() {
-	  _storeId = null; // Atau '' (sesuai tipe data storeId kamu, misal String/UUID)
-	 	  notifyListeners();
-	}
-
+  // 🔹 1. FUNGSI FETCH STORE ID & PROFILE (KODE UTAMA KAMU)
   Future<void> fetchStoreId() async {
-      try {
-        final user = Supabase.instance.client.auth.currentUser;
-        if (user == null) return;
-    
-        final response = await Supabase.instance.client
-            .from('profiles')
-            .select('store_id, nama_toko') // 👈 Tambahkan 'nama_toko'
-            .eq('id', user.id)
-            .maybeSingle();
-    
-        if (response != null) {
-          _storeId = response['store_id']?.toString();
-          _namaToko = response['nama_toko']?.toString() ?? ''; // 👈 Simpan nama toko
-          notifyListeners(); // 👈 Trigger UI update
-        }
-      } catch (e) {
-        debugPrint('Error fetching store_id: $e');
-      }
-    }
-  
-
-  // 🔹 2. Memuat pilihan tema dari penyimpanan HP/Browser
-  Future<void> _loadThemeFromPrefs() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final savedTheme = prefs.getString(_themeKey);
-      if (savedTheme == 'dark') {
-        _currentTheme = AppThemeMode.dark;
-      } else {
-        _currentTheme = AppThemeMode.pink;
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return;
+
+      final response = await Supabase.instance.client
+          .from('profiles')
+          .select('store_id, nama_toko')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (response != null) {
+        _storeId = response['store_id']?.toString();
+        _namaToko = response['nama_toko']?.toString() ?? '';
+        notifyListeners();
+
+        // Otomatis fetch store_settings setelah store_id didapat
+        if (_storeId != null) {
+          await fetchStoreSettings();
+        }
       }
-      notifyListeners();
     } catch (e) {
-      debugPrint('Gagal memuat tema: $e');
+      debugPrint('Error fetching store_id: $e');
     }
   }
 
-  // 🔹 3. Menyimpan pilihan tema saat tombol diklik
-  Future<void> setTheme(AppThemeMode theme) async {
-    _currentTheme = theme;
+  // 🔹 2. FUNGSI FETCH DATA PENGATURAN TOKO (PRINTER & NOTA FROM SUPABASE)
+  Future<void> fetchStoreSettings() async {
+    if (_storeId == null) return;
+
+    _isLoading = true;
     notifyListeners();
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_themeKey, theme == AppThemeMode.dark ? 'dark' : 'pink');
-    } 
-      catch (e) {
-      debugPrint('Gagal menyimpan tema: $e');
+      // RLS di Supabase akan otomatis memfilter sesuai store_id user yang login
+      final settings = await Supabase.instance.client
+          .from('store_settings')
+          .select('*')
+          .eq('store_id', _storeId!)
+          .maybeSingle();
+
+      _storeSettings = settings;
+    } catch (e) {
+      debugPrint('Error fetch store settings: $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
+  }
+
+  // 🔹 3. FUNGSI CLEAR SETTINGS (SAAT LOGOUT)
+  void clearSettings() {
+    _storeId = null;
+    _namaToko = '';
+    _userRole = '';
+    _emailToko = '';
+    _storeSettings = null;
+    notifyListeners();
   }
 }
