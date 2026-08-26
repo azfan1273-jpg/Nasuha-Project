@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../providers/settings_provider.dart';
 import 'customer_detail_screen.dart';
 
 class CustomerInsightScreen extends StatefulWidget {
@@ -28,8 +30,24 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
     final supabase = Supabase.instance.client;
 
     try {
-      final customersResp = await supabase.from('customers').select();
-      final ordersResp = await supabase.from('orders').select().order('created_at', ascending: false);
+      final storeId = context.read<SettingsProvider>().storeId;
+      if (storeId == null) {
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
+
+      final customersResp = await supabase
+          .from('customers')
+          .select()
+          .eq('store_id', storeId);
+
+      final sixMonthsAgo = DateTime.now().subtract(const Duration(days: 180)).toIso8601String();
+      final ordersResp = await supabase
+          .from('orders')
+          .select()
+          .eq('store_id', storeId)
+          .gte('created_at', sixMonthsAgo)
+          .order('created_at', ascending: false);
 
       final List<Map<String, dynamic>> customers = List<Map<String, dynamic>>.from(customersResp);
       final List<Map<String, dynamic>> orders = List<Map<String, dynamic>>.from(ordersResp);
@@ -37,7 +55,6 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
       List<Map<String, dynamic>> predictions = [];
       final DateTime tomorrow = DateTime.now().add(const Duration(days: 1));
 
-      // Grouping orders by customer phone/name
       Map<String, List<Map<String, dynamic>>> customerOrdersMap = {};
       for (var order in orders) {
         String key = (order['customer_phone'] ?? order['customer_name'] ?? '').toString();
@@ -65,7 +82,6 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
         DateTime lastVisit = dates.first;
         int daysSinceLastVisit = tomorrow.difference(lastVisit).inDays;
 
-        // 1. SIKLUS INTERVAL HARI
         List<int> intervals = [];
         for (int i = 0; i < dates.length - 1; i++) {
           intervals.add(dates[i].difference(dates[i + 1]).inDays);
@@ -92,11 +108,9 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
           intervalScore = 0;
         }
 
-        // 2. HABIT HARI (DAY OF WEEK)
         int sameDayCount = dates.where((d) => d.weekday == tomorrow.weekday).length;
         double dayHabitScore = (sameDayCount / dates.length) * 100;
 
-        // 3. SKOR AKURASI AKHIR
         double finalScore = (intervalScore * 0.60) + (dayHabitScore * 0.40);
 
         if (finalScore >= 40) {
@@ -126,14 +140,17 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
 
       predictions.sort((a, b) => (b['score'] as int).compareTo(a['score'] as int));
 
-      setState(() {
-        _predictions = predictions;
-        _totalPotensial = predictions.length;
-        _totalEstOmset = totalOmsetAcc;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _predictions = predictions;
+          _totalPotensial = predictions.length;
+          _totalEstOmset = totalOmsetAcc;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() => _isLoading = false);
+      debugPrint('Error engine: $e');
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -184,7 +201,6 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. CARDS RINGKASAN PROYEKSI ESOK HARI
                   Row(
                     children: [
                       Expanded(
@@ -209,8 +225,6 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
                     ],
                   ),
                   const SizedBox(height: 20),
-
-                  // 2. HEADER DAFTAR PREDIKSI
                   const Text(
                     'Daftar Pelanggan Diprediksi Datang Besok',
                     style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
@@ -221,8 +235,6 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
                     style: TextStyle(color: Colors.grey, fontSize: 11),
                   ),
                   const SizedBox(height: 12),
-
-                  // 3. LIST PREDIKSI
                   _predictions.isEmpty
                       ? const Center(
                           child: Padding(
@@ -306,7 +318,6 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
                                   ],
                                 ),
                                 onTap: () {
-                                  // Klik item langsung buka Detail Pelanggan tersebut
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(

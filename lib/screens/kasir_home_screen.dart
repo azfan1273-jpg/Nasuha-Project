@@ -58,6 +58,7 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
   @override
   void initState() {
     super.initState();
+    _ordersHariIni.clear();
     _loadOrdersFromSupabase();
   }
 
@@ -67,57 +68,46 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
   }
 
   // AMBIL DATA TERISOLASI BERDASARKAN STORE_ID
-  Future<void> _loadOrdersFromSupabase() async {
-    if (!mounted) return;
-    setState(() => _isLoading = true);
-
-    try {
-      final user = supabase.auth.currentUser;
-      if (user == null) return;
-
-      // 1. Ambil store_id dari profiles milik user yang sedang login
-      final profileRes = await supabase
-          .from('profiles')
-          .select('store_id')
-          .eq('id', user.id)
-          .maybeSingle();
-
-      final String? currentStoreId = profileRes?['store_id']?.toString();
-
-      if (currentStoreId == null) {
-        debugPrint('Log: store_id tidak ditemukan');
-        return;
+    Future<void> _loadOrdersFromSupabase() async {
+      if (!mounted) return;
+      setState(() => _isLoading = true);
+  
+      try {
+        // 1. Ambil store_id langsung dari SettingsProvider
+        final currentStoreId = context.read<SettingsProvider>().storeId;
+  
+        if (currentStoreId == null) {
+          debugPrint('Log: store_id tidak ditemukan');
+          return;
+        }
+  
+        // 2. Filter query Supabase hanya untuk toko ini
+        final List<dynamic> data = await supabase
+            .from('orders')
+            .select('*')
+            .eq('store_id', currentStoreId) // <-- ISOLASI DATA STORE ID
+            .order('created_at', ascending: false);
+  
+        if (mounted) {
+          setState(() {
+            _ordersHariIni.clear();
+            _ordersHariIni.addAll(data.map((record) {
+              return {
+                'id': record['id'].toString(),
+                'customer': record['customer_name'] ?? 'Pelanggan',
+                'services': record['service_name'] ?? 'Layanan',
+              };
+            }));
+          });
+        }
+      } catch (e) {
+        debugPrint('Error load orders home: $e');
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = true); // Sesuaikan dengan logika loading kamu
+        }
       }
-
-      // 2. Filter query Supabase hanya untuk toko ini
-      final List<dynamic> data = await supabase
-          .from('orders')
-          .select('*')
-          .eq('store_id', currentStoreId) // <-- ISOLASI DATA STORE ID
-          .order('created_at', ascending: false);
-
-      if (mounted) {
-        setState(() {
-          _ordersHariIni.clear();
-          _ordersHariIni.addAll(data.map((record) {
-            return {
-              'id': record['id'].toString(),
-              'customer': record['customer_name'] ?? 'Pelanggan',
-              'services': record['service_name'] ?? 'Layanan',
-              'status': record['status'] ?? 'Baru',
-              'total': (record['total_price'] as num?)?.toDouble() ?? 0.0,
-              'created_at': record['created_at'],
-              'estimated_at': record['estimated_at'],
-            };
-          }));
-        });
-      }
-    } catch (e) {
-      debugPrint('Log: Gagal memuat data Supabase: $e');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
-  }
 
   // Getter Total Omset
   double get _totalOmsetHariIni {
@@ -406,7 +396,7 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  'Engine 90%+',
+                  'Smart Engine 90%+',
                   style: TextStyle(fontSize: 9, color: settings.accentColor, fontWeight: FontWeight.bold),
                 ),
               ),

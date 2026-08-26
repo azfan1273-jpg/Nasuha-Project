@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'edit_layanan_screen.dart';
+import 'package:provider/provider.dart';
+import '../providers/settings_provider.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -46,35 +48,41 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
   }
 
   Future<void> _loadData() async {
-    setState(() => _isLoading = true);
-    try {
-      final servicesData = await supabase
-          .from('services')
-          .select('*')
-          .eq('is_active', true)
-          .order('category_order', ascending: true)
-          .order('name', ascending: true);
+              setState(() => _isLoading = true);
+              try {
+                // 1. Ambil storeId dari SettingsProvider dulu
+                final storeId = context.read<SettingsProvider>().storeId;
+                if (storeId == null) return;
+          
+                // 2. Query data yang sudah difilter store_id
+                final servicesData = await supabase
+                    .from('services')
+                    .select('*')
+                    .eq('is_active', true)
+                    .eq('store_id', storeId) // Filter store_id
+                    .order('category_order', ascending: true)
+                    .order('name', ascending: true);
 
-      List<String> rawCategories = [];
-      for (var item in servicesData) {
-        final catName = (item['category'] ?? '').toString().trim();
-        if (catName.isNotEmpty && !rawCategories.contains(catName)) {
-          rawCategories.add(catName);
-        }
-      }
+			      List<String> rawCategories = [];
+			      for (var item in servicesData) {
+			        final catName = (item['category'] ?? '').toString().trim();
+			        if (catName.isNotEmpty && !rawCategories.contains(catName)) {
+			          rawCategories.add(catName);
+			        }
+			      }
 
-      if (mounted) {
-        setState(() {
-          _servicesList = List<Map<String, dynamic>>.from(servicesData);
-          _categoriesList = ['Semua', ...rawCategories];
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error fetch services: $e');
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
+			      if (mounted) {
+			        setState(() {
+			          _servicesList = List<Map<String, dynamic>>.from(servicesData);
+			          _categoriesList = ['Semua', ...rawCategories];
+			          _isLoading = false;
+			        });
+			      }
+			    } catch (e) {
+			      debugPrint('Error fetch services: $e');
+			      if (mounted) setState(() => _isLoading = false);
+			    }
+			  }
 
   List<Map<String, dynamic>> get _filteredServices {
     return _servicesList.where((service) {

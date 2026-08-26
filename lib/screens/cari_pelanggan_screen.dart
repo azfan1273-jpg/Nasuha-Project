@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'customer_detail_screen.dart';
 
+import 'package:provider/provider.dart';
+import '../providers/settings_provider.dart';
+
 final supabase = Supabase.instance.client;
 
 class CariPelangganScreen extends StatefulWidget {
@@ -44,25 +47,33 @@ class _CariPelangganScreenState extends State<CariPelangganScreen> {
     });
   }
 
-  Future<void> _loadCustomers([String keyword = '']) async {
-    setState(() => _isLoading = true);
-    try {
-      var query = supabase.from('customers').select();
-      if (keyword.isNotEmpty) {
-        query = query.or('name.ilike.%$keyword%,phone.ilike.%$keyword%');
+ Future<void> _loadCustomers([String keyword = '']) async {
+      setState(() => _isLoading = true);
+      try {
+        // 1. Ambil storeId dari SettingsProvider
+        final storeId = context.read<SettingsProvider>().storeId;
+        if (storeId == null) return;
+  
+        // 2. Filter query pelanggan khusus milik toko ini
+        var query = supabase.from('customers').select().eq('store_id', storeId);
+  
+        if (keyword.isNotEmpty) {
+          query = query.or('name.ilike.%$keyword%,phone.ilike.%$keyword%');
+        }
+  
+        final data = await query;
+  
+        if (mounted) {
+          setState(() {
+            _customersList = List<Map<String, dynamic>>.from(data);
+            _isLoading = false;
+          });
+        }
+      } catch (e) {
+        debugPrint('Error fetch customers: $e');
+        if (mounted) setState(() => _isLoading = false);
       }
-      final data = await query;
-      if (mounted) {
-        setState(() {
-          _customersList = List<Map<String, dynamic>>.from(data);
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error fetch customers: $e');
-      if (mounted) setState(() => _isLoading = false);
     }
-  }
 
   List<dynamic> get _displayList {
     final List<dynamic> list = [];

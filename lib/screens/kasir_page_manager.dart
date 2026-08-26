@@ -30,15 +30,21 @@ class _KasirPageManagerState extends State<KasirPageManager> {
   // State untuk Broadcast Announcement dari Developer
   Map<String, dynamic>? _announcement;
 
-  @override
+ @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: 0);
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+  
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (mounted) {
-        context.read<SettingsProvider>().fetchStoreId();
+        // 1. Await / Tunggu sampai store_id benar-benar selesai di-fetch
+        await context.read<SettingsProvider>().fetchStoreId();
+  
+        // 2. Fetch pengumuman dev
         _fetchDeveloperAnnouncement();
+  
+        // 3. Trigger refresh data di layar anak (Home Screen) setelah store_id PASTI ada
+        _kasirHomeKey.currentState?.refreshData();
       }
     });
   }
@@ -497,11 +503,14 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                   ),
                   _buildSectionDivider(),
                   _buildSidebarItem(
-                    icon: Icons.assessment_outlined,
+                    icon: Icons.bar_chart_rounded,
                     title: 'Laporan Keuangan',
                     onTap: () {
-                      Navigator.pop(context);
-                      showDialog(context: context, builder: (_) => const ReportScreen());
+                      Navigator.pop(context); // Tutup drawer/sidebar dulu
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const ReportScreen()),
+                      );
                     },
                   ),
                   _buildSidebarItem(
@@ -540,16 +549,23 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                 textColor: Colors.redAccent,
                 iconColor: Colors.redAccent,
                 onTap: () async {
-                  Navigator.pop(context);
-                  await Supabase.instance.client.auth.signOut();
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+                                  Navigator.pop(context);
+                                  
+                                  // 1. Bersihkan data toko sebelumnya di memori
+                                  if (context.mounted) {
+                                    context.read<SettingsProvider>().clearSettings();
+                                  }
+                
+                                  // 2. Logout dari Supabase
+                                  await Supabase.instance.client.auth.signOut();
+                                },
+				              ),
+				            ),
+				          ],
+				        ),
+				      ),
+				    );
+				  }
 
   Widget _buildSidebarItem({
     required IconData icon,

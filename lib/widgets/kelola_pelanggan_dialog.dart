@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart'; // 👈 TAMBAHKAN INI
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../providers/settings_provider.dart'; // 👈 TAMBAHKAN INI (Sesuaikan path folder provider kamu)
+
+import 'package:provider/provider.dart';
+import '../providers/settings_provider.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -38,7 +39,13 @@ class _KelolaPelangganDialogState extends State<KelolaPelangganDialog> {
   Future<void> _fetchCustomers([String keyword = '']) async {
     setState(() => _isLoading = true);
     try {
+		// 1. Ambil storeId dari SettingsProvider
+      final storeId = context.read<SettingsProvider>().storeId;
+      if (storeId == null) return;
+
+      // 2. Filter query pelanggan khusus milik toko ini
       var query = supabase.from('customers').select();
+      
       if (keyword.trim().isNotEmpty) {
         query = query.or('name.ilike.%${keyword.trim()}%,phone.ilike.%${keyword.trim()}%');
       }

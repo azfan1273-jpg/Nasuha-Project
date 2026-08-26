@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
+import '../providers/settings_provider.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -37,41 +39,47 @@ class _EditLayananScreenState extends State<EditLayananScreen> {
   }
 
   Future<void> _fetchKategoriAndServices() async {
-    setState(() => _isLoading = true);
-    try {
-      final data = await supabase
-          .from('services')
-          .select()
-          .order('category_order', ascending: true)
-          .order('name', ascending: true);
+              setState(() => _isLoading = true);
+              try {
+                // 1. Ambil storeId dari SettingsProvider
+                final storeId = context.read<SettingsProvider>().storeId;
+                if (storeId == null) return;
+          
+                // 2. Query data layanan toko
+                final data = await supabase
+                    .from('services')
+                    .select('*')
+                    .eq('store_id', storeId) // Filter store_id
+                    .order('category_order', ascending: true)
+                    .order('name', ascending: true);
 
-      List<String> categories = [];
-      for (var item in data) {
-        final catName = (item['category'] ?? '').toString().trim();
-        if (catName.isNotEmpty && !categories.contains(catName)) {
-          categories.add(catName);
-        }
-      }
+			      List<String> categories = [];
+			      for (var item in data) {
+			        final catName = (item['category'] ?? '').toString().trim();
+			        if (catName.isNotEmpty && !categories.contains(catName)) {
+			          categories.add(catName);
+			        }
+			      }
 
-      if (mounted) {
-        setState(() {
-          _services = List<Map<String, dynamic>>.from(data);
-          if (categories.isNotEmpty) {
-            _kategoriOptions = categories;
-          }
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error fetch services: $e');
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal memuat layanan: $e')),
-        );
-      }
-    }
-  }
+			      if (mounted) {
+			        setState(() {
+			          _services = List<Map<String, dynamic>>.from(data);
+			          if (categories.isNotEmpty) {
+			            _kategoriOptions = categories;
+			          }
+			          _isLoading = false;
+			        });
+			      }
+			    } catch (e) {
+			      debugPrint('Error fetch services: $e');
+			      if (mounted) {
+			        setState(() => _isLoading = false);
+			        ScaffoldMessenger.of(context).showSnackBar(
+			          SnackBar(content: Text('Gagal memuat layanan: $e')),
+			        );
+			      }
+			    }
+			  }
 
   Future<void> _deleteService(dynamic id, String name) async {
     final confirm = await showDialog<bool>(

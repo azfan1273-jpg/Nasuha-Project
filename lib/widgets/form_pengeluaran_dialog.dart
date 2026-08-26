@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart'; // 👈 TAMBAHKAN INI
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../providers/settings_provider.dart'; // 👈 TAMBAHKAN INI
+import '../providers/settings_provider.dart';
 
 final supabase = Supabase.instance.client;
 
-// Formatter Khusus untuk Format Rupiah Otomatis Saat Pengetikan
 class RupiahFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(
@@ -54,10 +53,13 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
   String _filterPeriode = '7 Hari';
 
   List<Map<String, dynamic>> _kategoriList = [];
-  String _selectedKategori = 'Operasional Outlet';
+  String? _selectedKategori;
 
   bool _isLoading = true;
   bool _isSubmitting = false;
+
+  List<Map<String, dynamic>> _daftarPengeluaran = [];
+  double _totalPengeluaran = 0.0;
 
   List<Map<String, dynamic>> get _filteredDaftarPengeluaran {
     if (_filterPeriode == 'Semua') return _daftarPengeluaran;
@@ -80,20 +82,23 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
     }).toList();
   }
 
-  List<Map<String, dynamic>> _daftarPengeluaran = [];
-  double _totalPengeluaran = 0.0;
-
   @override
   void initState() {
     super.initState();
     _setInitialDate();
-    _fetchKategori();
-    _fetchPengeluaran();
+    _fetchData();
   }
 
   void _setInitialDate() {
     _tanggalController.text =
         "${_selectedDate.day.toString().padLeft(2, '0')}/${_selectedDate.month.toString().padLeft(2, '0')}/${_selectedDate.year}";
+  }
+
+  Future<void> _fetchData() async {
+    await Future.wait([
+      _fetchKategori(),
+      _fetchPengeluaran(),
+    ]);
   }
 
   @override
@@ -122,11 +127,17 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
   }
 
   Future<void> _fetchPengeluaran() async {
-    setState(() => _isLoading = true);
     try {
+      final storeId = context.read<SettingsProvider>().storeId;
+      if (storeId == null) {
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
+
       final response = await supabase
           .from('expenses')
           .select()
+          .eq('store_id', storeId)
           .order('created_at', ascending: false);
 
       final List<Map<String, dynamic>> data =
@@ -152,20 +163,28 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
 
   Future<void> _fetchKategori() async {
     try {
+      final storeId = context.read<SettingsProvider>().storeId;
+      if (storeId == null) return;
+
       final response = await supabase
           .from('expense_categories')
           .select()
+          .eq('store_id', storeId)
           .order('id', ascending: true);
 
       if (mounted) {
+        final List<Map<String, dynamic>> list =
+            List<Map<String, dynamic>>.from(response);
+        
         setState(() {
-          _kategoriList = List<Map<String, dynamic>>.from(response);
+          _kategoriList = list;
           if (_kategoriList.isNotEmpty) {
-            final names =
-                _kategoriList.map((e) => e['name'].toString()).toList();
-            if (!names.contains(_selectedKategori)) {
+            final names = _kategoriList.map((e) => e['name'].toString()).toList();
+            if (_selectedKategori == null || !names.contains(_selectedKategori)) {
               _selectedKategori = names.first;
             }
+          } else {
+            _selectedKategori = null;
           }
         });
       }
@@ -271,11 +290,14 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
                             final val = newKategoriCtrl.text.trim();
                             if (val.isNotEmpty) {
                               final settings = context.read<SettingsProvider>();
+                              if (settings.storeId == null) return;
+
                               await supabase
                                   .from('expense_categories')
-                                  .insert({'name': val,
-                                  'store_id':settings.storeId,
-                                });
+                                  .insert({
+                                'name': val,
+                                'store_id': settings.storeId,
+                              });
                               newKategoriCtrl.clear();
                               await _fetchKategori();
                               setDialogState(() {});
@@ -348,7 +370,9 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
                                                     .update({'name': newText})
                                                     .eq('id', item['id']);
 
-                                                Navigator.pop(ctx);
+                                                if (ctx.mounted) {
+                                                  Navigator.pop(ctx);
+                                                }
                                                 await _fetchKategori();
                                                 setDialogState(() {});
                                               }
@@ -457,7 +481,7 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
             TextButton(
               onPressed: () async {
                 await supabase.from('expenses').delete().eq('id', item['id']);
-                if (mounted) {
+                if (ctx.mounted) {
                   Navigator.pop(ctx);
                   _fetchPengeluaran();
                 }
@@ -481,7 +505,7 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
                   'notes': editCatatanCtrl.text.trim(),
                 }).eq('id', item['id']);
 
-                if (mounted) {
+                if (ctx.mounted) {
                   Navigator.pop(ctx);
                   _fetchPengeluaran();
                 }
@@ -507,11 +531,25 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
       return;
     }
 
+    if (_selectedKategori == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pilih atau buat kategori terlebih dahulu!')),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
     try {
       final settings = context.read<SettingsProvider>();
+      final storeId = settings.storeId;
+
+      if (storeId == null) {
+        throw Exception("storeId tidak ditemukan");
+      }
+
       await supabase.from('expenses').insert({
+        'store_id': storeId,
         'category': _selectedKategori,
         'amount': totalHarga,
         'notes': _catatanController.text.trim(),
@@ -625,8 +663,8 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
                       border: Border(
                           bottom: BorderSide(color: Colors.grey.shade300)),
                     ),
-                    child: Row(
-                      children: const [
+                    child: const Row(
+                      children: [
                         SizedBox(
                           width: 80,
                           child: Text('TANGGAL',
@@ -865,13 +903,15 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
                               child: DropdownButtonHideUnderline(
                                 child: DropdownButton<String>(
                                   value: _selectedKategori,
+                                  hint: const Text('Pilih Kategori',
+                                      style: TextStyle(fontSize: 11)),
                                   isExpanded: true,
                                   style: const TextStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.bold,
                                       color: _textBlack),
                                   items: _kategoriList.map((kat) {
-                                    final String name = kat['name'];
+                                    final String name = kat['name'].toString();
                                     return DropdownMenuItem<String>(
                                       value: name,
                                       child: Text(name),

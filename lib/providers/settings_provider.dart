@@ -55,19 +55,24 @@ class SettingsProvider with ChangeNotifier {
   // 🔹 2. FUNGSI FETCH DATA PENGATURAN TOKO (PRINTER & NOTA FROM SUPABASE)
   Future<void> fetchStoreSettings() async {
     if (_storeId == null) return;
-
+  
     _isLoading = true;
     notifyListeners();
-
+  
     try {
       // RLS di Supabase akan otomatis memfilter sesuai store_id user yang login
-      final settings = await Supabase.instance.client
+      final response = await Supabase.instance.client
           .from('store_settings')
-          .select('*')
+          .select()
           .eq('store_id', _storeId!)
           .maybeSingle();
-
-      _storeSettings = settings;
+  
+      if (response != null) {
+        // Lakukan casting eksplisit dari _JsonMap ke Map<String, dynamic>
+        _storeSettings = Map<String, dynamic>.from(response);
+      } else {
+        _storeSettings = null;
+      }
     } catch (e) {
       debugPrint('Error fetch store settings: $e');
     } finally {
