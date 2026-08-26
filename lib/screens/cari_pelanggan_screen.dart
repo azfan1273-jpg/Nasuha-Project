@@ -1,6 +1,7 @@
 import 'dart:async'; // Impor Timer untuk Debounce
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'customer_detail_screen.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -294,7 +295,14 @@ class _CariPelangganScreenState extends State<CariPelangganScreen> {
                                           '${cust['phone'] ?? '-'} • ${cust['address'] ?? '-'}',
                                           style: const TextStyle(fontSize: 10, color: Colors.black54),
                                         ),
-                                        onTap: () => Navigator.pop(context, cust),
+                                        onTap: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) => CustomerDetailScreen(customer: cust),
+                                            ),
+                                          );
+                                        },
                                       ),
                                     );
                                   },

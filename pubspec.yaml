@@ -38,6 +38,7 @@ dependencies:
     remixicon: ^1.2.0
     calendar_date_picker2: ^3.0.0
     url_launcher: ^6.3.2
+    fl_chart: ^0.68.0
 
 dev_dependencies:
   flutter_test:

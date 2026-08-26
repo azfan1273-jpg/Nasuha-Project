@@ -13,6 +13,7 @@ import 'parfum_screen.dart';
 import 'cari_pelanggan_screen.dart';
 import 'printer_screen.dart';
 import 'report_screen.dart';
+import 'customer_insight_screen.dart';
 
 class KasirPageManager extends StatefulWidget {
   const KasirPageManager({Key? key}) : super(key: key);
@@ -488,7 +489,7 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                   _buildSectionDivider(),
                   _buildSidebarItem(
                     icon: Icons.print_outlined,
-                    title: 'Connect Printer',
+                    title: 'Printer & Nota',
                     onTap: () {
                       Navigator.pop(context);
                       Navigator.push(context, MaterialPageRoute(builder: (_) => const PrinterScreen()));
@@ -506,7 +507,15 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                   _buildSidebarItem(
                     icon: Icons.analytics_outlined,
                     title: 'Analisis Pelanggan',
-                    onTap: () => Navigator.pop(context),
+                    onTap: () {
+                      Navigator.pop(context); // Tutup drawer/sidebar
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const CustomerInsightScreen(),
+                        ),
+                      );
+                    },
                   ),
                   _buildSectionDivider(),
                   _buildSidebarItem(

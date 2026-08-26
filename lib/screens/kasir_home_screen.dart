@@ -6,6 +6,8 @@ import '../widgets/buat_order_dialog.dart';
 import 'login_screen.dart';
 import '../screens/report_screen.dart';
 import 'daftar_order_by_status_screen.dart';
+import '../helpers/customer_insight_engine.dart';
+import 'customer_detail_screen.dart';
 
 class KasirHomeScreen extends StatefulWidget {
   const KasirHomeScreen({super.key});
@@ -370,12 +372,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
   }
 
   Widget _buildTodayOrdersCard(SettingsProvider settings) {
-    final daftarMasukHariIni = _ordersHariIni
-        .where((item) =>
-            item['status'] != 'Pengeluaran' &&
-            _isHariIni(item['created_at']))
-        .toList();
-
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -385,17 +381,54 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'MASUK HARI INI',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              color: settings.textColor,
-            ),
+          // --- HEADER CARD ---
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.radar_rounded, color: settings.accentColor, size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    'PREDIKSI PELANGGAN BESOK',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: settings.textColor,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: settings.accentColor.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'Engine 90%+',
+                  style: TextStyle(fontSize: 9, color: settings.accentColor, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
-          daftarMasukHariIni.isEmpty
-              ? Center(
+  
+          // --- BODY TABEL PREDIKSI ---
+          FutureBuilder<List<Map<String, dynamic>>>(
+            future: CustomerInsightEngine.fetchTomorrowPredictions(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Center(child: CircularProgressIndicator(color: settings.accentColor)),
+                );
+              }
+  
+              final predictions = snapshot.data ?? [];
+  
+              if (predictions.isEmpty) {
+                return Center(
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(20),
@@ -406,13 +439,13 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                     child: Column(
                       children: [
                         Icon(
-                          Icons.shopping_basket_outlined,
+                          Icons.analytics_outlined,
                           color: settings.accentColor,
                           size: 30,
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Belum Ada Masuk Hari Ini',
+                          'Belum Ada Prediksi Pelanggan Besok',
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
@@ -420,7 +453,7 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                           ),
                         ),
                         Text(
-                          'Tekan "MENU TRANSAKSI" untuk buat order',
+                          'Belum ada pelanggan yang masuk siklus rutin untuk esok hari',
                           style: TextStyle(
                             fontSize: 9,
                             color: settings.textColor.withOpacity(0.6),
@@ -429,81 +462,183 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                       ],
                     ),
                   ),
-                )
-              : ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: daftarMasukHariIni.length,
-                  itemBuilder: (context, index) {
-                    final order = daftarMasukHariIni[index];
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.all(10),
+                );
+              }
+  
+              // --- TABEL FREEZE COLUMN & HORIZONTAL SLIDE ---
+              return Container(
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: settings.bgDark,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: settings.textColor.withOpacity(0.08)),
+                ),
+                child: Row(
+                  children: [
+                    // -------------------------------------------------------------
+                    // 1. KOLOM KIRI (FREEZE / STATIS) : NAMA PELANGGAN
+                    // -------------------------------------------------------------
+                    Container(
+                      width: 120, // Lebar khusus untuk kolom Nama Pelanggan
                       decoration: BoxDecoration(
-                        color: settings.bgDark,
-                        borderRadius: BorderRadius.circular(10),
+                        border: Border(
+                          right: BorderSide(color: settings.textColor.withOpacity(0.12), width: 1),
+                        ),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  order['customer'] ?? '-',
+                          // Header Freeze
+                          Container(
+                            height: 38,
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            alignment: Alignment.centerLeft,
+                            color: settings.textColor.withOpacity(0.05),
+                            child: Text(
+                              'Pelanggan',
+                              style: TextStyle(
+                                color: settings.textColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                          Divider(height: 1, color: settings.textColor.withOpacity(0.12)),
+                          // Isi Baris Nama
+                          ...predictions.map((item) {
+                            return InkWell(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => CustomerDetailScreen(customer: item['cust_data']),
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                height: 48,
+                                padding: const EdgeInsets.symmetric(horizontal: 10),
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  item['name'],
                                   style: TextStyle(
                                     color: settings.textColor,
                                     fontWeight: FontWeight.bold,
                                     fontSize: 11,
                                   ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  order['services'] ?? '-',
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: settings.textColor.withOpacity(0.6),
-                                    fontSize: 9,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                _formatRupiah(order['total'] ?? 0),
-                                style: TextStyle(color: settings.textColor),
-                              ),
-                              const SizedBox(height: 2),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: settings.cardDark,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  order['status'] ?? 'Baru',
-                                  style: TextStyle(
-                                    fontSize: 8,
-                                    fontWeight: FontWeight.bold,
-                                    color: settings.accentColor,
-                                  ),
                                 ),
                               ),
-                            ],
-                          ),
+                            );
+                          }),
                         ],
                       ),
-                    );
-                  },
+                    ),
+  
+                    // -------------------------------------------------------------
+                    // 2. KOLOM KANAN (SLIDE HORIZONTAL) : SISA DATA
+                    // -------------------------------------------------------------
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        child: SizedBox(
+                          width: 480, // Total lebar tabel yang bisa di-slide ke kanan
+                          child: Column(
+                            children: [
+                              // Header Table Slide
+                              Container(
+                                height: 38,
+                                color: settings.textColor.withOpacity(0.05),
+                                child: Row(
+                                  children: [
+                                    SizedBox(width: 70, child: Text('Skor', style: TextStyle(color: settings.textColor, fontWeight: FontWeight.bold, fontSize: 10))),
+                                    SizedBox(width: 120, child: Text('Status Siklus', style: TextStyle(color: settings.textColor, fontWeight: FontWeight.bold, fontSize: 10))),
+                                    SizedBox(width: 100, child: Text('Est. Omset', style: TextStyle(color: settings.textColor, fontWeight: FontWeight.bold, fontSize: 10))),
+                                    SizedBox(width: 120, child: Text('Layanan Favorit', style: TextStyle(color: settings.textColor, fontWeight: FontWeight.bold, fontSize: 10))),
+                                    SizedBox(width: 70, child: Text('Aksi', style: TextStyle(color: settings.textColor, fontWeight: FontWeight.bold, fontSize: 10))),
+                                  ],
+                                ),
+                              ),
+                              Divider(height: 1, color: settings.textColor.withOpacity(0.12)),
+                              // Isi Baris Data
+                              ...predictions.map((item) {
+                                final int score = item['score'];
+                                return InkWell(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => CustomerDetailScreen(customer: item['cust_data']),
+                                      ),
+                                    );
+                                  },
+                                  child: Container(
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      border: Border(
+                                        bottom: BorderSide(color: settings.textColor.withOpacity(0.05), width: 1),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        // Skor %
+                                        SizedBox(
+                                          width: 70,
+                                          child: Text(
+                                            '$score%',
+                                            style: TextStyle(
+                                              color: settings.accentColor,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                        ),
+                                        // Status Siklus
+                                        SizedBox(
+                                          width: 120,
+                                          child: Text(
+                                            item['reason'],
+                                            style: TextStyle(color: settings.textColor.withOpacity(0.7), fontSize: 10),
+                                          ),
+                                        ),
+                                        // Est Omset
+                                        SizedBox(
+                                          width: 100,
+                                          child: Text(
+                                            'Rp ${item['est_spend'].toInt().toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')}',
+                                            style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 11),
+                                          ),
+                                        ),
+                                        // Layanan Favorit
+                                        SizedBox(
+                                          width: 120,
+                                          child: Text(
+                                            item['favorite_service'],
+                                            style: TextStyle(color: settings.textColor.withOpacity(0.8), fontSize: 10),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        // Tombol Detail/Aksi
+                                        SizedBox(
+                                          width: 70,
+                                          child: Icon(Icons.chevron_right_rounded, size: 18, color: settings.accentColor),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              }),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
+              );
+            },
+          ),
         ],
       ),
     );
