@@ -10,8 +10,13 @@ class OrderProvider with ChangeNotifier {
   List<Map<String, dynamic>> _orders = [];
   List<Map<String, dynamic>> get orders => _orders;
 
-  // Helper internal untuk mendapatkan store_id milik user aktif
+  // Cache storeId di memori agar tidak query berulang kali
+  String? _cachedStoreId;
+
+  // Mendapatkan store_id dengan mekanisme Caching
   Future<String?> _getCurrentStoreId() async {
+    if (_cachedStoreId != null) return _cachedStoreId;
+
     final user = _supabase.auth.currentUser;
     if (user == null) return null;
 
@@ -21,10 +26,19 @@ class OrderProvider with ChangeNotifier {
         .eq('id', user.id)
         .maybeSingle();
 
-    return profile?['store_id']?.toString();
+    _cachedStoreId = profile?['store_id']?.toString();
+    return _cachedStoreId;
   }
 
-  // Fetch orders yang terisolasi otomatis berdasarkan store_id
+  // Wajib dipanggil saat User LOGOUT agar tidak bocor ke user/toko berikutnya
+  void clearState() {
+    _orders = [];
+    _cachedStoreId = null;
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  // Fetch orders yang terisolasi
   Future<void> fetchOrders() async {
     _isLoading = true;
     notifyListeners();
@@ -39,7 +53,7 @@ class OrderProvider with ChangeNotifier {
       final List<dynamic> data = await _supabase
           .from('orders')
           .select('*, order_items(*)')
-          .eq('store_id', storeId) // ISOLATED FILTER
+          .eq('store_id', storeId)
           .order('created_at', ascending: false);
 
       _orders = List<Map<String, dynamic>>.from(data);
@@ -51,7 +65,7 @@ class OrderProvider with ChangeNotifier {
     }
   }
 
-  // Create Order tanpa perlu menginput storeId dari UI (otomatis terikat)
+  // Create Order dengan format nota yang lebih aman (unik)
   Future<bool> createOrder({
     required String customerName,
     required String customerPhone,
@@ -71,7 +85,9 @@ class OrderProvider with ChangeNotifier {
       final String? storeId = await _getCurrentStoreId();
       if (storeId == null) throw Exception('Store ID tidak ditemukan untuk user ini');
 
-      final String notaNumber = 'NDR-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+      // Penomoran nota dikombinasikan dengan 4 karakter akhir ID user agar unik
+      final String userSuffix = user.id.length >= 4 ? user.id.substring(0, 4).toUpperCase() : 'LNDR';
+      final String notaNumber = 'NDR-$userSuffix-${DateTime.now().millisecondsSinceEpoch}';
 
       // 1. Simpan Header Order
       final orderResponse = await _supabase
@@ -108,7 +124,7 @@ class OrderProvider with ChangeNotifier {
 
       await _supabase.from('order_items').insert(itemsPayload);
 
-      await fetchOrders(); // Refresh list setelah order baru dibuat
+      await fetchOrders();
       return true;
     } catch (e) {
       debugPrint('Error createOrder: $e');

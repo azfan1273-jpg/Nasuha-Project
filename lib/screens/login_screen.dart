@@ -178,24 +178,28 @@ class _LoginScreenState extends State<LoginScreen> {
               final namaToko = namaTokoController.text.trim();
               final email = emailRegController.text.trim();
               final password = passwordRegController.text.trim();
-
+            
               if (namaToko.isEmpty || email.isEmpty || password.isEmpty) {
                 _showSnackBar('Semua data wajib diisi!', isError: true);
                 return;
               }
-
+            
               Navigator.pop(ctx);
               setState(() => _isLoading = true);
-
+            
               try {
+                // Supabase SignUp menyertakan metadata toko
                 final res = await supabase.auth.signUp(
                   email: email,
                   password: password,
-                  data: {'nama_toko': namaToko, 'role': 'Owner'},
+                  data: {
+                    'nama_toko': namaToko,
+                    'role': 'Owner',
+                  },
                 );
-
+            
                 if (res.user != null && mounted) {
-                  _showSnackBar('Pendaftaran berhasil! Silakan login dengan akun baru.');
+                  _showSnackBar('Pendaftaran berhasil! Akun dan Toko Anda telah dibuat.');
                 }
               } catch (e) {
                 if (mounted) _showSnackBar('Gagal mendaftar: $e', isError: true);

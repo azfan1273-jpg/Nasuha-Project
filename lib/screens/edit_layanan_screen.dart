@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import '../providers/settings_provider.dart';
@@ -6,330 +7,632 @@ import '../providers/settings_provider.dart';
 final supabase = Supabase.instance.client;
 
 class EditLayananScreen extends StatefulWidget {
-  const EditLayananScreen({super.key});
+  final Map<String, dynamic>? serviceData;
+
+  const EditLayananScreen({super.key, this.serviceData});
 
   @override
   State<EditLayananScreen> createState() => _EditLayananScreenState();
 }
 
 class _EditLayananScreenState extends State<EditLayananScreen> {
-  final TextEditingController _searchController = TextEditingController();
-  List<Map<String, dynamic>> _services = [];
-  List<String> _kategoriOptions = ['Satuan', 'Kiloan', 'Khusus', 'Lainnya'];
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _priceController = TextEditingController();
+  final _estimationValueController = TextEditingController();
+  final _notesController = TextEditingController();
 
-  String _searchQuery = '';
-  bool _isLoading = true;
+  List<String> _kategoriOptions = ['Kiloan', 'Satuan', 'Sepatu & Tas'];
+  Map<String, int> _categoryCounts = {};
+  int _totalServicesCount = 0;
+  
+  String _selectedCategory = 'Kiloan';
+  String _selectedUnit = 'kg';
+  String _selectedTimeUnit = 'Hari';
+  bool _isLoading = false;
+  bool _isLoadingChart = true;
+
+  // Warna chart konsisten untuk setiap kategori
+  final List<Color> _chartColors = [
+    const Color(0xFF3B82F6), // Blue
+    const Color(0xFFA78BFA), // Purple
+    const Color(0xFFFBBF24), // Orange/Yellow
+    const Color(0xFFFDE047), // Light Yellow
+    const Color(0xFF10B981), // Emerald
+    const Color(0xFFEC4899), // Pink
+  ];
 
   @override
   void initState() {
     super.initState();
-    _fetchKategoriAndServices();
+    if (widget.serviceData != null) {
+      final data = widget.serviceData!;
+      _nameController.text = data['name'] ?? '';
+      _priceController.text = (data['price'] ?? '').toString();
+      _selectedCategory = data['category'] ?? 'Kiloan';
+      _selectedUnit = data['unit'] ?? 'kg';
+      _notesController.text = data['notes'] ?? '';
+
+      final estRaw = (data['estimation'] ?? '5 Hari').toString().split(' ');
+      if (estRaw.isNotEmpty) {
+        _estimationValueController.text = estRaw[0];
+      }
+      if (estRaw.length > 1) {
+        _selectedTimeUnit = estRaw[1];
+      }
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchCategoryChartData();
+    });
+  }
+
+  // Mengambil data real-time kategori dari Supabase
+  Future<void> _fetchCategoryChartData() async {
+    try {
+      final storeId = context.read<SettingsProvider>().storeId;
+      if (storeId == null) return;
+
+      final response = await supabase
+          .from('services')
+          .select('category')
+          .eq('store_id', storeId);
+
+      final List data = response as List;
+      Map<String, int> counts = {};
+      int total = 0;
+
+      for (var item in data) {
+        final cat = (item['category'] ?? 'Lainnya').toString();
+        counts[cat] = (counts[cat] ?? 0) + 1;
+        total++;
+      }
+
+      // Update daftar kategori jika ada kategori baru di DB
+      List<String> updatedKategori = List.from(_kategoriOptions);
+      counts.keys.forEach((cat) {
+        if (!updatedKategori.contains(cat)) {
+          updatedKategori.add(cat);
+        }
+      });
+
+      if (mounted) {
+        setState(() {
+          _categoryCounts = counts;
+          _totalServicesCount = total;
+          _kategoriOptions = updatedKategori;
+          if (_kategoriOptions.isNotEmpty && !_kategoriOptions.contains(_selectedCategory)) {
+            _selectedCategory = _kategoriOptions.first;
+          }
+          _isLoadingChart = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoadingChart = false);
+    }
   }
 
   @override
   void dispose() {
-    _searchController.dispose();
+    _nameController.dispose();
+    _priceController.dispose();
+    _estimationValueController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
-  String _formatRupiah(num number) {
-    final String str = number.toInt().toString();
-    final RegExp reg = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
-    return 'Rp ${str.replaceAllMapped(reg, (Match m) => '${m[1]}.')}';
+  Future<void> _saveService() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final storeId = context.read<SettingsProvider>().storeId;
+      if (storeId == null) {
+        throw Exception('ID Toko tidak ditemukan. Silakan atur pengaturan toko.');
+      }
+
+      final estimationStr =
+          '${_estimationValueController.text.trim()} $_selectedTimeUnit';
+
+      final payload = {
+        'store_id': storeId,
+        'name': _nameController.text.trim(),
+        'category': _selectedCategory,
+        'unit': _selectedUnit,
+        'price': double.tryParse(_priceController.text.trim()) ?? 0,
+        'estimation': estimationStr,
+        'notes': _notesController.text.trim(),
+        'is_active': true,
+      };
+
+      if (widget.serviceData == null) {
+        await supabase.from('services').insert(payload);
+      } else {
+        await supabase
+            .from('services')
+            .update(payload)
+            .eq('id', widget.serviceData!['id']);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Layanan berhasil disimpan!'),
+            backgroundColor: Color(0xFFED4C9D),
+          ),
+        );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal menyimpan: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
   }
 
-  Future<void> _fetchKategoriAndServices() async {
-              setState(() => _isLoading = true);
-              try {
-                // 1. Ambil storeId dari SettingsProvider
-                final storeId = context.read<SettingsProvider>().storeId;
-                if (storeId == null) return;
-          
-                // 2. Query data layanan toko
-                final data = await supabase
-                    .from('services')
-                    .select('*')
-                    .eq('store_id', storeId) // Filter store_id
-                    .order('category_order', ascending: true)
-                    .order('name', ascending: true);
-
-			      List<String> categories = [];
-			      for (var item in data) {
-			        final catName = (item['category'] ?? '').toString().trim();
-			        if (catName.isNotEmpty && !categories.contains(catName)) {
-			          categories.add(catName);
-			        }
-			      }
-
-			      if (mounted) {
-			        setState(() {
-			          _services = List<Map<String, dynamic>>.from(data);
-			          if (categories.isNotEmpty) {
-			            _kategoriOptions = categories;
-			          }
-			          _isLoading = false;
-			        });
-			      }
-			    } catch (e) {
-			      debugPrint('Error fetch services: $e');
-			      if (mounted) {
-			        setState(() => _isLoading = false);
-			        ScaffoldMessenger.of(context).showSnackBar(
-			          SnackBar(content: Text('Gagal memuat layanan: $e')),
-			        );
-			      }
-			    }
-			  }
-
-  Future<void> _deleteService(dynamic id, String name) async {
-    final confirm = await showDialog<bool>(
+  void _showAddCategoryDialog() {
+    final catController = TextEditingController();
+    showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Hapus Layanan'),
-        content: Text('Apakah Anda yakin ingin menghapus "$name"?'),
+      builder: (ctx) => AlertDialog(
+        title: const Text('Tambah Kategori Baru', style: TextStyle(fontSize: 14)),
+        content: TextField(
+          controller: catController,
+          decoration: const InputDecoration(hintText: 'Nama Kategori'),
+        ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFED4C9D),
+            ),
+            onPressed: () {
+              final newCat = catController.text.trim();
+              if (newCat.isNotEmpty && !_kategoriOptions.contains(newCat)) {
+                setState(() {
+                  _kategoriOptions.add(newCat);
+                  _selectedCategory = newCat;
+                });
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('Tambah', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDeleteCategory(String categoryName) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hapus Kategori', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+        content: Text('Yakin ingin menghapus kategori "$categoryName"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
             child: const Text('Batal'),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () {
+              setState(() {
+                _kategoriOptions.remove(categoryName);
+                if (_selectedCategory == categoryName) {
+                  _selectedCategory = _kategoriOptions.isNotEmpty ? _kategoriOptions.first : '';
+                }
+              });
+              Navigator.pop(ctx);
+            },
             child: const Text('Hapus', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
+  }
 
-    if (confirm == true) {
-      try {
-        await supabase.from('services').delete().eq('id', id);
-        _fetchKategoriAndServices();
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Gagal menghapus: $e')),
-          );
-        }
-      }
+  List<PieChartSectionData> _generateChartSections() {
+    if (_totalServicesCount == 0) {
+      // Data dummy fallback jika belum ada layanan di Supabase
+      return [
+        PieChartSectionData(color: const Color(0xFF3B82F6), value: 21.4, title: 'Kiloan\n21.4%', radius: 35, titleStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black87), titlePositionPercentageOffset: 1.55),
+        PieChartSectionData(color: const Color(0xFFA78BFA), value: 57.1, title: 'Satuan\n57.1%', radius: 35, titleStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black87), titlePositionPercentageOffset: 1.55),
+        PieChartSectionData(color: const Color(0xFFFBBF24), value: 14.3, title: 'Sepatu dan tas\n14.3%', radius: 35, titleStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black87), titlePositionPercentageOffset: 1.55),
+        PieChartSectionData(color: const Color(0xFFFDE047), value: 7.1, title: 'Jacket\n7.1%', radius: 35, titleStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black87), titlePositionPercentageOffset: 1.55),
+      ];
     }
-  }
 
-  void _showAturUrutanKategoriDialog() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setBottomSheetState) {
-            return Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Geser Urutan Kategori',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Urutan teratas otomatis tersimpan di Supabase & berlaku di semua HP.',
-                    style: TextStyle(fontSize: 11, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 250,
-                    child: ReorderableListView(
-                      children: _kategoriOptions.map((cat) {
-                        return ListTile(
-                          key: ValueKey(cat),
-                          dense: true,
-                          title: Text(cat, style: const TextStyle(fontWeight: FontWeight.w600)),
-                          leading: const Icon(Icons.drag_handle_rounded, color: Colors.grey),
-                        );
-                      }).toList(),
-                      onReorder: (oldIndex, newIndex) async {
-                        setBottomSheetState(() {
-                          if (newIndex > oldIndex) newIndex -= 1;
-                          final item = _kategoriOptions.removeAt(oldIndex);
-                          _kategoriOptions.insert(newIndex, item);
-                        });
+    int index = 0;
+    return _categoryCounts.entries.map((entry) {
+      final percentage = (entry.value / _totalServicesCount) * 100;
+      final color = _chartColors[index % _chartColors.length];
+      index++;
 
-                        for (int i = 0; i < _kategoriOptions.length; i++) {
-                          final catName = _kategoriOptions[i];
-                          await supabase
-                              .from('services')
-                              .update({'category_order': i + 1})
-                              .eq('category', catName);
-                        }
-
-                        _fetchKategoriAndServices();
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  List<Map<String, dynamic>> get _filteredServices {
-    if (_searchQuery.isEmpty) return _services;
-    return _services.where((s) {
-      final name = (s['name'] ?? '').toString().toLowerCase();
-      return name.contains(_searchQuery.toLowerCase());
+      return PieChartSectionData(
+        color: color,
+        value: entry.value.toDouble(),
+        title: '${entry.key}\n${percentage.toStringAsFixed(1)}%',
+        radius: 35,
+        titleStyle: const TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          color: Colors.black87,
+        ),
+        titlePositionPercentageOffset: 1.55,
+      );
     }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
+    const bgPink = Color(0xFFFFE5EC);
+    const purpleBar = Color(0xFF5E0B5B);
+    const primaryPink = Color(0xFFED4C9D);
+
+    final isEdit = widget.serviceData != null;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFFAF5F7),
+      backgroundColor: bgPink,
       appBar: AppBar(
-        title: const Text('Kelola Layanan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        backgroundColor: bgPink,
         elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        actions: [
-          IconButton(
-            tooltip: 'Urutkan Kategori',
-            icon: const Icon(Icons.low_priority_rounded, color: Color(0xFFEC4899)),
-            onPressed: _showAturUrutanKategoriDialog,
-          ),
-        ],
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded, color: Colors.black87),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFFEC4899)))
-          : RefreshIndicator(
-              onRefresh: _fetchKategoriAndServices,
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    TextField(
-                      controller: _searchController,
-                      onChanged: (val) => setState(() => _searchQuery = val.trim()),
-                      decoration: InputDecoration(
-                        hintText: 'Cari layanan...',
-                        prefixIcon: const Icon(Icons.search),
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Header Title
+              Center(
+                child: Text(
+                  isEdit ? 'FORM EDIT LAYANAN' : 'FORM TAMBAH LAYANAN',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.5,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Donut Chart Real Dynamic dari Supabase
+              SizedBox(
+                height: 200,
+                child: _isLoadingChart
+                    ? const Center(child: CircularProgressIndicator(color: primaryPink))
+                    : PieChart(
+                        PieChartData(
+                          sectionsSpace: 2,
+                          centerSpaceRadius: 42,
+                          startDegreeOffset: -90,
+                          sections: _generateChartSections(),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    Expanded(
-                      child: ListView(
-                        children: _kategoriOptions.map((cat) {
-                          final itemsInCat = _filteredServices
-                              .where((s) => (s['category'] ?? '').toString().trim().toLowerCase() == cat.toLowerCase())
-                              .toList();
+              ),
+              const SizedBox(height: 16),
 
-                          if (itemsInCat.isEmpty) return const SizedBox.shrink();
+              // Bar Options Kategori (Purple Bar)
+              Container(
+                color: purpleBar,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      // Tombol + Tambah Hijau
+                      GestureDetector(
+                        onTap: _showAddCategoryDialog,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Text(
+                            '+ Tambah',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
 
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 8.0),
-                                child: Text(
-                                  cat.toUpperCase(),
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                    color: Colors.grey,
-                                    letterSpacing: 1.1,
-                                  ),
-                                ),
+                      // List Kategori Dinamis
+                      ..._kategoriOptions.map((cat) {
+                                      final isSel = cat == _selectedCategory;
+                                      return GestureDetector(
+                                        onTap: () => setState(() => _selectedCategory = cat),
+                                        onLongPress: () => _confirmDeleteCategory(cat), // <-- TAMBAHKAN BARIS INI (Long Press untuk Hapus)
+                                        child: Container(
+                                          margin: const EdgeInsets.only(right: 8),
+                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                          decoration: BoxDecoration(
+                                            color: isSel ? Colors.white.withOpacity(0.25) : Colors.transparent,
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          child: Text(
+                                            cat,
+                                            style: TextStyle(
+                                              color: isSel ? Colors.white : Colors.white70,
+                                              fontSize: 13,
+                                              fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
                               ),
-                              ...itemsInCat.map((item) {
-                                final price = (item['price'] as num?) ?? 0;
-                                final unit = item['unit'] ?? 'Kg';
-                                final estimation = item['estimation'] ?? '';
-                                final isActive = item['is_active'] ?? true;
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
 
-                                return AnimatedOpacity(
-                                  duration: const Duration(milliseconds: 300),
-                                  opacity: isActive ? 1.0 : 0.5,
-                                  child: Container(
-                                    margin: const EdgeInsets.only(bottom: 8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: ListTile(
-                                      leading: Container(
-                                        padding: const EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
-                                          color: isActive ? const Color(0xFFFCE7F3) : Colors.grey.shade200,
-                                          borderRadius: BorderRadius.circular(10),
-                                        ),
-                                        child: Icon(
-                                          Icons.checkroom_rounded,
-                                          color: isActive ? const Color(0xFFEC4899) : Colors.grey,
-                                          size: 20,
-                                        ),
-                                      ),
-                                      title: Row(
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              item['name'] ?? '',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 13,
-                                                decoration: isActive ? TextDecoration.none : TextDecoration.lineThrough,
-                                              ),
-                                            ),
-                                          ),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: isActive ? Colors.pink.shade50 : Colors.grey.shade200,
-                                              borderRadius: BorderRadius.circular(6),
-                                            ),
-                                            child: Text(
-                                              isActive ? 'Aktif' : 'Non-aktif',
-                                              style: TextStyle(
-                                                fontSize: 9,
-                                                fontWeight: FontWeight.bold,
-                                                color: isActive ? const Color(0xFFEC4899) : Colors.grey.shade600,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      subtitle: Text(
-                                        '${_formatRupiah(price)} / $unit' +
-                                            (estimation.toString().isNotEmpty ? ' • $estimation' : ''),
-                                        style: const TextStyle(fontSize: 11, color: Colors.black54),
-                                      ),
-                                      trailing: IconButton(
-                                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
-                                        onPressed: () => _deleteService(item['id'], item['name'] ?? ''),
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
+              // Form Utama
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Layanan',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: Colors.black87),
+                      ),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _nameController,
+                        style: const TextStyle(fontSize: 12),
+                        decoration: InputDecoration(
+                          hintText: 'Contoh : Cuci Komplit',
+                          hintStyle: TextStyle(
+                              color: Colors.grey.shade400,
+                              fontStyle: FontStyle.italic),
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 12),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Nama layanan wajib diisi'
+                            : null,
+                      ),
+                      const SizedBox(height: 14),
+
+                      const Text(
+                        'Satuan',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: Colors.black87),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: ['kg', 'Pcs', 'meter'].map((unit) {
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Radio<String>(
+                                value: unit,
+                                groupValue: _selectedUnit,
+                                activeColor: primaryPink,
+                                fillColor: MaterialStateProperty.all(
+                                    _selectedUnit == unit
+                                        ? primaryPink
+                                        : Colors.white),
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setState(() => _selectedUnit = val);
+                                  }
+                                },
+                              ),
+                              Text(
+                                unit,
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600),
+                              ),
+                              const SizedBox(width: 12),
                             ],
                           );
                         }).toList(),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 10),
+
+                      const Text(
+                        'Biaya Layanan',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: Colors.black87),
+                      ),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _priceController,
+                        keyboardType: TextInputType.number,
+                        style: const TextStyle(fontSize: 12),
+                        decoration: InputDecoration(
+                          hintText: 'contoh : Rp. 8.000',
+                          hintStyle: TextStyle(
+                              color: Colors.grey.shade400,
+                              fontStyle: FontStyle.italic),
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 12),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Biaya wajib diisi'
+                            : null,
+                      ),
+                      const SizedBox(height: 14),
+
+                      const Text(
+                        'Estimasi',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: Colors.black87),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 1,
+                            child: TextFormField(
+                              controller: _estimationValueController,
+                              keyboardType: TextInputType.number,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontSize: 12, fontFamily: 'Arial'),
+                              decoration: InputDecoration(
+                              	hintText: '5', // <-- Menggunakan hintText '5'
+                           	    hintStyle: TextStyle(
+                           	      color: Colors.grey.shade400,
+                           	      fontFamily: 'Arial'
+                           	    ),
+                                filled: true,
+                                fillColor: Colors.white,
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 12),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide.none,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 1,
+                            child: Container(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: _selectedTimeUnit,
+                                  isExpanded: true,
+                                  style: const TextStyle(
+                                      color: Colors.black,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600),
+                                  items: ['Hari', 'Jam'].map((t) {
+                                    return DropdownMenuItem(
+                                        value: t, child: Text(t));
+                                  }).toList(),
+                                  onChanged: (val) {
+                                    if (val != null) {
+                                      setState(() => _selectedTimeUnit = val);
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                          ),
+                          const Expanded(flex: 1, child: SizedBox()),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+
+                      const Text(
+                        'Catatan',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: Colors.black87),
+                      ),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _notesController,
+                        maxLines: 4,
+                        style: const TextStyle(fontSize: 12),
+                        decoration: InputDecoration(
+                          hintText: 'Opsional',
+                          hintStyle: TextStyle(
+                              color: Colors.grey.shade400,
+                              fontStyle: FontStyle.italic),
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.all(12),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      SizedBox(
+                        width: double.infinity,
+                        height: 44,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primaryPink,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          onPressed: _isLoading ? null : _saveService,
+                          child: _isLoading
+                              ? const CircularProgressIndicator(
+                                  color: Colors.white)
+                              : Text(
+                                  isEdit
+                                      ? 'PERBARUI LAYANAN'
+                                      : 'SIMPAN LAYANAN',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontFamily: 'Arial',
+                                    fontSize: 13,
+                                  ),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                  ),
                 ),
               ),
-            ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

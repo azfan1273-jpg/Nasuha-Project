@@ -23,12 +23,13 @@ class DatabaseHelper {
         .toList();
   }
 
-  // Membersihkan data lokal toko tertentu saat logout
+  // Membersihkan data lokal (bisa spesifik storeId atau bersih total saat Logout)
   Future<void> clearLocalOrders({String? storeId}) async {
     if (storeId != null) {
       _localOrders.removeWhere((order) => order['store_id']?.toString() == storeId);
     } else {
       _localOrders.clear();
     }
+    debugPrint('Database lokal dibersihkan.');
   }
 }

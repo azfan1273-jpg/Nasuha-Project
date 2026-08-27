@@ -195,6 +195,39 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
           const SizedBox(width: 4),
         ],
       ),
+	  bottomNavigationBar: Container(
+	          padding: const EdgeInsets.all(16),
+	          decoration: const BoxDecoration(
+	            color: Colors.white,
+	            boxShadow: [
+	              BoxShadow(
+	                color: Colors.black12,
+	                blurRadius: 4,
+	                offset: Offset(0, -2),
+	              ),
+	            ],
+	          ),
+	          child: ElevatedButton.icon(
+	            style: ElevatedButton.styleFrom(
+	              backgroundColor: const Color(0xFFEC4899),
+	              padding: const EdgeInsets.symmetric(vertical: 14),
+	              shape: RoundedRectangleBorder(
+	                borderRadius: BorderRadius.circular(12),
+	              ),
+	            ),
+	            onPressed: _navigateToEditLayanan,
+	            icon: const Icon(Icons.add_rounded, color: Colors.white),
+	            label: const Text(
+	              'Tambah Layanan',
+	              style: TextStyle(
+	                color: Colors.white,
+	                fontWeight: FontWeight.bold,
+	                fontSize: 14,
+	              ),
+	            ),
+	          ),
+	        ),
+      
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),

@@ -11,18 +11,99 @@
 <body style="background-color: #0F1115;">
   <script src="flutter_bootstrap.js" async></script>
 </body>
-<!-- TOMBOL & POPUP CONSOLE DEBUG -->
-<button id="debug-toggle-btn" onclick="toggleDebugConsole()" style="position: fixed; bottom: 15px; right: 15px; z-index: 999999; background: #EC4899; color: white; border: none; border-radius: 50px; padding: 8px 14px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.3); font-size: 12px; display: flex; align-items: center; gap: 6px;">
-  🐞 Console <span id="debug-error-badge" style="background: red; color: white; border-radius: 10px; padding: 1px 6px; font-size: 10px; display: none;">0</span>
-</button>
+<!-- FLOATING MODERN DEBUG CONSOLE -->
+<div id="debug-floating-container" style="position: fixed; top: 20px; right: 20px; z-index: 999999; cursor: move;">
+  <!-- Tombol Badge Floating -->
+  <button id="debug-toggle-btn" onclick="toggleDebugConsole()" style="background: #1E1E2E; color: #FFF; border: 1.5px solid rgba(255,255,255,0.2); padding: 8px 14px; border-radius: 20px; font-size: 12px; font-weight: bold; box-shadow: 0 4px 12px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 6px; cursor: pointer;">
+    <span>⚡ Console</span>
+    <span id="debug-error-badge" style="background: #EF4444; color: white; border-radius: 10px; padding: 1px 6px; font-size: 10px; display: none;">0</span>
+  </button>
 
-<div id="debug-console" style="display: none; position: fixed; bottom: 60px; right: 15px; width: 90%; max-width: 420px; max-height: 250px; overflow-y: auto; background: rgba(0,0,0,0.92); color: #00FF66; font-family: monospace; font-size: 11px; z-index: 999998; padding: 12px; border-radius: 12px; border: 1px solid #EC4899; box-shadow: 0 4px 20px rgba(0,0,0,0.5); box-sizing: border-box;">
-  <div style="display: flex; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px solid #444; padding-bottom: 4px;">
-    <b style="color: #FFF;">LOG CONSOLE</b>
-    <span onclick="toggleDebugConsole()" style="cursor: pointer; color: #FFF; font-weight: bold; padding: 0 4px;">✕</span>
+  <!-- Jendela Log Console -->
+  <div id="debug-console" style="display: none; position: absolute; top: 40px; right: 0; width: 360px; max-height: 260px; background: rgba(30, 30, 46, 0.95); border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); backdrop-filter: blur(8px); overflow: hidden; font-family: monospace;">
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: rgba(255,255,255,0.05); border-bottom: 1px solid rgba(255,255,255,0.1);">
+      <span style="color: #06B6D4; font-size: 11px; font-weight: bold;">LOG CONSOLE</span>
+      <div style="display: flex; gap: 8px;">
+        <span onclick="clearDebugLogs()" style="color: #EF4444; cursor: pointer; font-size: 11px;">Clear</span>
+        <span onclick="toggleDebugConsole()" style="color: #9CA3AF; cursor: pointer; font-size: 12px; font-weight: bold;">✕</span>
+      </div>
+    </div>
+    <div id="debug-logs" style="padding: 10px; max-height: 200px; overflow-y: auto; font-size: 11px; color: #A7F3D0;"></div>
   </div>
-  <div id="debug-logs"></div>
 </div>
+
+<script>
+  let errorCount = 0;
+  function toggleDebugConsole() {
+    const box = document.getElementById('debug-console');
+    box.style.display = box.style.display === 'none' ? 'block' : 'none';
+  }
+
+  function clearDebugLogs() {
+    document.getElementById('debug-logs').innerHTML = '';
+    errorCount = 0;
+    const badge = document.getElementById('debug-error-badge');
+    badge.innerText = '0';
+    badge.style.display = 'none';
+  }
+
+  // Intercept Console Log
+  (function () {
+    const logsBox = document.getElementById('debug-logs');
+    const badge = document.getElementById('debug-error-badge');
+
+    function printLog(msg, isError = false) {
+      if (!logsBox) return;
+      const item = document.createElement('div');
+      item.style.marginBottom = '4px';
+      item.style.color = isError ? '#F87171' : '#34D399';
+      item.innerText = (isError ? '[ERR] ' : '[LOG] ') + msg;
+      logsBox.appendChild(item);
+      logsBox.scrollTop = logsBox.scrollHeight;
+
+      if (isError) {
+        errorCount++;
+        badge.innerText = errorCount;
+        badge.style.display = 'inline-block';
+      }
+    }
+
+    const origLog = console.log;
+    console.log = function (...args) {
+      origLog.apply(console, args);
+      printLog(args.join(' '));
+    };
+
+    const origErr = console.error;
+    console.error = function (...args) {
+      origErr.apply(console, args);
+      printLog(args.join(' '), true);
+    };
+  })();
+
+  // Fitur Drag & Drop untuk Menggeser Console
+  (function() {
+    const el = document.getElementById("debug-floating-container");
+    let isDragging = false, xOffset = 0, yOffset = 0;
+
+    el.addEventListener("mousedown", (e) => {
+      if (e.target.tagName === 'SPAN' && e.target.innerText === 'Clear') return;
+      isDragging = true;
+      xOffset = e.clientX - el.offsetLeft;
+      yOffset = e.clientY - el.offsetTop;
+    });
+
+    document.addEventListener("mousemove", (e) => {
+      if (isDragging) {
+        el.style.left = (e.clientX - xOffset) + "px";
+        el.style.top = (e.clientY - yOffset) + "px";
+        el.style.right = "auto";
+      }
+    });
+
+    document.addEventListener("mouseup", () => isDragging = false);
+  })();
+</script>
 
 <script>
   let errorCount = 0;

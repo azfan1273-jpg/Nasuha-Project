@@ -14,6 +14,8 @@ import 'cari_pelanggan_screen.dart';
 import 'printer_screen.dart';
 import 'report_screen.dart';
 import 'customer_insight_screen.dart';
+import '../providers/order_provider.dart';
+import '../helpers/database_helper.dart';
 
 class KasirPageManager extends StatefulWidget {
   const KasirPageManager({Key? key}) : super(key: key);
@@ -550,15 +552,21 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                 iconColor: Colors.redAccent,
                 onTap: () async {
                                   Navigator.pop(context);
-                                  
-                                  // 1. Bersihkan data toko sebelumnya di memori
+                                
                                   if (context.mounted) {
+                                    // 1. Bersihkan settings
                                     context.read<SettingsProvider>().clearSettings();
+                                    
+                                    // 2. Bersihkan state orders toko sebelumnya
+                                    context.read<OrderProvider>().clearState();
                                   }
-                
-                                  // 2. Logout dari Supabase
+                                
+                                  // 3. Bersihkan database lokal dari memori
+                                  await DatabaseHelper.instance.clearLocalOrders();
+                                
+                                  // 4. Logout dari Supabase
                                   await Supabase.instance.client.auth.signOut();
-                                },
+                                }
 				              ),
 				            ),
 				          ],
