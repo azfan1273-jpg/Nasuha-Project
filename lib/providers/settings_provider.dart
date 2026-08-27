@@ -29,23 +29,34 @@ class SettingsProvider with ChangeNotifier {
   Future<void> fetchStoreId() async {
     try {
       final user = Supabase.instance.client.auth.currentUser;
-      if (user == null) return;
-
+      if (user == null) {
+        debugPrint('Log: User belum login / null');
+        return;
+      }
+  
+      // Ambil store_id dari profiles
       final response = await Supabase.instance.client
           .from('profiles')
           .select('store_id, nama_toko')
           .eq('id', user.id)
           .maybeSingle();
-
+  
       if (response != null) {
-        _storeId = response['store_id']?.toString();
-        _namaToko = response['nama_toko']?.toString() ?? '';
+        // Cast response ke Map biar gak kena error TypeError _JsonMap
+        final Map<String, dynamic> data = Map<String, dynamic>.from(response);
+        
+        _storeId = data['store_id']?.toString();
+        _namaToko = data['nama_toko']?.toString() ?? '';
         notifyListeners();
-
-        // Otomatis fetch store_settings setelah store_id didapat
-        if (_storeId != null) {
+  
+        // Cek apakah storeId beneran ketemu
+        if (_storeId != null && _storeId!.isNotEmpty) {
           await fetchStoreSettings();
-        }
+        }/* else {
+          debugPrint('Log: store_id di tabel profiles masih kosong/null');
+        }*/
+      } else {
+        debugPrint('Log: Profile user tidak ditemukan di database');
       }
     } catch (e) {
       debugPrint('Error fetching store_id: $e');

@@ -44,21 +44,30 @@ class NasuhaApp extends StatelessWidget {
         fontFamily: 'Roboto',
         scaffoldBackgroundColor: const Color(0xFFFAF5F7),
       ),
+      
       home: StreamBuilder<AuthState>(
-              stream: supabase.auth.onAuthStateChange,
-              builder: (context, snapshot) {
-                // Membaca session aktif secara akurat dari stream update
-                final session = snapshot.data?.session ?? supabase.auth.currentSession;
-      
-                // Jika session kosong (setelah logout), lempar langsung ke LoginScreen
-                if (session == null) {
-                  return const LoginScreen();
-                }
-      
-                // Jika session ada (sudah login), tampilkan halaman utama
-                return const KasirPageManager();
-              },
-            ),
+                    stream: supabase.auth.onAuthStateChange,
+                    builder: (context, snapshot) {
+                      // Membaca session aktif secara akurat dari stream update
+                      final session = snapshot.data?.session ?? supabase.auth.currentSession;
+            
+                      // Jika session kosong (setelah logout / belum login), lempar ke LoginScreen
+                      if (session == null) {
+                        return const LoginScreen();
+                      }
+            
+                      // 🔹 TAHAP PENTING: Panggil fetchStoreId() begitu user terdeteksi login
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        final settingsProvider = context.read<SettingsProvider>();
+                        // Panggil fetch hanya jika storeId belum dimuat
+                        if (settingsProvider.storeId == null) {
+                          settingsProvider.fetchStoreId();
+                        }
+                      });
+            
+                      return const KasirPageManager();
+                    },
+                  ),
     );
   }
 }
