@@ -8,7 +8,7 @@ import 'package:open_file/open_file.dart';
 
 import '../providers/settings_provider.dart';
 import '../widgets/form_pengeluaran_dialog.dart';
-import 'chart_screen.dart'; // Menggunakan widget chart asli projek kamu!
+import 'chart_screen.dart';
 
 class ReportScreen extends StatefulWidget {
   const ReportScreen({Key? key}) : super(key: key);
@@ -23,12 +23,11 @@ class _ReportScreenState extends State<ReportScreen> {
   bool _isExporting = false;
 
   String _filterPeriode = 'Hari Ini';
-  String _activeTabChart = 'Omset'; // 'Omset', 'Pendapatan', 'Pengeluaran', 'Profit'
+  String _activeTabChart = 'Omset';
 
   double _totalOmset = 0;
   double _totalPengeluaran = 0;
   
-  // Data Metode Pembayaran
   double _cashTotal = 0;
   double _qrisTotal = 0;
 
@@ -46,7 +45,10 @@ class _ReportScreenState extends State<ReportScreen> {
     setState(() => _isLoading = true);
     try {
       final storeId = context.read<SettingsProvider>().storeId;
-      if (storeId == null) return;
+      if (storeId == null) {
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
 
       final now = DateTime.now();
       DateTime startDate;
@@ -116,13 +118,11 @@ class _ReportScreenState extends State<ReportScreen> {
     }
   }
 
-  // LOGIKA EXPORT EXCEL (.xlsx)
   Future<void> _exportToExcel() async {
     setState(() => _isExporting = true);
     try {
       final excel = excel_lib.Excel.createExcel();
       
-      // Sheet 1: Ringkasan
       final excel_lib.Sheet sheet1 = excel['Ringkasan Keuangan'];
       sheet1.appendRow([excel_lib.TextCellValue('LAPORAN KEUANGAN LAUNDRY')]);
       sheet1.appendRow([excel_lib.TextCellValue('Periode: $_filterPeriode')]);
@@ -132,7 +132,6 @@ class _ReportScreenState extends State<ReportScreen> {
       sheet1.appendRow([excel_lib.TextCellValue('Total Pengeluaran'), excel_lib.TextCellValue(_totalPengeluaran.toString())]);
       sheet1.appendRow([excel_lib.TextCellValue('Laba Bersih'), excel_lib.TextCellValue((_totalOmset - _totalPengeluaran).toString())]);
 
-      // Sheet 2: Detail Pengeluaran
       final excel_lib.Sheet sheet2 = excel['Detail Pengeluaran'];
       sheet2.appendRow([excel_lib.TextCellValue('Tanggal'), excel_lib.TextCellValue('Kategori'), excel_lib.TextCellValue('Catatan'), excel_lib.TextCellValue('Nominal')]);
 
@@ -239,7 +238,6 @@ class _ReportScreenState extends State<ReportScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  // 1. CARDS SUMMARY
                   Row(
                     children: [
                       Expanded(
@@ -271,7 +269,6 @@ class _ReportScreenState extends State<ReportScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // 2. CHART WIDGET DARI PROJEK KAMU
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
@@ -284,7 +281,6 @@ class _ReportScreenState extends State<ReportScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // TAB FILTER CHART (Omset, Pendapatan, Pengeluaran, Profit)
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: ['Omset', 'Pendapatan', 'Pengeluaran', 'Profit'].map((tab) {
@@ -310,7 +306,6 @@ class _ReportScreenState extends State<ReportScreen> {
                           }).toList(),
                         ),
                         const SizedBox(height: 16),
-                        // PAKAI WIDGET CHART PROJEK ASLI
                         ReportChartWidget(
                           items: _rawOrders,
                           expenses: _rawExpenses,
@@ -323,11 +318,9 @@ class _ReportScreenState extends State<ReportScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // 3. BREAKDOWN METODE PEMBAYARAN
                   _buildPaymentMethodCard(),
                   const SizedBox(height: 24),
 
-                  // 4. RIWAYAT PENGELUARAN
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [

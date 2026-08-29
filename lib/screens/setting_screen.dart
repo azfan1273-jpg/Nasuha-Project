@@ -2,14 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/settings_provider.dart';
-import '../screens/report_screen.dart';
+import '../providers/order_provider.dart';
+import '../helpers/database_helper.dart';
 import 'cari_pelanggan_screen.dart';
 import 'kasir_screen.dart';
 import 'edit_layanan_screen.dart';
 import 'owner_screen.dart';
 import 'parfum_screen.dart';
 import 'printer_screen.dart';
-
+import 'splash_screen.dart';
 
 class SettingScreen extends StatelessWidget {
   const SettingScreen({super.key});
@@ -43,13 +44,11 @@ class SettingScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 🎨 SEKSI TEMA
               _buildSectionHeader('TEMA APLIKASI'),
               _buildThemeSelector(context),
 
               const SizedBox(height: 20),
 
-              // 🏪 SEKSI TOKO & AKUN
               _buildSectionHeader('TOKO & AKUN'),
               _buildModernTile(
                 title: 'Profil Toko',
@@ -84,7 +83,6 @@ class SettingScreen extends StatelessWidget {
 
               const SizedBox(height: 20),
 
-              // 📦 SEKSI KATALOG & OPERASIONAL
               _buildSectionHeader('KATALOG & OPERASIONAL'),
               _buildModernTile(
                 title: 'Kelola Layanan',
@@ -149,7 +147,6 @@ class SettingScreen extends StatelessWidget {
 
               const SizedBox(height: 20),
 
-              // 🚪 SEKSI SISTEM & AKUN (LOGOUT)
               _buildSectionHeader('SISTEM & AKUN'),
               _buildLogoutTile(context),
 
@@ -161,7 +158,6 @@ class SettingScreen extends StatelessWidget {
     );
   }
 
-  // WIDGET JUDUL KATEGORI
   Widget _buildSectionHeader(String title) {
     return Padding(
       padding: const EdgeInsets.only(left: 4, bottom: 8),
@@ -177,7 +173,6 @@ class SettingScreen extends StatelessWidget {
     );
   }
 
-  // WIDGET CARD LIST ITEM ELEGAN
   Widget _buildModernTile({
     required String title,
     required String subtitle,
@@ -232,7 +227,6 @@ class SettingScreen extends StatelessWidget {
     );
   }
 
-  // WIDGET CARD LOGOUT ELEGAN
   Widget _buildLogoutTile(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -281,7 +275,6 @@ class SettingScreen extends StatelessWidget {
     );
   }
 
-  // DIALOG KONFIRMASI LOGOUT
   void _showLogoutDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -307,11 +300,20 @@ class SettingScreen extends StatelessWidget {
             ),
             onPressed: () async {
               Navigator.pop(ctx);
-              await Supabase.instance.client.auth.signOut();
+
               if (context.mounted) {
-              	context.read<SettingsProvider>().clearSettings();
-                // Mengarahkan kembali ke halaman login & menghapus stack halaman sebelumnya
-                Navigator.of(context).popUntil((route) => route.isFirst);
+                context.read<SettingsProvider>().clearSettings();
+                context.read<OrderProvider>().clearState();
+              }
+
+              await DatabaseHelper.instance.clearLocalOrders();
+              await Supabase.instance.client.auth.signOut();
+
+              if (context.mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const SplashScreen()),
+                  (route) => false,
+                );
               }
             },
             child: const Text('Ya, Keluar', style: TextStyle(color: Colors.white)),
@@ -321,7 +323,6 @@ class SettingScreen extends StatelessWidget {
     );
   }
 
-  // WIDGET PILIH TEMA ELEGAN
   Widget _buildThemeSelector(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
 

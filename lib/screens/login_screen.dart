@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../main.dart';
 import 'package:flutter/foundation.dart';
-import 'splash_screen.dart'; // 👈 Import SplashScreen
+import 'splash_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -41,14 +40,14 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-	      final response = await Supabase.instance.client.auth.signInWithPassword(
-		  email: email,
-		  password: password,
-		);
+      final response = await Supabase.instance.client.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+
       if (response.user != null && mounted) {
         _showSnackBar('Login berhasil! Selamat datang.');
 
-        // 🟢 Pindah ke SplashScreen & bersihkan stack LoginScreen
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const SplashScreen()),
           (route) => false,
@@ -70,7 +69,7 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final String? currentDomain = kIsWeb ? Uri.base.origin : null;
 
-      final bool redirectToWeb = await supabase.auth.signInWithOAuth(
+      final bool redirectToWeb = await Supabase.instance.client.auth.signInWithOAuth(
         OAuthProvider.google,
         redirectTo: currentDomain,
       );
@@ -135,7 +134,7 @@ class _LoginScreenState extends State<LoginScreen> {
               if (email.isEmpty) return;
               Navigator.pop(ctx);
               try {
-                await supabase.auth.resetPasswordForEmail(email);
+                await Supabase.instance.client.auth.resetPasswordForEmail(email);
                 if (mounted) _showSnackBar('Link reset password telah dikirim ke email $email!');
               } catch (e) {
                 if (mounted) _showSnackBar('Gagal mengirim link reset: $e', isError: true);
@@ -193,7 +192,7 @@ class _LoginScreenState extends State<LoginScreen> {
               setState(() => _isLoading = true);
             
               try {
-                final res = await supabase.auth.signUp(
+                final res = await Supabase.instance.client.auth.signUp(
                   email: email,
                   password: password,
                   data: {

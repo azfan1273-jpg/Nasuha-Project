@@ -54,11 +54,14 @@ class OrderDetailDialog extends StatelessWidget {
 
   Future<void> _updatePayment(BuildContext context, String method) async {
     try {
+      // 🟢 FIX: Update kedua variasi nama kolom agar sinkron dengan ReportScreen
       await Supabase.instance.client
           .from('orders')
           .update({
             'status_pembayaran': 'Lunas',
+            'payment_status': 'Lunas',
             'metode_pembayaran': method,
+            'payment_method': method,
           })
           .eq('id', order['id']);
 

@@ -23,8 +23,6 @@ class FormOrderDialog extends StatefulWidget {
 }
 
 class FormOrderDialogState extends State<FormOrderDialog> {
-  static const Color _bgDark = Color(0xFFFAF5F7);
-  static const Color _cardDark = Color(0xFFFCE7F3);
   static const Color _goldAccent = Color(0xFFEC4899);
   static const Color _textBlack = Color(0xFF111827);
 
@@ -37,55 +35,75 @@ class FormOrderDialogState extends State<FormOrderDialog> {
   bool _isSubmitting = false;
   List<String> _parfums = [];
 
+  List<Map<String, dynamic>> _discountList = [];
+  Map<String, dynamic>? _selectedDiscountItem;
+
+  // 🟢 STATE TANGGAL TRANSAKSI (DEFAULT: TANGGAL HARI INI)
+  DateTime _selectedOrderDate = DateTime.now();
+
   @override
-      void initState() {
-        super.initState();
-        _fetchParfums();
-        _fetchDiscounts(); // 👈 Tambahkan panggil fetch diskon
-      }
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchParfums();
+      _fetchDiscounts();
+    });
+  }
 
-  // 🟢 STATE UNTUK DISKON DINAMIS
-    List<Map<String, dynamic>> _discountList = [];
-    Map<String, dynamic>? _selectedDiscountItem;
-  
-    
-  
-    // 🟢 METHOD FETCH DISKON DARI SUPABASE
-    Future<void> _fetchDiscounts() async {
-      try {
-        final user = supabase.auth.currentUser;
-        if (user == null) return;
-  
-        final profileRes = await supabase
-            .from('profiles')
-            .select('store_id')
-            .eq('id', user.id)
-            .maybeSingle();
-  
-        final String? currentStoreId = profileRes?['store_id']?.toString();
-
-        // JIKA STORE_ID NULL, HENTIKAN PROSES AGAR TIDAK ERROR
-        if (currentStoreId == null) return;
-  
-        final response = await supabase
-            .from('discounts')
-            .select()
-            .eq('store_id', currentStoreId)
-            .order('created_at', ascending: false);
-  
-        if (mounted) {
-          setState(() {
-            _discountList = List<Map<String, dynamic>>.from(response);
-          });
-        }
-      } catch (e) {
-        debugPrint('Error fetch discounts: $e');
-      }
+  // 🟢 METHOD UNTUK PILIH TANGGAL LAMPAU / KUSTOM
+  Future<void> _selectOrderDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedOrderDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null) {
+      setState(() {
+        final now = DateTime.now();
+        _selectedOrderDate = DateTime(
+          picked.year,
+          picked.month,
+          picked.day,
+          now.hour,
+          now.minute,
+          now.second,
+        );
+      });
     }
+  }
+
+  Future<void> _fetchDiscounts() async {
+    try {
+      final storeId = context.read<SettingsProvider>().storeId;
+      if (storeId == null) return;
+
+      final response = await supabase
+          .from('discounts')
+          .select()
+          .eq('store_id', storeId)
+          .order('created_at', ascending: false);
+
+      if (mounted) {
+        setState(() {
+          _discountList = List<Map<String, dynamic>>.from(response);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetch discounts: $e');
+    }
+  }
 
   Future<void> _fetchParfums() async {
     try {
-      final response = await supabase.from('parfums').select('name');
+      final storeId = context.read<SettingsProvider>().storeId;
+      if (storeId == null) return;
+
+      final response = await supabase
+          .from('parfums')
+          .select('name')
+          .eq('store_id', storeId);
+
       if (mounted) {
         setState(() {
           _parfums = List<String>.from(response.map((e) => e['name'] as String));
@@ -118,7 +136,6 @@ class FormOrderDialogState extends State<FormOrderDialog> {
     return 'Rp ${chunks.reversed.join('.')}';
   }
 
-  // 1. SUB TOTAL KOTOR (SEBELUM DISKON)
   double get _subtotal {
     double total = 0;
     for (final service in _selectedServices) {
@@ -129,7 +146,6 @@ class FormOrderDialogState extends State<FormOrderDialog> {
     return total;
   }
 
-  // 🟢 DISKON PERSEN (JIKA DIPILIH TIPE PERCENT)
   double get _selectedDiscount {
     if (_selectedDiscountItem == null) return 0;
     if (_selectedDiscountItem!['type'] == 'percent') {
@@ -138,7 +154,6 @@ class FormOrderDialogState extends State<FormOrderDialog> {
     return 0;
   }
 
-  // 🟢 NOMINAL RUPIAH POTONGAN DISKON
   double get _discountAmount {
     if (_selectedDiscountItem == null) return 0;
     final type = _selectedDiscountItem!['type'];
@@ -147,12 +162,10 @@ class FormOrderDialogState extends State<FormOrderDialog> {
     if (type == 'percent') {
       return _subtotal * (value / 100);
     } else {
-      // Jika nominal, potongan langsung sebesar value
       return value;
     }
   }
 
-  // TOTAL PRICE BERSIH
   double get _totalPrice => (_subtotal - _discountAmount) < 0 ? 0 : (_subtotal - _discountAmount);
   
   Future<void> _searchCustomer() async {
@@ -212,22 +225,16 @@ class FormOrderDialogState extends State<FormOrderDialog> {
       if (days > maxDays) maxDays = days;
     }
     
-    final DateTime estimatedDate = DateTime.now().add(Duration(days: maxDays));
+    // 🟢 Estimasi dihitung berbasis tanggal order yang dipilih
+    final DateTime estimatedDate = _selectedOrderDate.add(Duration(days: maxDays));
 
     try {
       final user = supabase.auth.currentUser;
       if (user == null) throw Exception('User belum login');
 
-      // 1. Ambil store_id dari profiles
-      final profileRes = await supabase
-          .from('profiles')
-          .select('store_id')
-          .eq('id', user.id)
-          .maybeSingle();
+      final String? currentStoreId = context.read<SettingsProvider>().storeId;
+      if (currentStoreId == null) throw Exception('ID Toko tidak ditemukan');
 
-      final String? currentStoreId = profileRes?['store_id']?.toString();
-
-      // 2. Susun Payload Header Order (Lengkap Subtotal & Discount Nominal)
       final Map<String, dynamic> payload = {
         'user_id': user.id,
         'store_id': currentStoreId,
@@ -235,16 +242,16 @@ class FormOrderDialogState extends State<FormOrderDialog> {
         'customer_phone': _selectedCustomer!['phone'],
         'service_name': serviceNames,
         'status': 'Antrian',
-        'subtotal': _subtotal,            // 🟢 SIMPAN SUB TOTAL KOTOR
-        'discount': _discountAmount,      // 🟢 SIMPAN NOMINAL DISKON RUPIAH
+        'subtotal': _subtotal,
+        'discount': _discountAmount,
         'discount_percent': _selectedDiscount,
-        'total_price': _totalPrice,       // 🟢 SIMPAN TOTAL BERSIH
+        'total_price': _totalPrice,
         'catatan': _catatanController.text,
         'parfum': _selectedParfum,
+        'created_at': _selectedOrderDate.toIso8601String(), // 🟢 SIMPAN TANGGAL KUSTOM
         'estimated_at': estimatedDate.toIso8601String(),
       };
 
-      // 3. Insert ke tabel orders Supabase
       final orderResponse = await supabase
           .from('orders')
           .insert(payload)
@@ -259,7 +266,6 @@ class FormOrderDialogState extends State<FormOrderDialog> {
           .update({'nota_number': notaNumber})
           .eq('id', orderId);
 
-      // 4. Susun Payload Items (Harga Asli)
       final List<Map<String, dynamic>> orderItemsPayload = _selectedServices.map((s) {
         final double price = (s['price'] as num).toDouble();
         final double qty = (s['quantity'] as num).toDouble();
@@ -275,17 +281,14 @@ class FormOrderDialogState extends State<FormOrderDialog> {
         };
       }).toList();
 
-      // 5. Insert ke order_items Supabase
       await supabase.from('order_items').insert(orderItemsPayload);
 
-      // 6. Simpan ke SQLite Lokal
       try {
         await DatabaseHelper.instance.insertOrder(payload);
       } catch (e) {
         debugPrint('Local SQLite insert skipped: $e');
       }
 
-      // 7. Notifikasi Berhasil & Tutup Dialog
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -321,6 +324,46 @@ class FormOrderDialogState extends State<FormOrderDialog> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // 🟢 WIDGET FIELD TANGGAL TRANSAKSI
+              const Text(
+                'Tanggal Transaksi',
+                style: TextStyle(fontSize: 11, color: Colors.black45, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 5),
+              InkWell(
+                onTap: () => _selectOrderDate(context),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  height: 52,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.black12),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.calendar_month_rounded, size: 18, color: _goldAccent),
+                          const SizedBox(width: 8),
+                          Text(
+                            '${_selectedOrderDate.day.toString().padLeft(2, '0')}/${_selectedOrderDate.month.toString().padLeft(2, '0')}/${_selectedOrderDate.year}',
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _textBlack),
+                          ),
+                        ],
+                      ),
+                      const Text(
+                        'Ubah Tanggal',
+                        style: TextStyle(fontSize: 11, color: Color(0xFF2563EB), fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
               // PELANGGAN
               const Text('Pelanggan', style: TextStyle(fontSize: 11, color: Colors.black45, fontWeight: FontWeight.w500)),
               const SizedBox(height: 5),
@@ -362,7 +405,6 @@ class FormOrderDialogState extends State<FormOrderDialog> {
               ),
               const SizedBox(height: 12),
 
-              // KERANJANG LAYANAN
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -492,7 +534,6 @@ class FormOrderDialogState extends State<FormOrderDialog> {
               ),
               const SizedBox(height: 12),
 
-              // AROMA PARFUM
               const Text('Aroma Parfum', style: TextStyle(fontSize: 11, color: Colors.black45, fontWeight: FontWeight.w500)),
               const SizedBox(height: 5),
               Container(
@@ -523,7 +564,6 @@ class FormOrderDialogState extends State<FormOrderDialog> {
               ),
               const SizedBox(height: 12),
 
-              // CATATAN ORDER
               const Text('Catatan Order', style: TextStyle(fontSize: 11, color: Colors.black45, fontWeight: FontWeight.w500)),
               const SizedBox(height: 5),
               TextField(
@@ -543,50 +583,47 @@ class FormOrderDialogState extends State<FormOrderDialog> {
               ),
               const SizedBox(height: 12),
 
-              // DISKON / POTONGAN HARGA
               const Text('Diskon / Potongan Harga', style: TextStyle(fontSize: 11, color: Colors.black45, fontWeight: FontWeight.w500)),
               const SizedBox(height: 5),
-              // 🟢 DROPDOWN DISKON DINAMIS
-                Container(
-                  height: 56,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.black12),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<Map<String, dynamic>?>(
-                      value: _selectedDiscountItem,
-                      isExpanded: true,
-                      hint: const Text('Pilih Diskon / Tanpa Diskon', style: TextStyle(color: Colors.black38, fontSize: 12)),
-                      icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
-                      style: const TextStyle(color: _textBlack, fontSize: 12),
-                      items: [
-                        const DropdownMenuItem<Map<String, dynamic>?>(
-                          value: null,
-                          child: Text('Tanpa Diskon (0%)'),
-                        ),
-                        ..._discountList.map((item) {
-                          final isPercent = item['type'] == 'percent';
-                          final String valText = isPercent 
-                              ? '${item['value']}%' 
-                              : _formatRupiah((item['value'] as num).toDouble());
-                          return DropdownMenuItem<Map<String, dynamic>?>(
-                            value: item,
-                            child: Text('${item['title']} ($valText)'),
-                          );
-                        }),
-                      ],
-                      onChanged: (val) {
-                        setState(() => _selectedDiscountItem = val);
-                      },
-                    ),
+              Container(
+                height: 56,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.black12),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<Map<String, dynamic>?>(
+                    value: _selectedDiscountItem,
+                    isExpanded: true,
+                    hint: const Text('Pilih Diskon / Tanpa Diskon', style: TextStyle(color: Colors.black38, fontSize: 12)),
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
+                    style: const TextStyle(color: _textBlack, fontSize: 12),
+                    items: [
+                      const DropdownMenuItem<Map<String, dynamic>?>(
+                        value: null,
+                        child: Text('Tanpa Diskon (0%)'),
+                      ),
+                      ..._discountList.map((item) {
+                        final isPercent = item['type'] == 'percent';
+                        final String valText = isPercent 
+                            ? '${item['value']}%' 
+                            : _formatRupiah((item['value'] as num).toDouble());
+                        return DropdownMenuItem<Map<String, dynamic>?>(
+                          value: item,
+                          child: Text('${item['title']} ($valText)'),
+                        );
+                      }),
+                    ],
+                    onChanged: (val) {
+                      setState(() => _selectedDiscountItem = val);
+                    },
                   ),
                 ),
+              ),
               const SizedBox(height: 20),
 
-              // 🟢 RINCIAN HARGA LENGKAP & TOMBOL PESAN (LANGKAH NO. 1)
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -596,7 +633,6 @@ class FormOrderDialogState extends State<FormOrderDialog> {
                 ),
                 child: Column(
                   children: [
-                    // A. SUB TOTAL (KOTOR)
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -606,7 +642,6 @@ class FormOrderDialogState extends State<FormOrderDialog> {
                     ),
                     const SizedBox(height: 4),
 
-                    // B. DISCOUNT (NOMINAL RUPIAH)
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -625,12 +660,11 @@ class FormOrderDialogState extends State<FormOrderDialog> {
                       child: Divider(height: 1),
                     ),
 
-                    // C. TOTAL PRICE BERSIH & TOMBOL PESAN
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-						SizedBox(
+                        SizedBox(
                           height: 40,
                           width: 120,
                           child: ElevatedButton(
@@ -664,7 +698,6 @@ class FormOrderDialogState extends State<FormOrderDialog> {
                             ),
                           ],
                         ),
-                        
                       ],
                     ),
                   ],

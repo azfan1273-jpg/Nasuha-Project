@@ -12,7 +12,6 @@ class DiscountScreen extends StatefulWidget {
 
 class _DiscountScreenState extends State<DiscountScreen> {
   static const Color _bgDark = Color(0xFFFAF5F7);
-  static const Color _cardDark = Color(0xFFFCE7F3);
   static const Color _primaryPink = Color(0xFFEC4899);
   static const Color _textBlack = Color(0xFF111827);
 
@@ -52,25 +51,17 @@ class _DiscountScreenState extends State<DiscountScreen> {
     return 'Rp ${chunks.reversed.join('.')}';
   }
 
-  // 🔹 1. FETCH DATA DISKON DARI SUPABASE
+  // 🟢 1. FETCH DATA DISKON DARI SUPABASE (Otomatis difilter RLS)
   Future<void> _fetchDiscounts() async {
     setState(() => _isLoading = true);
     try {
       final user = supabase.auth.currentUser;
       if (user == null) return;
 
-      final profile = await supabase
-          .from('profiles')
-          .select('store_id')
-          .eq('id', user.id)
-          .maybeSingle();
-
-      final storeId = profile?['store_id'];
-
+      // Kueri bersih standar: Supabase RLS otomatis menyaring berdasarkan store_id
       final response = await supabase
           .from('discounts')
           .select()
-          .eq('store_id', storeId)
           .order('created_at', ascending: false);
 
       if (mounted) {
@@ -85,7 +76,7 @@ class _DiscountScreenState extends State<DiscountScreen> {
     }
   }
 
-  // 🔹 2. PROSES TAMBAH / UPDATE DISKON
+  // 🟢 2. PROSES TAMBAH / UPDATE DISKON
   Future<void> _saveDiscount({required String type}) async {
     final isPercent = type == 'percent';
     final ket = isPercent ? _ketPercentController.text.trim() : _ketNominalController.text.trim();
@@ -112,6 +103,7 @@ class _DiscountScreenState extends State<DiscountScreen> {
       final user = supabase.auth.currentUser;
       if (user == null) throw Exception('User null');
 
+      // Ambil store_id dari profile untuk ditautkan saat membuat data baru
       final profile = await supabase
           .from('profiles')
           .select('store_id')
@@ -152,7 +144,7 @@ class _DiscountScreenState extends State<DiscountScreen> {
     }
   }
 
-  // 🔹 3. HAPUS DISKON
+  // 🟢 3. HAPUS DISKON
   Future<void> _deleteDiscount(String id) async {
     try {
       await supabase.from('discounts').delete().eq('id', id);
@@ -203,7 +195,7 @@ class _DiscountScreenState extends State<DiscountScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 🔹 INPUT FORM DISKON PERSEN (%)
+            // INPUT FORM DISKON PERSEN (%)
             const Text('Keterangan Diskon Persen (%)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
             const SizedBox(height: 4),
             Row(
@@ -248,7 +240,7 @@ class _DiscountScreenState extends State<DiscountScreen> {
             ),
             const SizedBox(height: 16),
 
-            // 🔹 INPUT FORM DISKON NOMINAL (RP)
+            // INPUT FORM DISKON NOMINAL (RP)
             const Text('Keterangan Diskon Nominal (Rp)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
             const SizedBox(height: 4),
             Row(
@@ -293,7 +285,7 @@ class _DiscountScreenState extends State<DiscountScreen> {
             ),
             const SizedBox(height: 20),
 
-            // 🔹 TABEL DAFTAR DISKON
+            // TABEL DAFTAR DISKON
             const Text('Daftar Diskon', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: _textBlack)),
             const SizedBox(height: 8),
             Container(

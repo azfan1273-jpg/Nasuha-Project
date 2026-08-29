@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
 import 'package:provider/provider.dart';
 import '../providers/settings_provider.dart';
 
@@ -39,15 +38,18 @@ class _KelolaPelangganDialogState extends State<KelolaPelangganDialog> {
   Future<void> _fetchCustomers([String keyword = '']) async {
     setState(() => _isLoading = true);
     try {
-		// 1. Ambil storeId dari SettingsProvider
       final storeId = context.read<SettingsProvider>().storeId;
-      if (storeId == null) return;
+      if (storeId == null) {
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
 
-      // 2. Filter query pelanggan khusus milik toko ini
-      var query = supabase.from('customers').select();
+      // 🟢 FIX 1: Wajib tambahkan filter store_id pada kueri select
+      var query = supabase.from('customers').select().eq('store_id', storeId);
       
       if (keyword.trim().isNotEmpty) {
-        query = query.or('name.ilike.%${keyword.trim()}%,phone.ilike.%${keyword.trim()}%');
+        final kw = keyword.trim();
+        query = query.or('name.ilike.%$kw%,phone.ilike.%$kw%');
       }
 
       final data = await query.order('name', ascending: true);
@@ -148,7 +150,7 @@ class _KelolaPelangganDialogState extends State<KelolaPelangganDialog> {
                   );
                   return;
                 }
-				final settings = context.read<SettingsProvider>();
+                final settings = context.read<SettingsProvider>();
                 final payload = {
                   'name': name,
                   'phone': phone.isEmpty ? '-' : phone,
@@ -171,7 +173,7 @@ class _KelolaPelangganDialogState extends State<KelolaPelangganDialog> {
                 } catch (e) {
                   debugPrint('Error save customer: $e');
                   if (dialogContext.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    ScaffoldMessenger.of(dialogContext).showSnackBar(
                       SnackBar(content: Text('Gagal menyimpan pelanggan: $e')),
                     );
                   }
@@ -258,7 +260,6 @@ class _KelolaPelangganDialogState extends State<KelolaPelangganDialog> {
             ),
             body: Column(
               children: [
-                // Input Pencarian Pelanggan
                 Container(
                   padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
                   child: TextField(

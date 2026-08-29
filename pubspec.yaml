@@ -42,6 +42,7 @@ dependencies:
     excel: ^4.0.0
     path_provider: ^2.1.2
     open_file: ^3.3.2
+    sqflite: ^2.4.3
 
 dev_dependencies:
   flutter_test:

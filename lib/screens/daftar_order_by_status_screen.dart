@@ -32,6 +32,9 @@ class DaftarOrderByStatusScreen extends StatelessWidget {
               itemCount: orders.length,
               itemBuilder: (context, index) {
                 final order = orders[index];
+				// 🟢 FIX: Mengambil total_price atau total sebagai fallback
+                final num totalPrice = num.tryParse((order['total_price'] ?? order['total'] ?? '0').toString()) ?? 0;
+                
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
                   child: ListTile(

@@ -19,6 +19,8 @@ class _OwnerScreenState extends State<OwnerScreen> {
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
 
+  bool _isLoading = true; // 🟢 Indikator loading data & simpan
+
   @override
   void initState() {
     super.initState();
@@ -53,26 +55,60 @@ class _OwnerScreenState extends State<OwnerScreen> {
       }
     } catch (e) {
       debugPrint('Error load profile: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-		  @override
-		  Widget build(BuildContext context) {
-		    return Scaffold(
-		      backgroundColor: _bgDark,
-              appBar: AppBar(
-              backgroundColor: Colors.white,
-              elevation: 0,
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back_rounded, color: _textBlack),
-                onPressed: () => Navigator.pop(context),
-              ),
-              title: const Text(
-                'Profil Toko',
-                style: TextStyle(color: _textBlack, fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ),
-            body: SingleChildScrollView(
+  Future<void> _saveProfile() async {
+    setState(() => _isLoading = true);
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return;
+
+      await Supabase.instance.client.from('profiles').update({
+        'nama_toko': _nameController.text.trim(),
+        'no_hp': _phoneController.text.trim(),
+        'alamat': _addressController.text.trim(),
+      }).eq('id', user.id);
+
+      if (mounted) {
+        await context.read<SettingsProvider>().fetchStoreId();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profil toko berhasil diperbarui!')),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal memperbarui profil: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _bgDark,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded, color: _textBlack),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'Profil Toko',
+          style: TextStyle(color: _textBlack, fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: _greenAccent))
+          : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -101,6 +137,7 @@ class _OwnerScreenState extends State<OwnerScreen> {
                         const SizedBox(height: 4),
                         TextField(
                           controller: _phoneController,
+                          keyboardType: TextInputType.phone,
                           decoration: InputDecoration(
                             filled: true,
                             fillColor: _bgDark,
@@ -131,32 +168,7 @@ class _OwnerScreenState extends State<OwnerScreen> {
                         backgroundColor: _greenAccent,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
-                      onPressed: () async {
-                        try {
-                          final user = Supabase.instance.client.auth.currentUser;
-                          if (user == null) return;
-
-                          await Supabase.instance.client.from('profiles').update({
-                            'nama_toko': _nameController.text,
-                            'no_hp': _phoneController.text,
-                            'alamat': _addressController.text,
-                          }).eq('id', user.id);
-
-                          if (context.mounted) {
-                            await context.read<SettingsProvider>().fetchStoreId();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Profil toko berhasil diperbarui!')),
-                            );
-                            Navigator.pop(context);
-                          }
-                        } catch (e) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Gagal memperbarui profil: $e')),
-                            );
-                          }
-                        }
-                      },
+                      onPressed: _isLoading ? null : _saveProfile,
                       child: const Text(
                         'SIMPAN PROFIL',
                         style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
@@ -166,6 +178,6 @@ class _OwnerScreenState extends State<OwnerScreen> {
                 ],
               ),
             ),
-	      );
-	    }
-	  }
+    );
+  }
+}

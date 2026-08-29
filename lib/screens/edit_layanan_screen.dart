@@ -71,7 +71,10 @@ class _EditLayananScreenState extends State<EditLayananScreen> {
   Future<void> _fetchCategoryChartData() async {
     try {
       final storeId = context.read<SettingsProvider>().storeId;
-      if (storeId == null) return;
+      if (storeId == null) {
+        if (mounted) setState(() => _isLoadingChart = false); // 🟢 Matikan loading
+        return;
+      }
 
       final response = await supabase
           .from('services')
@@ -443,10 +446,7 @@ class _EditLayananScreenState extends State<EditLayananScreen> {
                                 value: unit,
                                 groupValue: _selectedUnit,
                                 activeColor: primaryPink,
-                                fillColor: MaterialStateProperty.all(
-                                    _selectedUnit == unit
-                                        ? primaryPink
-                                        : Colors.white),
+                                fillColor: WidgetStateProperty.all(_selectedUnit == unit ? primaryPink : Colors.white),
                                 onChanged: (val) {
                                   if (val != null) {
                                     setState(() => _selectedUnit = val);

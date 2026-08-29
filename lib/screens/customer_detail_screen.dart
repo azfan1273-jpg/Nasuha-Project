@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../widgets/order_detail_dialog.dart'; // Terkoneksi ke folder widgets
+import '../providers/settings_provider.dart';
+import '../widgets/order_detail_dialog.dart';
 
 class CustomerDetailScreen extends StatefulWidget {
   final Map<String, dynamic> customer;
@@ -23,8 +25,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   double _persenKontribusi = 0.0;
 
   // Filter Active
-  String _selectedTimeFilter = 'Semua'; // Semua, Minggu, Bulan, Tahun
-  String _selectedMetricFilter = 'Harga'; // Harga, Transaksi
+  String _selectedTimeFilter = 'Semua';
+  String _selectedMetricFilter = 'Harga';
 
   @override
   void initState() {
@@ -42,11 +44,21 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   Future<void> _fetchCustomerOrders() async {
     setState(() => _isLoading = true);
     try {
+      final storeId = context.read<SettingsProvider>().storeId;
+      if (storeId == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
       final customerPhone = widget.customer['phone'] ?? widget.customer['customer_phone'];
       final customerName = widget.customer['name'] ?? widget.customer['customer_name'];
 
-      // 1. Fetch Transaksi Pelanggan Ini
-      var query = Supabase.instance.client.from('orders').select();
+      // 🟢 1. Fetch Transaksi Pelanggan Ini Terisolasi Berdasarkan store_id
+      var query = Supabase.instance.client
+          .from('orders')
+          .select()
+          .eq('store_id', storeId);
+
       if (customerPhone != null && customerPhone.toString().isNotEmpty) {
         query = query.eq('customer_phone', customerPhone);
       } else {
@@ -56,8 +68,12 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       final response = await query.order('created_at', ascending: false);
       final List<Map<String, dynamic>> fetched = List<Map<String, dynamic>>.from(response);
 
-      // 2. Fetch Total Omset Keseluruhan Toko (Untuk hitung % Kontribusi)
-      final allOrdersResp = await Supabase.instance.client.from('orders').select('total_price');
+      // 🟢 2. Fetch Total Omset Keseluruhan Toko Ini (Untuk Hitung % Kontribusi)
+      final allOrdersResp = await Supabase.instance.client
+          .from('orders')
+          .select('total_price')
+          .eq('store_id', storeId);
+
       num grandTotalOmset = 0;
       for (var o in allOrdersResp) {
         grandTotalOmset += num.tryParse(o['total_price']?.toString() ?? '0') ?? 0;
@@ -74,18 +90,20 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
         pct = (totalRp / grandTotalOmset) * 100;
       }
 
-      setState(() {
-        _allOrders = fetched;
-        _totalTransaksi = fetched.length;
-        _totalKontribusi = totalRp;
-        _persenKontribusi = pct;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _allOrders = fetched;
+          _totalTransaksi = fetched.length;
+          _totalKontribusi = totalRp;
+          _persenKontribusi = pct;
+          _isLoading = false;
+        });
 
-      _applyTimeFilter(_selectedTimeFilter);
+        _applyTimeFilter(_selectedTimeFilter);
+      }
     } catch (e) {
       debugPrint('Error fetch customer detail: $e');
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -121,7 +139,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       return const [FlSpot(1, 0), FlSpot(5, 0), FlSpot(10, 0), FlSpot(15, 0), FlSpot(20, 0), FlSpot(25, 0), FlSpot(31, 0)];
     }
 
-    // Mapping tanggal hari (1-31) ke total nominal
     Map<int, double> dayMap = {1: 0, 5: 0, 10: 0, 15: 0, 20: 0, 25: 0, 31: 0};
 
     for (var o in _filteredOrders) {
@@ -157,7 +174,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     final phone = (widget.customer['phone'] ?? widget.customer['customer_phone'] ?? '-').toString();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF0F5), // Light Pink background seperti di mockup
+      backgroundColor: const Color(0xFFFFF0F5),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -178,7 +195,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. HEADER CARD PROFIL DARK
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -210,7 +226,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                                 ],
                               ),
                             ),
-                            // VIP Badge Icon
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
@@ -229,7 +244,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                           ],
                         ),
                         const SizedBox(height: 20),
-                        // Ringkasan 3 Kolom
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceAround,
                           children: [
@@ -243,7 +257,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // 2. DROPDOWN METRIC FILTER (HARGA)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     decoration: BoxDecoration(
@@ -267,7 +280,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                   ),
                   const SizedBox(height: 10),
 
-                  // 3. GRAFIK LINE CHART DARK
                   Container(
                     height: 220,
                     width: double.infinity,
@@ -278,10 +290,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                     ),
                     child: LineChart(
                       LineChartData(
-                        gridData: FlTitlesData(show: false) == null ? const FlGridData(show: false) : FlGridData(
+                        gridData: const FlGridData(
                           show: true,
                           drawVerticalLine: false,
-                          getDrawingHorizontalLine: (val) => const FlLine(color: Colors.white10, strokeWidth: 1),
+                          getDrawingHorizontalLine: _getHorizontalLine,
                         ),
                         titlesData: FlTitlesData(
                           rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -328,7 +340,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                   ),
                   const SizedBox(height: 14),
 
-                  // 4. FILTER WAKTU (Semua, Minggu, Bulan, Tahun)
                   Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
@@ -358,7 +369,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                   ),
                   const SizedBox(height: 14),
 
-                  // 5. LIST RIWAYAT TRANSAKSI
                   _filteredOrders.isEmpty
                       ? const Center(child: Padding(padding: EdgeInsets.all(20), child: Text('Belum ada transaksi')))
                       : ListView.builder(
@@ -373,7 +383,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
 
                             return GestureDetector(
                               onTap: () {
-                                // PANGGIL DIALOG DETAIL DARI FOLDER WIDGETS
                                 showDialog(
                                   context: context,
                                   builder: (ctx) => OrderDetailDialog(
@@ -421,6 +430,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
             ),
     );
   }
+
+  static FlLine _getHorizontalLine(double value) => const FlLine(color: Colors.white10, strokeWidth: 1);
 
   Widget _buildStatItem(String title, String value, Color valueColor) {
     return Column(

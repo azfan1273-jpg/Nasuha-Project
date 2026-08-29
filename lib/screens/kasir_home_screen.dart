@@ -18,7 +18,7 @@ class KasirHomeScreen extends StatefulWidget {
 
 class KasirHomeScreenState extends State<KasirHomeScreen> {
   final List<Map<String, dynamic>> _ordersHariIni = [];
-  double _totalPengeluaranHariIniVal = 0.0; // 🟢 PENAMPUNG PENGELUARAN
+  double _totalPengeluaranHariIniVal = 0.0;
   bool _isLoading = false;
 
   String _formatRupiah(num number) {
@@ -28,7 +28,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
     return 'Rp $result';
   }
 
-  // HELPER FUNCTION PENGECEK TANGGAL HARI INI
   bool _isHariIni(String? rawDate) {
     if (rawDate == null || rawDate.isEmpty) return false;
     try {
@@ -42,7 +41,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
     }
   }
 
-  // HELPER FUNCTION PENGECEK TERLAMBAT
   bool _isTerlambat(String? rawDate) {
     if (rawDate == null || rawDate.isEmpty) return false;
     try {
@@ -60,16 +58,14 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
     super.initState();
     _ordersHariIni.clear();
     _loadOrdersFromSupabase();
-    _fetchPengeluaranHariIni(); // 🟢 FETCH PENGELUARAN SAAT INITIALIZE
+    _fetchPengeluaranHariIni();
   }
 
-  // Method publik yang bisa dipanggil dari KasirPageManager
   Future<void> refreshData() async {
     await _loadOrdersFromSupabase();
-    await _fetchPengeluaranHariIni(); // 🟢 REFRESH PENGELUARAN
+    await _fetchPengeluaranHariIni();
   }
 
-  // AMBIL DATA ORDERS TERISOLASI BERDASARKAN STORE_ID
   Future<void> _loadOrdersFromSupabase() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
@@ -95,10 +91,11 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
             return {
               'id': record['id'].toString(),
               'customer': record['customer_name'] ?? 'Pelanggan',
-              'services': record['service_name'] ?? 'Layanan',
+              'services': record['service_name'] ?? record['services_summary'] ?? 'Layanan',
               'created_at': record['created_at'],
+              'estimated_at': record['estimated_at'],
               'status': record['status'],
-              'total_price': record['total_price'] ?? 0,
+              'total_price': record['total_price'] ?? record['total'] ?? 0,
             };
           }));
         });
@@ -112,7 +109,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
     }
   }
 
-  // 🟢 AMBIL DATA PENGELUARAN LANGSUNG DARI TABEL EXPENSES
   Future<void> _fetchPengeluaranHariIni() async {
     try {
       final currentStoreId = context.read<SettingsProvider>().storeId;
@@ -145,7 +141,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
     }
   }
 
-  // GETTER TOTAL OMSET
   double get _totalOmsetHariIni {
     double total = 0.0;
     for (var item in _ordersHariIni) {
@@ -157,7 +152,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
     return total;
   }
 
-  // 🟢 GETTER TOTAL PENGELUARAN HARI INI (DIAMBIL DARI TABEL EXPENSES)
   double get _totalPengeluaranHariIni => _totalPengeluaranHariIniVal;
 
   @override
@@ -424,7 +418,7 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  'Smart Engine 90%+',
+                  'Clay Engine 90%+',
                   style: TextStyle(fontSize: 9, color: settings.accentColor, fontWeight: FontWeight.bold),
                 ),
               ),
@@ -433,7 +427,8 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
           const SizedBox(height: 12),
 
           FutureBuilder<List<Map<String, dynamic>>>(
-            future: CustomerInsightEngine.fetchTomorrowPredictions(),
+            // 🟢 PASS STORE_ID AGAR ISOLASI MULTI-TENANT 100% AMAN
+            future: CustomerInsightEngine.fetchTomorrowPredictions(storeId: settings.storeId),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return Padding(
@@ -491,8 +486,9 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                 ),
                 child: Row(
                   children: [
+                    // 1. KOLOM TERKUNCI / FROZEN (PELANGGAN)
                     Container(
-                      width: 120,
+                      width: 110,
                       decoration: BoxDecoration(
                         border: Border(
                           right: BorderSide(color: settings.textColor.withOpacity(0.12), width: 1),
@@ -519,19 +515,21 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                           ...predictions.map((item) {
                             return InkWell(
                               onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => CustomerDetailScreen(customer: item['cust_data']),
-                                  ),
-                                );
+                                if (item['cust_data'] != null) {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => CustomerDetailScreen(customer: item['cust_data']),
+                                    ),
+                                  );
+                                }
                               },
                               child: Container(
                                 height: 48,
                                 padding: const EdgeInsets.symmetric(horizontal: 10),
                                 alignment: Alignment.centerLeft,
                                 child: Text(
-                                  item['name'],
+                                  item['name'] ?? '-',
                                   style: TextStyle(
                                     color: settings.textColor,
                                     fontWeight: FontWeight.bold,
@@ -546,12 +544,13 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                       ),
                     ),
 
+                    // 2. KOLOM SCROLLABLE HORIZONTAL (TERMASUK TOTAL TX & KONTRIBUSI)
                     Expanded(
                       child: SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         physics: const BouncingScrollPhysics(),
                         child: SizedBox(
-                          width: 480,
+                          width: 590, // Total lebar area scroll horizontal
                           child: Column(
                             children: [
                               Container(
@@ -559,25 +558,33 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                                 color: settings.textColor.withOpacity(0.05),
                                 child: Row(
                                   children: [
-                                    SizedBox(width: 70, child: Text('Skor', style: TextStyle(color: settings.textColor, fontWeight: FontWeight.bold, fontSize: 10))),
+                                    SizedBox(width: 60, child: Text('Skor', style: TextStyle(color: settings.textColor, fontWeight: FontWeight.bold, fontSize: 10))),
                                     SizedBox(width: 120, child: Text('Status Siklus', style: TextStyle(color: settings.textColor, fontWeight: FontWeight.bold, fontSize: 10))),
                                     SizedBox(width: 100, child: Text('Est. Omset', style: TextStyle(color: settings.textColor, fontWeight: FontWeight.bold, fontSize: 10))),
-                                    SizedBox(width: 120, child: Text('Layanan Favorit', style: TextStyle(color: settings.textColor, fontWeight: FontWeight.bold, fontSize: 10))),
-                                    SizedBox(width: 70, child: Text('Aksi', style: TextStyle(color: settings.textColor, fontWeight: FontWeight.bold, fontSize: 10))),
+                                    SizedBox(width: 110, child: Text('Layanan Favorit', style: TextStyle(color: settings.textColor, fontWeight: FontWeight.bold, fontSize: 10))),
+                                    SizedBox(width: 70, child: Text('Total Tx', style: TextStyle(color: settings.textColor, fontWeight: FontWeight.bold, fontSize: 10))),
+                                    SizedBox(width: 80, child: Text('Kontribusi', style: TextStyle(color: settings.textColor, fontWeight: FontWeight.bold, fontSize: 10))),
+                                    SizedBox(width: 50, child: Text('Aksi', textAlign: TextAlign.center, style: TextStyle(color: settings.textColor, fontWeight: FontWeight.bold, fontSize: 10))),
                                   ],
                                 ),
                               ),
                               Divider(height: 1, color: settings.textColor.withOpacity(0.12)),
                               ...predictions.map((item) {
-                                final int score = item['score'];
+                                final int score = item['score'] ?? 0;
+                                final num estSpend = item['est_spend'] ?? 0;
+                                final int totalTx = item['total_tx'] ?? 1;
+                                final String contribution = item['contribution'] ?? '0%';
+
                                 return InkWell(
                                   onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => CustomerDetailScreen(customer: item['cust_data']),
-                                      ),
-                                    );
+                                    if (item['cust_data'] != null) {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) => CustomerDetailScreen(customer: item['cust_data']),
+                                        ),
+                                      );
+                                    }
                                   },
                                   child: Container(
                                     height: 48,
@@ -588,8 +595,9 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                                     ),
                                     child: Row(
                                       children: [
+                                        // Skor
                                         SizedBox(
-                                          width: 70,
+                                          width: 60,
                                           child: Text(
                                             '$score%',
                                             style: TextStyle(
@@ -599,30 +607,58 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                                             ),
                                           ),
                                         ),
+                                        // Status Siklus
                                         SizedBox(
                                           width: 120,
                                           child: Text(
-                                            item['reason'],
+                                            item['reason'] ?? '-',
                                             style: TextStyle(color: settings.textColor.withOpacity(0.7), fontSize: 10),
+                                            overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
+                                        // Est. Omset
                                         SizedBox(
                                           width: 100,
                                           child: Text(
-                                            'Rp ${item['est_spend'].toInt().toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')}',
+                                            'Rp ${estSpend.toInt().toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')}',
                                             style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 11),
                                           ),
                                         ),
+                                        // Layanan Favorit
                                         SizedBox(
-                                          width: 120,
+                                          width: 110,
                                           child: Text(
-                                            item['favorite_service'],
+                                            item['favorite_service'] ?? '-',
                                             style: TextStyle(color: settings.textColor.withOpacity(0.8), fontSize: 10),
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
+                                        // Total Transaksi
                                         SizedBox(
                                           width: 70,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: Colors.blue.withOpacity(0.1),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              '$totalTx Tx',
+                                              style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.blue),
+                                            ),
+                                          ),
+                                        ),
+                                        // Kontribusi
+                                        SizedBox(
+                                          width: 80,
+                                          child: Text(
+                                            contribution,
+                                            style: TextStyle(color: settings.textColor.withOpacity(0.8), fontSize: 10, fontWeight: FontWeight.w600),
+                                          ),
+                                        ),
+                                        // Aksi
+                                        SizedBox(
+                                          width: 50,
                                           child: Icon(Icons.chevron_right_rounded, size: 18, color: settings.accentColor),
                                         ),
                                       ],
