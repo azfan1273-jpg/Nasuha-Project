@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../main.dart';
 import 'package:flutter/foundation.dart';
+import 'splash_screen.dart'; // 👈 Import SplashScreen
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -40,14 +41,18 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await supabase.auth.signInWithPassword(
-        email: email,
-        password: password,
-      );
-
+	      final response = await Supabase.instance.client.auth.signInWithPassword(
+		  email: email,
+		  password: password,
+		);
       if (response.user != null && mounted) {
         _showSnackBar('Login berhasil! Selamat datang.');
-        // StreamBuilder di main.dart otomatis memindahkan halaman ke KasirPageManager
+
+        // 🟢 Pindah ke SplashScreen & bersihkan stack LoginScreen
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const SplashScreen()),
+          (route) => false,
+        );
       }
     } on AuthException catch (e) {
       if (mounted) _showSnackBar(e.message, isError: true);
@@ -188,7 +193,6 @@ class _LoginScreenState extends State<LoginScreen> {
               setState(() => _isLoading = true);
             
               try {
-                // Supabase SignUp menyertakan metadata toko
                 final res = await supabase.auth.signUp(
                   email: email,
                   password: password,
@@ -258,7 +262,6 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                // CARD FORM LOGIN
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
@@ -275,7 +278,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // LOGO TOKO
                       Container(
                         width: 48,
                         height: 48,
@@ -306,7 +308,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 20),
 
-                      // INPUT EMAIL
                       const Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
@@ -337,7 +338,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 14),
 
-                      // INPUT PASSWORD LABEL & LUPA PASSWORD LINK
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -360,7 +360,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 6),
 
-                      // KOTAK INPUT PASSWORD
                       Container(
                         decoration: BoxDecoration(
                           color: const Color(0xFFF9FAFB),
@@ -389,7 +388,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 20),
 
-                      // TOMBOL LOG IN
                       SizedBox(
                         width: double.infinity,
                         height: 44,
@@ -417,7 +415,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 14),
 
-                      // SEPARATOR "ATAU"
                       const Row(
                         children: [
                           Expanded(child: Divider(color: Colors.black12)),
@@ -430,7 +427,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 14),
 
-                      // TOMBOL GOOGLE
                       SizedBox(
                         width: double.infinity,
                         height: 44,
@@ -458,7 +454,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // LINK DAFTAR TOKO
                       GestureDetector(
                         onTap: _showDaftarTokoDialog,
                         child: const Text(
@@ -474,7 +469,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
 
-                // DEKORASI MAWAR ATAS KIRI & BAWAH KANAN
                 const Positioned(
                   top: -16,
                   left: -10,

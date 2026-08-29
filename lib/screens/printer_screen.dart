@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:blue_thermal_printer/blue_thermal_printer.dart';
+import 'package:provider/provider.dart';
+import '../providers/settings_provider.dart';
 import '../main.dart'; // Sesuaikan lokasi import supabase client kamu
 
 class PrinterScreen extends StatefulWidget {
@@ -21,7 +23,6 @@ class _PrinterScreenState extends State<PrinterScreen> {
   bool _isConnected = false;
   bool _isSearching = false;
 
-  bool _isLoading = false;
   bool _isSaving = false;
   String? _storeId;
 
@@ -43,7 +44,11 @@ class _PrinterScreenState extends State<PrinterScreen> {
   void initState() {
     super.initState();
     _checkCurrentConnection();
-    _loadSettingsFromSupabase();
+    
+    // BACA PENGATURAN LANGSUNG DARI SETTINGSPROVIDER
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadSettingsFromProvider();
+    });
   }
 
   @override
@@ -56,54 +61,30 @@ class _PrinterScreenState extends State<PrinterScreen> {
     super.dispose();
   }
 
-  // 🔹 1. BACA PENGATURAN DARI TABEL store_settings SUPABASE
-  Future<void> _loadSettingsFromSupabase() async {
-    setState(() => _isLoading = true);
-    try {
-      final user = supabase.auth.currentUser;
-      if (user == null) return;
+  // 🔹 1. BACA PENGATURAN DARI SETTINGSPROVIDER (EFISIEN, TANPA QUERY REPETITIF)
+  void _loadSettingsFromProvider() {
+    final settingsProv = context.read<SettingsProvider>();
+    _storeId = settingsProv.storeId;
+    final data = settingsProv.storeSettings;
 
-      // Ambil store_id dari profile user
-      final profile = await supabase
-          .from('profiles')
-          .select('store_id')
-          .eq('id', user.id)
-          .maybeSingle();
+    if (data != null && mounted) {
+      setState(() {
+        _headerNamaTokoController.text = data['header_nama_toko'] ?? settingsProv.namaToko;
+        _headerHpController.text = data['header_hp'] ?? '';
+        _footerNotaController.text = data['footer_nota'] ?? '';
+        _footerWaController.text = data['footer_wa'] ?? '';
+        _notifikasiWaController.text = data['notifikasi_wa'] ?? '';
 
-      _storeId = profile?['store_id']?.toString();
-
-      if (_storeId != null) {
-        // Fetch dari tabel store_settings
-        final data = await supabase
-            .from('store_settings')
-            .select('*')
-            .eq('store_id', _storeId!)
-            .maybeSingle();
-
-        if (data != null && mounted) {
-          setState(() {
-            _headerNamaTokoController.text = data['header_nama_toko'] ?? '{{nama toko}}';
-            _headerHpController.text = data['header_hp'] ?? '{{HP :}}';
-            _footerNotaController.text = data['footer_nota'] ?? '';
-            _footerWaController.text = data['footer_wa'] ?? '';
-            _notifikasiWaController.text = data['notifikasi_wa'] ?? '-';
-
-            _showNamaKasir = data['show_nama_kasir'] ?? true;
-            _showFooterNota = data['show_footer_nota'] ?? true;
-            _showFooterNotaWa = data['show_footer_wa'] ?? true;
-            _showQrCode = data['show_qr_code'] ?? true;
-            _selectedPaperSize = data['paper_size'] ?? '58 mm';
-          });
-        }
-      }
-    } catch (e) {
-      debugPrint("Error load store_settings: $e");
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+        _showNamaKasir = data['show_nama_kasir'] ?? true;
+        _showFooterNota = data['show_footer_nota'] ?? true;
+        _showFooterNotaWa = data['show_footer_wa'] ?? true;
+        _showQrCode = data['show_qr_code'] ?? true;
+        _selectedPaperSize = data['paper_size'] ?? '58 mm';
+      });
     }
   }
 
-  // 🔹 2. SIMPAN / UPSERT PENGATURAN KE SUPABASE
+  // 🔹 2. SIMPAN / UPSERT PENGATURAN KE SUPABASE & SINKRONKAN KE PROVIDER
   Future<void> _saveSettingsToSupabase() async {
     if (_storeId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -132,6 +113,9 @@ class _PrinterScreenState extends State<PrinterScreen> {
       await supabase.from('store_settings').upsert(payload, onConflict: 'store_id');
 
       if (mounted) {
+        // 🟢 SINKRONKAN STATE DENGAN MENGHUBUNGKAN KE PROVIDER
+        await context.read<SettingsProvider>().fetchStoreSettings();
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Pengaturan Nota berhasil disimpan!')),
         );
@@ -192,146 +176,146 @@ class _PrinterScreenState extends State<PrinterScreen> {
         ),
         title: const Text('Printer & Nota', style: TextStyle(color: _textBlack, fontSize: 16, fontWeight: FontWeight.bold)),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: _purpleAccent))
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // CARD STATUS PRINTER
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+              child: Row(
                 children: [
-                  // CARD STATUS PRINTER
                   Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-                    child: Row(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: const Color(0xFFF3E8FF), borderRadius: BorderRadius.circular(8)),
+                    child: const Icon(Icons.print_rounded, color: _purpleAccent, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(color: const Color(0xFFF3E8FF), borderRadius: BorderRadius.circular(8)),
-                          child: const Icon(Icons.print_rounded, color: _purpleAccent, size: 20),
+                        const Text('Status Printer', style: TextStyle(fontSize: 10, color: Colors.black45)),
+                        Text(
+                          _isConnected ? 'Terhubung (${_selectedDevice?.name ?? 'Thermal'})' : 'Belum Terhubung',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _isConnected ? Colors.green : Colors.red),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Status Printer', style: TextStyle(fontSize: 10, color: Colors.black45)),
-                              Text(
-                                _isConnected ? 'Terhubung (${_selectedDevice?.name ?? 'Thermal'})' : 'Belum Terhubung',
-                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _isConnected ? Colors.green : Colors.red),
-                              ),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.refresh_rounded, color: _purpleAccent),
-                          onPressed: _scanDevices,
-                        )
                       ],
                     ),
                   ),
-
-                  // LIST PERANGKAT BLUETOOTH
-                  if (_isSearching)
-                    const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Center(child: CircularProgressIndicator(color: _purpleAccent)))
-                  else if (_devices.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _devices.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (context, index) {
-                          final device = _devices[index];
-                          final isThisConnected = _selectedDevice?.address == device.address && _isConnected;
-                          return ListTile(
-                            dense: true,
-                            title: Text(device.name ?? 'Device', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                            trailing: ElevatedButton(
-                              style: ElevatedButton.styleFrom(backgroundColor: isThisConnected ? Colors.redAccent : _purpleAccent),
-                              onPressed: () => _connectToDevice(device),
-                              child: Text(isThisConnected ? 'Putus' : 'Hubungkan', style: const TextStyle(color: Colors.white, fontSize: 10)),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-
-                  const SizedBox(height: 16),
-                  const Divider(),
-                  const SizedBox(height: 8),
-
-                  // INPUT FORM
-                  const Text('Header Nota', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _textBlack)),
-                  const SizedBox(height: 8),
-                  _buildTextField(_headerNamaTokoController),
-                  const SizedBox(height: 8),
-                  _buildTextField(_headerHpController),
-
-                  const SizedBox(height: 16),
-                  const Text('Footer Nota', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _textBlack)),
-                  const SizedBox(height: 8),
-                  _buildTextField(_footerNotaController, maxLines: 4),
-
-                  const SizedBox(height: 16),
-                  const Text('Footer Nota WA', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _textBlack)),
-                  const SizedBox(height: 8),
-                  _buildTextField(_footerWaController, maxLines: 4),
-
-                  const SizedBox(height: 16),
-                  const Text('Notifikasi WA', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _textBlack)),
-                  const SizedBox(height: 8),
-                  _buildTextField(_notifikasiWaController),
-
-                  const SizedBox(height: 16),
-                  _buildSwitch('Nama Kasir', _showNamaKasir, (val) => setState(() => _showNamaKasir = val)),
-                  _buildSwitch('footer nota', _showFooterNota, (val) => setState(() => _showFooterNota = val)),
-                  _buildSwitch('footer nota wa', _showFooterNotaWa, (val) => setState(() => _showFooterNotaWa = val)),
-                  _buildSwitch('QR code pembayaran', _showQrCode, (val) => setState(() => _showQrCode = val)),
-
-                  const SizedBox(height: 16),
-                  const Text('Ukuran Printer', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _textBlack)),
-                  RadioListTile<String>(
-                    dense: true,
-                    title: const Text('58 mm'),
-                    value: '58 mm',
-                    groupValue: _selectedPaperSize,
-                    activeColor: _purpleAccent,
-                    onChanged: (val) => setState(() => _selectedPaperSize = val!),
-                  ),
-                  RadioListTile<String>(
-                    dense: true,
-                    title: const Text('80 mm'),
-                    value: '80 mm',
-                    groupValue: _selectedPaperSize,
-                    activeColor: _purpleAccent,
-                    onChanged: (val) => setState(() => _selectedPaperSize = val!),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // TOMBOL SIMPAN SINKRONISASI
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _purpleAccent,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      onPressed: _isSaving ? null : _saveSettingsToSupabase,
-                      child: _isSaving
-                          ? const CircularProgressIndicator(color: Colors.white)
-                          : const Text('SIMPAN PENGATURAN', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
+                  IconButton(
+                    icon: const Icon(Icons.refresh_rounded, color: _purpleAccent),
+                    onPressed: _scanDevices,
+                  )
                 ],
               ),
             ),
+
+            // LIST PERANGKAT BLUETOOTH
+            if (_isSearching)
+              const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Center(child: CircularProgressIndicator(color: _purpleAccent)))
+            else if (_devices.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _devices.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final device = _devices[index];
+                    final isThisConnected = _selectedDevice?.address == device.address && _isConnected;
+                    return ListTile(
+                      dense: true,
+                      title: Text(device.name ?? 'Device', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      trailing: ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: isThisConnected ? Colors.redAccent : _purpleAccent),
+                        onPressed: () => _connectToDevice(device),
+                        child: Text(isThisConnected ? 'Putus' : 'Hubungkan', style: const TextStyle(color: Colors.white, fontSize: 10)),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 8),
+
+            // INPUT FORM
+            const Text(
+              'Sub-Header / Slogan Nota (Di Bawah Nama Toko)', 
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _textBlack)),
+            const SizedBox(height: 8),
+            _buildTextField(_headerNamaTokoController),
+            const SizedBox(height: 8),
+            _buildTextField(_headerHpController),
+
+            const SizedBox(height: 16),
+            const Text('Footer Nota', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _textBlack)),
+            const SizedBox(height: 8),
+            _buildTextField(_footerNotaController, maxLines: 4),
+
+            const SizedBox(height: 16),
+            const Text('Footer Nota WA', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _textBlack)),
+            const SizedBox(height: 8),
+            _buildTextField(_footerWaController, maxLines: 4),
+
+            const SizedBox(height: 16),
+            const Text('Notifikasi WA', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _textBlack)),
+            const SizedBox(height: 8),
+            _buildTextField(_notifikasiWaController),
+
+            const SizedBox(height: 16),
+            _buildSwitch('Nama Kasir', _showNamaKasir, (val) => setState(() => _showNamaKasir = val)),
+            _buildSwitch('footer nota', _showFooterNota, (val) => setState(() => _showFooterNota = val)),
+            _buildSwitch('footer nota wa', _showFooterNotaWa, (val) => setState(() => _showFooterNotaWa = val)),
+            _buildSwitch('QR code pembayaran', _showQrCode, (val) => setState(() => _showQrCode = val)),
+
+            const SizedBox(height: 16),
+            const Text('Ukuran Printer', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _textBlack)),
+            RadioListTile<String>(
+              dense: true,
+              title: const Text('58 mm'),
+              value: '58 mm',
+              groupValue: _selectedPaperSize,
+              activeColor: _purpleAccent,
+              onChanged: (val) => setState(() => _selectedPaperSize = val!),
+            ),
+            RadioListTile<String>(
+              dense: true,
+              title: const Text('80 mm'),
+              value: '80 mm',
+              groupValue: _selectedPaperSize,
+              activeColor: _purpleAccent,
+              onChanged: (val) => setState(() => _selectedPaperSize = val!),
+            ),
+
+            const SizedBox(height: 20),
+
+            // TOMBOL SIMPAN SINKRONISASI
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _purpleAccent,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: _isSaving ? null : _saveSettingsToSupabase,
+                child: _isSaving
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text('SIMPAN PENGATURAN', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
     );
   }
 

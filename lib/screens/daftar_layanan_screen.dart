@@ -107,7 +107,7 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
   }
 
   Future<double?> _showQtyDialog(Map<String, dynamic> service) async {
-    final qtyController = TextEditingController(text: '1');
+    final qtyController = TextEditingController(text: '');
     final unit = service['unit'] ?? 'Kg';
 
     final result = await showDialog<double>(
@@ -124,8 +124,10 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
           children: [
             Text(
               'Harga: ${_formatRupiah((service['price'] as num?) ?? 0)} / $unit',
-              style: const TextStyle(fontSize: 11, color: Colors.black54),
-            ),
+              style: const TextStyle(fontSize: 11, color: Colors.black,
+              fontWeight: FontWeight.bold,
+             ),
+           ),
             const SizedBox(height: 12),
             TextField(
               controller: qtyController,
@@ -135,14 +137,24 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
               decoration: InputDecoration(
                 labelText: 'Jumlah / Qty ($unit)',
                 hintText: 'Contoh: 2.5 atau 3',
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-              ),
-            ),
-          ],
-        ),
+                // 👈 TAMBAHKAN BARIS INI UNTUK MENGUBAH WARNA HINT
+                  hintStyle: const TextStyle(
+                    color: Colors.black38, // Warna abu-abu yang lembut/tidak mencolok
+                    fontSize: 12,
+                    fontWeight: FontWeight.normal,
+                  ),
+                  
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10), 
+                    borderSide: BorderSide.none,
+                 ),
+               ),
+             ),
+           ],
+         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogCtx),

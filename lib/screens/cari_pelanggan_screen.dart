@@ -9,7 +9,12 @@ import '../providers/settings_provider.dart';
 final supabase = Supabase.instance.client;
 
 class CariPelangganScreen extends StatefulWidget {
-  const CariPelangganScreen({super.key});
+  final bool isSelectionMode; // Flag untuk membedakan mode pilih / mode kelola
+
+  const CariPelangganScreen({
+    super.key,
+    this.isSelectionMode = true, // Default = mode pilih pelanggan untuk kasir
+  });
 
   @override
   State<CariPelangganScreen> createState() => _CariPelangganScreenState();
@@ -101,105 +106,116 @@ class _CariPelangganScreenState extends State<CariPelangganScreen> {
   }
 
   Future<void> _showTambahPelangganDialog() async {
-    final nameController = TextEditingController();
-    final phoneController = TextEditingController();
-    final addressController = TextEditingController();
-
-    final newCust = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: _bgDark,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          'Tambah Pelanggan Baru',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: _textBlack),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              style: const TextStyle(fontSize: 12),
-              decoration: InputDecoration(
-                hintText: 'Nama Lengkap',
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+      final nameController = TextEditingController();
+      final phoneController = TextEditingController();
+      final addressController = TextEditingController();
+  
+      final newCust = await showDialog<Map<String, dynamic>>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: _bgDark,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text(
+            'Tambah Pelanggan Baru',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: _textBlack),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                style: const TextStyle(fontSize: 12),
+                decoration: InputDecoration(
+                  hintText: 'Nama Lengkap',
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                ),
               ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: phoneController,
+                keyboardType: TextInputType.phone,
+                style: const TextStyle(fontSize: 12),
+                decoration: InputDecoration(
+                  hintText: 'No. WhatsApp / HP',
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: addressController,
+                style: const TextStyle(fontSize: 12),
+                decoration: InputDecoration(
+                  hintText: 'Alamat (Opsional)',
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Batal', style: TextStyle(color: Colors.grey, fontSize: 12)),
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: phoneController,
-              keyboardType: TextInputType.phone,
-              style: const TextStyle(fontSize: 12),
-              decoration: InputDecoration(
-                hintText: 'No. WhatsApp / HP',
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _goldAccent,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: addressController,
-              style: const TextStyle(fontSize: 12),
-              decoration: InputDecoration(
-                hintText: 'Alamat (Opsional)',
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-              ),
+              onPressed: () async {
+                if (nameController.text.trim().isEmpty) return;
+  
+                // 1. Ambil storeId dari SettingsProvider
+                final storeId = context.read<SettingsProvider>().storeId;
+                if (storeId == null) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(content: Text('Error: Store ID tidak ditemukan')),
+                  );
+                  return;
+                }
+  
+                // 2. Sertakan store_id agar lolos RLS Supabase
+                final newCustomerData = {
+                  'store_id': storeId,
+                  'name': nameController.text.trim(),
+                  'phone': phoneController.text.trim().isEmpty ? '-' : phoneController.text.trim(),
+                  'address': addressController.text.trim().isEmpty ? '-' : addressController.text.trim(),
+                };
+  
+                try {
+                  final response = await supabase
+                      .from('customers')
+                      .insert(newCustomerData)
+                      .select()
+                      .single();
+  
+                  if (dialogContext.mounted) {
+                    Navigator.pop(dialogContext, response);
+                  }
+                } catch (e) {
+                  debugPrint('Error inserting customer: $e');
+                  if (dialogContext.mounted) {
+                    ScaffoldMessenger.of(dialogContext).showSnackBar(
+                      SnackBar(content: Text('Gagal menyimpan pelanggan: $e')),
+                    );
+                  }
+                }
+              },
+              child: const Text('SIMPAN', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Batal', style: TextStyle(color: Colors.grey, fontSize: 12)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _goldAccent,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () async {
-              if (nameController.text.trim().isEmpty) return;
-              final newCustomerData = {
-                'name': nameController.text.trim(),
-                'phone': phoneController.text.trim().isEmpty ? '-' : phoneController.text.trim(),
-                'address': addressController.text.trim().isEmpty ? '-' : addressController.text.trim(),
-              };
-
-              try {
-                final response = await supabase
-                    .from('customers')
-                    .insert(newCustomerData)
-                    .select()
-                    .single();
-
-                if (dialogContext.mounted) {
-                  Navigator.pop(dialogContext, response);
-                }
-              } catch (e) {
-                debugPrint('Error inserting customer: $e');
-                if (dialogContext.mounted) {
-                  // 🔹 Tampilkan pesan error alih-alih mengembalikan data gagal ke layar utama
-                  ScaffoldMessenger.of(dialogContext).showSnackBar(
-                    const SnackBar(content: Text('Gagal menyimpan data pelanggan')),
-                  );
-                }
-              }
-            },
-            child: const Text('SIMPAN', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-
-    if (newCust != null && mounted) {
-      Navigator.pop(context, newCust);
+      );
+  
+      if (newCust != null && mounted) {
+        _loadCustomers(_searchController.text.trim());
+      }
     }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -307,12 +323,18 @@ class _CariPelangganScreenState extends State<CariPelangganScreen> {
                                           style: const TextStyle(fontSize: 10, color: Colors.black54),
                                         ),
                                         onTap: () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (context) => CustomerDetailScreen(customer: cust),
-                                            ),
-                                          );
+                                          if (widget.isSelectionMode) {
+                                            // Mode Kasir: Kembalikan data pelanggan terpilih
+                                            Navigator.pop(context, cust);
+                                          } else {
+                                            // Mode Kelola: Buka detail pelanggan
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (context) => CustomerDetailScreen(customer: cust),
+                                              ),
+                                            );
+                                          }
                                         },
                                       ),
                                     );

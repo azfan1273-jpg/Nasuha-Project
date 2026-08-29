@@ -64,33 +64,54 @@ class SettingsProvider with ChangeNotifier {
   }
 
   // 🔹 2. FUNGSI FETCH DATA PENGATURAN TOKO (PRINTER & NOTA FROM SUPABASE)
-  Future<void> fetchStoreSettings() async {
-    if (_storeId == null) return;
-  
-    _isLoading = true;
-    notifyListeners();
-  
-    try {
-      // RLS di Supabase akan otomatis memfilter sesuai store_id user yang login
-      final response = await Supabase.instance.client
-          .from('store_settings')
-          .select()
-          .eq('store_id', _storeId!)
-          .maybeSingle();
-  
-      if (response != null) {
-        // Lakukan casting eksplisit dari _JsonMap ke Map<String, dynamic>
-        _storeSettings = Map<String, dynamic>.from(response);
-      } else {
-        _storeSettings = null;
-      }
-    } catch (e) {
-      debugPrint('Error fetch store settings: $e');
-    } finally {
-      _isLoading = false;
+  // 🟢 KODE PERBAIKAN (Ganti method di atas dengan ini):
+    Future<void> fetchStoreSettings() async {
+      if (_storeId == null) return;
+    
+      _isLoading = true;
       notifyListeners();
+    
+      try {
+        final response = await Supabase.instance.client
+            .from('store_settings')
+            .select()
+            .eq('store_id', _storeId!)
+            .maybeSingle();
+    
+        if (response != null) {
+          _storeSettings = Map<String, dynamic>.from(response);
+        } else {
+          // 🟢 AUTO-CREATE DATA DEFAULT JIKA STORE_SETTINGS MASIH KOSONG
+          final defaultPayload = {
+                    'store_id': _storeId,
+                    // 'header_nama_toko' kita fungsikan sebagai Sub-Header / Slogan Toko
+                    'header_nama_toko': 'Jasa Laundry & Dry Cleaning', 
+                    'header_hp': '{{HP :}}',
+                    'footer_nota': 'Terima kasih telah mempercayakan pakaian Anda pada kami!',
+                    'footer_wa': 'Silakan simpan nomor ini untuk cek status laundry.',
+                    'notifikasi_wa': '-',
+                    'show_nama_kasir': true,
+                    'show_footer_nota': true,
+                    'show_footer_wa': true,
+                    'show_qr_code': true,
+                    'paper_size': '58 mm',
+                  };
+  
+          final inserted = await Supabase.instance.client
+              .from('store_settings')
+              .insert(defaultPayload)
+              .select()
+              .single();
+  
+          _storeSettings = Map<String, dynamic>.from(inserted);
+        }
+      } catch (e) {
+        debugPrint('Error fetch or auto-create store settings: $e');
+      } finally {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
-  }
 
   // 🔹 3. FUNGSI CLEAR SETTINGS (SAAT LOGOUT)
   void clearSettings() {

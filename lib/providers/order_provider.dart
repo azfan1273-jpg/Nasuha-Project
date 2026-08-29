@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 class OrderProvider with ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
   
@@ -10,46 +13,19 @@ class OrderProvider with ChangeNotifier {
   List<Map<String, dynamic>> _orders = [];
   List<Map<String, dynamic>> get orders => _orders;
 
-  // Cache storeId di memori agar tidak query berulang kali
-  String? _cachedStoreId;
-
-  // Mendapatkan store_id dengan mekanisme Caching
-  Future<String?> _getCurrentStoreId() async {
-    if (_cachedStoreId != null) return _cachedStoreId;
-
-    final user = _supabase.auth.currentUser;
-    if (user == null) return null;
-
-    final profile = await _supabase
-        .from('profiles')
-        .select('store_id')
-        .eq('id', user.id)
-        .maybeSingle();
-
-    _cachedStoreId = profile?['store_id']?.toString();
-    return _cachedStoreId;
-  }
-
-  // Wajib dipanggil saat User LOGOUT agar tidak bocor ke user/toko berikutnya
+  // Wajib dipanggil saat User LOGOUT agar state bersih total
   void clearState() {
     _orders = [];
-    _cachedStoreId = null;
     _isLoading = false;
     notifyListeners();
   }
 
-  // Fetch orders yang terisolasi
-  Future<void> fetchOrders() async {
+  // Fetch orders terisolasi menggunakan storeId yang dipass langsung
+  Future<void> fetchOrders(String storeId) async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      final storeId = await _getCurrentStoreId();
-      if (storeId == null) {
-        _orders = [];
-        return;
-      }
-
       final List<dynamic> data = await _supabase
           .from('orders')
           .select('*, order_items(*)')
@@ -65,8 +41,9 @@ class OrderProvider with ChangeNotifier {
     }
   }
 
-  // Create Order dengan format nota yang lebih aman (unik)
+  // Create Order menggunakan storeId yang dipass langsung
   Future<bool> createOrder({
+    required String storeId,
     required String customerName,
     required String customerPhone,
     required String perfume,
@@ -81,9 +58,6 @@ class OrderProvider with ChangeNotifier {
     try {
       final user = _supabase.auth.currentUser;
       if (user == null) throw Exception('User belum login');
-
-      final String? storeId = await _getCurrentStoreId();
-      if (storeId == null) throw Exception('Store ID tidak ditemukan untuk user ini');
 
       // Penomoran nota dikombinasikan dengan 4 karakter akhir ID user agar unik
       final String userSuffix = user.id.length >= 4 ? user.id.substring(0, 4).toUpperCase() : 'LNDR';
@@ -124,7 +98,8 @@ class OrderProvider with ChangeNotifier {
 
       await _supabase.from('order_items').insert(itemsPayload);
 
-      await fetchOrders();
+      // Refresh data order menggunakan storeId yang sama
+      await fetchOrders(storeId);
       return true;
     } catch (e) {
       debugPrint('Error createOrder: $e');

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/settings_provider.dart';
 
 class NotaDialog extends StatefulWidget {
   final Map<String, dynamic> order;
@@ -34,6 +36,18 @@ class _NotaDialogState extends State<NotaDialog> {
 
   @override
   Widget build(BuildContext context) {
+    // 🟢 1. AKSES STATE DARI SETTINGSPROVIDER
+    final settingsProv = context.watch<SettingsProvider>();
+    final storeSettings = settingsProv.storeSettings;
+
+    final String namaTokoHeader = settingsProv.namaToko.isNotEmpty
+        ? settingsProv.namaToko.toUpperCase()
+        : 'NAMA TOKO';
+    final String subHeader = storeSettings?['header_nama_toko'] ?? '';
+    final String footerNota = storeSettings?['footer_nota'] ?? '';
+    final bool showFooterNota = storeSettings?['show_footer_nota'] ?? true;
+
+    // 2. PARSING DATA ORDER
     final String nota = (widget.order['nota_number'] ?? 'LNDR-${(widget.order['id'] ?? 0).toString().padLeft(5, '0')}').toString();
     final String customerName = (widget.order['customer_name'] ?? 'Pelanggan').toString();
     final String customerPhone = (widget.order['customer_phone'] ?? '-').toString();
@@ -87,7 +101,7 @@ class _NotaDialogState extends State<NotaDialog> {
             ),
             const SizedBox(height: 12),
 
-            // 1. DUA PILIHAN TAB TOMBOL
+            // DUA PILIHAN TAB TOMBOL
             Row(
               children: [
                 Expanded(
@@ -139,7 +153,7 @@ class _NotaDialogState extends State<NotaDialog> {
             ),
             const SizedBox(height: 14),
 
-            // 2. KERTAS PREVIEW NOTA THERMAL (58mm Style)
+            // KERTAS PREVIEW NOTA THERMAL (58mm Style)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
@@ -151,6 +165,10 @@ class _NotaDialogState extends State<NotaDialog> {
               ),
               child: _selectedMode == 'customer'
                   ? _buildCustomerReceipt(
+                      namaToko: namaTokoHeader,
+                      subHeader: subHeader,
+                      footerNota: footerNota,
+                      showFooter: showFooterNota,
                       nota: nota,
                       customerName: customerName,
                       customerPhone: customerPhone,
@@ -163,6 +181,7 @@ class _NotaDialogState extends State<NotaDialog> {
                       itemsList: itemsList,
                     )
                   : _buildProduksiReceipt(
+                      namaToko: namaTokoHeader,
                       nota: nota,
                       customerName: customerName,
                       parfum: parfum,
@@ -174,7 +193,7 @@ class _NotaDialogState extends State<NotaDialog> {
             ),
             const SizedBox(height: 16),
 
-            // 3. TOMBOL EKSEKUSI CETAK
+            // TOMBOL EKSEKUSI CETAK
             SizedBox(
               width: double.infinity,
               height: 42,
@@ -192,7 +211,6 @@ class _NotaDialogState extends State<NotaDialog> {
                       ),
                     ),
                   );
-                  // LOGIKA PRINT BLUETOOTH DI PANGGIL DI SINI NANTI
                 },
                 icon: const Icon(Icons.print, color: Colors.white, size: 18),
                 label: Text(
@@ -207,8 +225,12 @@ class _NotaDialogState extends State<NotaDialog> {
     );
   }
 
-  // BUILDER PREVIEW NOTA CUSTOMER (LENGKAP WITH PRICE)
+  // 🟢 BUILDER PREVIEW NOTA CUSTOMER (LAYOUT REVISI TERBARU)
   Widget _buildCustomerReceipt({
+    required String namaToko,
+    required String subHeader,
+    required String footerNota,
+    required bool showFooter,
     required String nota,
     required String customerName,
     required String customerPhone,
@@ -220,34 +242,65 @@ class _NotaDialogState extends State<NotaDialog> {
     required String paymentStatus,
     required List<Map<String, dynamic>> itemsList,
   }) {
+    final num discount = num.tryParse(widget.order['discount']?.toString() ?? '0') ?? 0;
+    final num subTotal = totalPrice + discount;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        const Text('NASUHA LAUNDRY', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-        const Text('Nota Transaksi Pelanggan', style: TextStyle(fontSize: 10, color: Colors.grey)),
-        const SizedBox(height: 6),
-        const Text('----------------------------------------', style: TextStyle(fontSize: 10, color: Colors.grey)),
+        // 1. NAMA TOKO & SUB HEADER (CENTER)
+        Text(
+          namaToko,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 0.5),
+        ),
+        if (subHeader.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(
+            subHeader,
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 9.5, color: Colors.grey.shade700),
+          ),
+        ],
         
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Nota: $nota', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-            Text(createdDate, style: const TextStyle(fontSize: 10)),
-          ],
-        ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Plg: $customerName', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-            Text(customerPhone, style: const TextStyle(fontSize: 10)),
-          ],
-        ),
-        const Text('----------------------------------------', style: TextStyle(fontSize: 10, color: Colors.grey)),
+        const SizedBox(height: 6),
+        Text('---------------------------------------------------', style: TextStyle(fontSize: 10, color: Colors.grey.shade400)),
 
-        // Items
+        // 2. NAMA PELANGGAN & NOTA (CENTER)
+        Text(
+          customerName.toUpperCase(),
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+        ),
+        Text(
+          nota,
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 11, color: Colors.grey.shade800, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 6),
+
+        // 3. TANGGAL MASUK & EST. SELESAI
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Tgl Masuk', style: TextStyle(fontSize: 10)),
+            Text(createdDate, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
+          ],
+        ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Est. Selesai', style: TextStyle(fontSize: 10)),
+            Text(estDate, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
+          ],
+        ),
+
+        Text('---------------------------------------------------', style: TextStyle(fontSize: 10, color: Colors.grey.shade400)),
+
+        // 4. DAFTAR ITEM LAYANAN
         ...itemsList.map((item) {
           final String name = (item['service_name'] ?? 'Layanan').toString();
-          final String unit = (item['unit'] ?? 'Pcs').toString();
+          final String unit = (item['unit'] ?? 'kg').toString();
           final String qty = (item['qty'] ?? 1).toString();
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 2),
@@ -261,7 +314,9 @@ class _NotaDialogState extends State<NotaDialog> {
           );
         }),
 
-        const Text('----------------------------------------', style: TextStyle(fontSize: 10, color: Colors.grey)),
+        Text('---------------------------------------------------', style: TextStyle(fontSize: 10, color: Colors.grey.shade400)),
+
+        // 5. PARFUM, STATUS & CATATAN
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -272,34 +327,78 @@ class _NotaDialogState extends State<NotaDialog> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Est. Selesai:', style: TextStyle(fontSize: 10)),
-            Text(estDate, style: const TextStyle(fontSize: 10)),
+            const Text('STATUS:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+            Text(
+              paymentStatus.toUpperCase(),
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: paymentStatus.toLowerCase().contains('lunas') ? Colors.green : Colors.red,
+              ),
+            ),
           ],
         ),
-        if (notes != '-') ...[
+        if (notes != '-' && notes.isNotEmpty) ...[
           const SizedBox(height: 2),
           Align(
             alignment: Alignment.centerLeft,
-            child: Text('Ket: $notes', style: const TextStyle(fontSize: 9, fontStyle: FontStyle.italic)),
+            child: Text('(Ket: $notes)', style: const TextStyle(fontSize: 9, fontStyle: FontStyle.italic, color: Colors.black87)),
           ),
         ],
-        const Text('----------------------------------------', style: TextStyle(fontSize: 10, color: Colors.grey)),
-        
+
+        Text('---------------------------------------------------', style: TextStyle(fontSize: 10, color: Colors.grey.shade400)),
+
+        // 6. RINCIAN HARGA
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('STATUS: ${paymentStatus.toUpperCase()}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+            const Text('Sub Total', style: TextStyle(fontSize: 10)),
+            Text(_formatRupiah(subTotal), style: const TextStyle(fontSize: 10)),
+          ],
+        ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Discount', style: TextStyle(fontSize: 10)),
+            Text(_formatRupiah(discount), style: const TextStyle(fontSize: 10)),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('TOTAL', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
             Text(_formatRupiah(totalPrice), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
           ],
         ),
-        const SizedBox(height: 8),
-        const Text('*** Terima Kasih ***', style: TextStyle(fontSize: 9, fontStyle: FontStyle.italic)),
+
+        Text('---------------------------------------------------', style: TextStyle(fontSize: 10, color: Colors.grey.shade400)),
+
+        // 7. FOOTER NOTA DINAMIS
+        if (showFooter && footerNota.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(
+            footerNota,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 9, fontStyle: FontStyle.italic),
+          ),
+          const SizedBox(height: 6),
+        ],
+
+        // 8. TEKS FIX PALING BAWAH
+        const SizedBox(height: 4),
+        const Text(
+          '**** TERIMA KASIH ****',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
+        ),
       ],
     );
   }
 
-  // BUILDER PREVIEW NOTA PRODUKSI (SIMPLE TAG UNTUK DIPENITI / DITEMPEL)
+  // BUILDER PREVIEW NOTA PRODUKSI (SIMPLE TAG)
   Widget _buildProduksiReceipt({
+    required String namaToko,
     required String nota,
     required String customerName,
     required String parfum,
@@ -317,6 +416,7 @@ class _NotaDialogState extends State<NotaDialog> {
           child: const Text('[ NOTA PRODUKSI / WORKSHOP ]', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Colors.white)),
         ),
         const SizedBox(height: 6),
+        Text(namaToko, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
         Text(nota, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
         Text('Pelanggan: $customerName', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
         const Text('========================================', style: TextStyle(fontSize: 10, color: Colors.grey)),

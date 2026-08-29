@@ -16,6 +16,8 @@ import 'report_screen.dart';
 import 'customer_insight_screen.dart';
 import '../providers/order_provider.dart';
 import '../helpers/database_helper.dart';
+import 'discount_screen.dart';
+import 'splash_screen.dart';  
 
 class KasirPageManager extends StatefulWidget {
   const KasirPageManager({Key? key}) : super(key: key);
@@ -489,10 +491,17 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                       Navigator.push(context, MaterialPageRoute(builder: (_) => const ParfumScreen()));
                     },
                   ),
+                  // 🟢 KODE PERBAIKAN:
                   _buildSidebarItem(
                     icon: Icons.confirmation_number_outlined,
                     title: 'Pengaturan Diskon',
-                    onTap: () => Navigator.pop(context),
+                    onTap: () {
+                      Navigator.pop(context); // Tutup drawer/sidebar dulu
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const DiscountScreen()),
+                      );
+                    },
                   ),
                   _buildSectionDivider(),
                   _buildSidebarItem(
@@ -551,29 +560,37 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                 textColor: Colors.redAccent,
                 iconColor: Colors.redAccent,
                 onTap: () async {
-                                  Navigator.pop(context);
-                                
-                                  if (context.mounted) {
-                                    // 1. Bersihkan settings
-                                    context.read<SettingsProvider>().clearSettings();
-                                    
-                                    // 2. Bersihkan state orders toko sebelumnya
-                                    context.read<OrderProvider>().clearState();
-                                  }
-                                
-                                  // 3. Bersihkan database lokal dari memori
-                                  await DatabaseHelper.instance.clearLocalOrders();
-                                
-                                  // 4. Logout dari Supabase
-                                  await Supabase.instance.client.auth.signOut();
-                                }
-				              ),
-				            ),
-				          ],
-				        ),
-				      ),
-				    );
-				  }
+						  Navigator.pop(context); // Tutup drawer/sidebar
+
+						  if (context.mounted) {
+						    // 1. Bersihkan settings
+						    context.read<SettingsProvider>().clearSettings();
+
+						    // 2. Bersihkan state orders toko sebelumnya
+						    context.read<OrderProvider>().clearState();
+						  }
+
+						  // 3. Bersihkan database lokal dari memori
+						  await DatabaseHelper.instance.clearLocalOrders();
+
+						  // 4. Logout dari Supabase
+						  await Supabase.instance.client.auth.signOut();
+
+						  // 🟢 5. LEMPAR USER KEMBALI KE SPLASH SCREEN & SAPU CLEAN STACK SCREEN
+						  if (context.mounted) {
+						    Navigator.of(context).pushAndRemoveUntil(
+						      MaterialPageRoute(builder: (_) => SplashScreen()),
+						      (route) => false,
+						    );
+						  }
+						},				              
+					  ),
+		            ),
+		          ],
+		        ),
+		      ),
+		    );
+		  }
 
   Widget _buildSidebarItem({
     required IconData icon,

@@ -6,6 +6,7 @@ import 'providers/settings_provider.dart';
 import 'providers/order_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/kasir_page_manager.dart';
+import 'screens/splash_screen.dart';
 
 const String supabaseUrl = 'https://elesjrpswpppbliaifbw.supabase.co';
 const String supabaseAnonKey = 'sb_publishable_iX0RtTSOEZjtsyz_wj4-aw_hgPjOIUZ';
@@ -65,7 +66,7 @@ class NasuhaApp extends StatelessWidget {
                         }
                       });
             
-                      return const KasirPageManager();
+                      return const SplashScreen();
                     },
                   ),
     );

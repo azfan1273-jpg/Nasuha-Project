@@ -18,6 +18,7 @@ class KasirHomeScreen extends StatefulWidget {
 
 class KasirHomeScreenState extends State<KasirHomeScreen> {
   final List<Map<String, dynamic>> _ordersHariIni = [];
+  double _totalPengeluaranHariIniVal = 0.0; // 🟢 PENAMPUNG PENGELUARAN
   bool _isLoading = false;
 
   String _formatRupiah(num number) {
@@ -47,7 +48,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
     try {
       final est = DateTime.parse(rawDate).toLocal();
       final now = DateTime.now();
-      // Bandingkan apakah tanggal estimasi lebih kecil dari tanggal hari ini (00:00)
       final todayStart = DateTime(now.year, now.month, now.day);
       return est.isBefore(todayStart);
     } catch (_) {
@@ -60,76 +60,105 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
     super.initState();
     _ordersHariIni.clear();
     _loadOrdersFromSupabase();
+    _fetchPengeluaranHariIni(); // 🟢 FETCH PENGELUARAN SAAT INITIALIZE
   }
 
   // Method publik yang bisa dipanggil dari KasirPageManager
   Future<void> refreshData() async {
     await _loadOrdersFromSupabase();
+    await _fetchPengeluaranHariIni(); // 🟢 REFRESH PENGELUARAN
   }
 
-  // AMBIL DATA TERISOLASI BERDASARKAN STORE_ID
-    Future<void> _loadOrdersFromSupabase() async {
-      if (!mounted) return;
-      setState(() => _isLoading = true);
-  
-      try {
-        // 1. Ambil store_id langsung dari SettingsProvider
-        final currentStoreId = context.read<SettingsProvider>().storeId;
-  
-        if (currentStoreId == null) {
-          debugPrint('Log: store_id tidak ditemukan');
-          return;
-        }
-  
-        // 2. Filter query Supabase hanya untuk toko ini
-        final List<dynamic> data = await supabase
-            .from('orders')
-            .select('*')
-            .eq('store_id', currentStoreId) // <-- ISOLASI DATA STORE ID
-            .order('created_at', ascending: false);
-  
-        if (mounted) {
-          setState(() {
-            _ordersHariIni.clear();
-            _ordersHariIni.addAll(data.map((record) {
-              return {
-                'id': record['id'].toString(),
-                'customer': record['customer_name'] ?? 'Pelanggan',
-                'services': record['service_name'] ?? 'Layanan',
-              };
-            }));
-          });
-        }
-      } catch (e) {
-        debugPrint('Error load orders home: $e');
-      } finally {
-        if (mounted) {
-          setState(() => _isLoading = true); // Sesuaikan dengan logika loading kamu
-        }
+  // AMBIL DATA ORDERS TERISOLASI BERDASARKAN STORE_ID
+  Future<void> _loadOrdersFromSupabase() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final currentStoreId = context.read<SettingsProvider>().storeId;
+
+      if (currentStoreId == null) {
+        debugPrint('Log: store_id tidak ditemukan');
+        return;
+      }
+
+      final List<dynamic> data = await supabase
+          .from('orders')
+          .select('*')
+          .eq('store_id', currentStoreId)
+          .order('created_at', ascending: false);
+
+      if (mounted) {
+        setState(() {
+          _ordersHariIni.clear();
+          _ordersHariIni.addAll(data.map((record) {
+            return {
+              'id': record['id'].toString(),
+              'customer': record['customer_name'] ?? 'Pelanggan',
+              'services': record['service_name'] ?? 'Layanan',
+              'created_at': record['created_at'],
+              'status': record['status'],
+              'total_price': record['total_price'] ?? 0,
+            };
+          }));
+        });
+      }
+    } catch (e) {
+      debugPrint('Error load orders home: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
       }
     }
+  }
 
-  // Getter Total Omset
+  // 🟢 AMBIL DATA PENGELUARAN LANGSUNG DARI TABEL EXPENSES
+  Future<void> _fetchPengeluaranHariIni() async {
+    try {
+      final currentStoreId = context.read<SettingsProvider>().storeId;
+      if (currentStoreId == null) return;
+
+      final now = DateTime.now();
+      final startOfDay = DateTime(now.year, now.month, now.day).toIso8601String();
+      final endOfDay = DateTime(now.year, now.month, now.day, 23, 59, 59).toIso8601String();
+
+      final List<dynamic> data = await supabase
+          .from('expenses')
+          .select('amount')
+          .eq('store_id', currentStoreId)
+          .gte('created_at', startOfDay)
+          .lte('created_at', endOfDay);
+
+      double total = 0.0;
+      for (var item in data) {
+        final num price = (item['amount'] as num?) ?? 0;
+        total += price.toDouble();
+      }
+
+      if (mounted) {
+        setState(() {
+          _totalPengeluaranHariIniVal = total;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetch pengeluaran home: $e');
+    }
+  }
+
+  // GETTER TOTAL OMSET
   double get _totalOmsetHariIni {
     double total = 0.0;
     for (var item in _ordersHariIni) {
       if (item['status'] != 'Pengeluaran' && _isHariIni(item['created_at'])) {
-        total += (item['total'] as num?)?.toDouble() ?? 0.0;
+        final num price = num.tryParse(item['total_price']?.toString() ?? '0') ?? 0;
+        total += price.toDouble();
       }
     }
     return total;
   }
 
-  // Getter Total Pengeluaran
-  double get _totalPengeluaranHariIni {
-    double total = 0.0;
-    for (var item in _ordersHariIni) {
-      if (item['status'] == 'Pengeluaran' && _isHariIni(item['created_at'])) {
-        total += (item['total'] as num?)?.toDouble() ?? 0.0;
-      }
-    }
-    return total;
-  }
+  // 🟢 GETTER TOTAL PENGELUARAN HARI INI (DIAMBIL DARI TABEL EXPENSES)
+  double get _totalPengeluaranHariIni => _totalPengeluaranHariIniVal;
 
   @override
   Widget build(BuildContext context) {
@@ -142,7 +171,7 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
         children: [
           Expanded(
             child: RefreshIndicator(
-              onRefresh: _loadOrdersFromSupabase,
+              onRefresh: refreshData,
               color: settings.accentColor,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -288,7 +317,7 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
       ),
     );
 
-    _loadOrdersFromSupabase();
+    refreshData();
   }
 
   Widget _buildFinancialSummaryCard(SettingsProvider settings) {
@@ -371,7 +400,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // --- HEADER CARD ---
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -403,8 +431,7 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
             ],
           ),
           const SizedBox(height: 12),
-  
-          // --- BODY TABEL PREDIKSI ---
+
           FutureBuilder<List<Map<String, dynamic>>>(
             future: CustomerInsightEngine.fetchTomorrowPredictions(),
             builder: (context, snapshot) {
@@ -414,9 +441,9 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                   child: Center(child: CircularProgressIndicator(color: settings.accentColor)),
                 );
               }
-  
+
               final predictions = snapshot.data ?? [];
-  
+
               if (predictions.isEmpty) {
                 return Center(
                   child: Container(
@@ -454,8 +481,7 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                   ),
                 );
               }
-  
-              // --- TABEL FREEZE COLUMN & HORIZONTAL SLIDE ---
+
               return Container(
                 clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
@@ -465,11 +491,8 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                 ),
                 child: Row(
                   children: [
-                    // -------------------------------------------------------------
-                    // 1. KOLOM KIRI (FREEZE / STATIS) : NAMA PELANGGAN
-                    // -------------------------------------------------------------
                     Container(
-                      width: 120, // Lebar khusus untuk kolom Nama Pelanggan
+                      width: 120,
                       decoration: BoxDecoration(
                         border: Border(
                           right: BorderSide(color: settings.textColor.withOpacity(0.12), width: 1),
@@ -478,7 +501,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Header Freeze
                           Container(
                             height: 38,
                             padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -494,7 +516,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                             ),
                           ),
                           Divider(height: 1, color: settings.textColor.withOpacity(0.12)),
-                          // Isi Baris Nama
                           ...predictions.map((item) {
                             return InkWell(
                               onTap: () {
@@ -524,19 +545,15 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                         ],
                       ),
                     ),
-  
-                    // -------------------------------------------------------------
-                    // 2. KOLOM KANAN (SLIDE HORIZONTAL) : SISA DATA
-                    // -------------------------------------------------------------
+
                     Expanded(
                       child: SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         physics: const BouncingScrollPhysics(),
                         child: SizedBox(
-                          width: 480, // Total lebar tabel yang bisa di-slide ke kanan
+                          width: 480,
                           child: Column(
                             children: [
-                              // Header Table Slide
                               Container(
                                 height: 38,
                                 color: settings.textColor.withOpacity(0.05),
@@ -551,7 +568,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                                 ),
                               ),
                               Divider(height: 1, color: settings.textColor.withOpacity(0.12)),
-                              // Isi Baris Data
                               ...predictions.map((item) {
                                 final int score = item['score'];
                                 return InkWell(
@@ -572,7 +588,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                                     ),
                                     child: Row(
                                       children: [
-                                        // Skor %
                                         SizedBox(
                                           width: 70,
                                           child: Text(
@@ -584,7 +599,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                                             ),
                                           ),
                                         ),
-                                        // Status Siklus
                                         SizedBox(
                                           width: 120,
                                           child: Text(
@@ -592,7 +606,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                                             style: TextStyle(color: settings.textColor.withOpacity(0.7), fontSize: 10),
                                           ),
                                         ),
-                                        // Est Omset
                                         SizedBox(
                                           width: 100,
                                           child: Text(
@@ -600,7 +613,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                                             style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 11),
                                           ),
                                         ),
-                                        // Layanan Favorit
                                         SizedBox(
                                           width: 120,
                                           child: Text(
@@ -609,7 +621,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
-                                        // Tombol Detail/Aksi
                                         SizedBox(
                                           width: 70,
                                           child: Icon(Icons.chevron_right_rounded, size: 18, color: settings.accentColor),
@@ -706,7 +717,7 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
               context: context,
               builder: (context) => BuatOrderDialog(
                 onOrderCreated: () {
-                  _loadOrdersFromSupabase();
+                  refreshData();
                 },
               ),
             );
