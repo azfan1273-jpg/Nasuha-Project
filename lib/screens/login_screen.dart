@@ -11,8 +11,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _emailController = TextEditingController(text: 'superadmin@lndr.com');
-  final _passwordController = TextEditingController(text: '123456');
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _isPasswordObscured = true;
   bool _isLoading = false;
 
@@ -54,7 +54,14 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } on AuthException catch (e) {
-      if (mounted) _showSnackBar(e.message, isError: true);
+      if (mounted) {
+        // Menangani pesan khusus jika email belum dikonfirmasi
+        if (e.message.toLowerCase().contains('email not confirmed')) {
+          _showSnackBar('Email belum dikonfirmasi! Periksa inbox/spam email Anda.', isError: true);
+        } else {
+          _showSnackBar(e.message, isError: true);
+        }
+      }
     } catch (e) {
       if (mounted) _showSnackBar('Terjadi kesalahan: $e', isError: true);
     } finally {
@@ -147,7 +154,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // 4. DIALOG REGISTRASI OWNER BARU
+  // 4. DIALOG REGISTRASI OWNER BARU (DENGAN VERIFIKASI EMAIL)
   void _showDaftarTokoDialog() {
     final namaTokoController = TextEditingController();
     final emailRegController = TextEditingController();
@@ -182,15 +189,15 @@ class _LoginScreenState extends State<LoginScreen> {
               final namaToko = namaTokoController.text.trim();
               final email = emailRegController.text.trim();
               final password = passwordRegController.text.trim();
-            
+
               if (namaToko.isEmpty || email.isEmpty || password.isEmpty) {
                 _showSnackBar('Semua data wajib diisi!', isError: true);
                 return;
               }
-            
+
               Navigator.pop(ctx);
               setState(() => _isLoading = true);
-            
+
               try {
                 final res = await Supabase.instance.client.auth.signUp(
                   email: email,
@@ -200,9 +207,37 @@ class _LoginScreenState extends State<LoginScreen> {
                     'role': 'Owner',
                   },
                 );
-            
+
                 if (res.user != null && mounted) {
-                  _showSnackBar('Pendaftaran berhasil! Akun dan Toko Anda telah dibuat.');
+                  // 🟢 LOGIKA CEK STATUS VERIFIKASI EMAIL
+                  if (res.session == null) {
+                    // Opsi Confirm Email di Supabase Aktif
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (dialogCtx) => AlertDialog(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        title: const Text('Verifikasi Email Dikirim', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                        content: Text(
+                          'Link konfirmasi telah dikirim ke $email.\n\nSilakan buka inbox atau folder spam email Anda, lalu klik link verifikasi sebelum melakukan login.',
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                        actions: [
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _pinkAccent,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            onPressed: () => Navigator.pop(dialogCtx),
+                            child: const Text('Paham, Ke Login', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                      ),
+                    );
+                  } else {
+                    // Opsi Confirm Email di Supabase Mati
+                    _showSnackBar('Pendaftaran berhasil! Akun dan Toko Anda telah dibuat.');
+                  }
                 }
               } catch (e) {
                 if (mounted) _showSnackBar('Gagal mendaftar: $e', isError: true);
@@ -244,7 +279,7 @@ class _LoginScreenState extends State<LoginScreen> {
       SnackBar(
         content: Text(message, style: const TextStyle(fontSize: 12)),
         backgroundColor: isError ? Colors.redAccent : Colors.green,
-        duration: const Duration(seconds: 3),
+        duration: const Duration(seconds: 4),
       ),
     );
   }

@@ -50,54 +50,67 @@ class _ReportScreenState extends State<ReportScreen> {
         return;
       }
 
+      // 🟢 1. BUAT KUERI ORDERS (DISESUAIKAN NAMA KOLOM SUPABASE)
+      var ordersQuery = _supabase
+          .from('orders')
+          .select('total_price, metode_pembayaran, created_at, store_id')
+          .eq('store_id', storeId);
+
+      var expensesQuery = _supabase
+          .from('expenses')
+          .select('*')
+          .eq('store_id', storeId);
+
+      // 🟢 2. FILTER TANGGAL LOKAL (WIB)
       final now = DateTime.now();
-      DateTime startDate;
+      DateTime? startDate;
 
       if (_filterPeriode == 'Hari Ini') {
-        startDate = DateTime(now.year, now.month, now.day);
+        startDate = DateTime(now.year, now.month, now.day, 0, 0, 0);
       } else if (_filterPeriode == 'Minggu Ini') {
-        startDate = now.subtract(Duration(days: now.weekday - 1));
-        startDate = DateTime(startDate.year, startDate.month, startDate.day);
-      } else {
-        startDate = DateTime(now.year, now.month, 1);
+        final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+        startDate = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day, 0, 0, 0);
+      } else if (_filterPeriode == 'Bulan Ini') {
+        startDate = DateTime(now.year, now.month, 1, 0, 0, 0);
       }
 
-      final startDateIso = startDate.toIso8601String();
+      if (startDate != null) {
+        final startDateIso = startDate.toIso8601String();
+        ordersQuery = ordersQuery.gte('created_at', startDateIso);
+        expensesQuery = expensesQuery.gte('created_at', startDateIso);
+      }
 
-      // 1. Fetch Orders
-      final ordersResponse = await _supabase
-          .from('orders')
-          .select('total_price, payment_method, created_at, status_pembayaran')
-          .eq('store_id', storeId)
-          .gte('created_at', startDateIso);
+      final ordersResponse = await ordersQuery;
+      final expensesResponse = await expensesQuery.order('created_at', ascending: false);
+
+      debugPrint('LOG REPORT - storeId: $storeId');
+      debugPrint('LOG REPORT - Data Order Ditemukan: ${ordersResponse.length}');
 
       double omset = 0;
       double cash = 0;
       double qris = 0;
 
       for (var row in ordersResponse) {
-        final price = ((row['total_price'] ?? 0) as num).toDouble();
+        final price = num.tryParse(row['total_price']?.toString() ?? '0')?.toDouble() ?? 0.0;
         omset += price;
         
-        final method = (row['payment_method'] ?? '').toString().toLowerCase();
-        if (method.contains('cash') || method.contains('tunai')) {
+		// 🟢 Rincian Kas/QRIS HANYA dihitung jika uang sudah benar-benar diterima (Lunas)
+        final status = (row['status_pembayaran'] ?? '').toString().toLowerCase();
+        if (status == 'lunas') {
+
+        // Match nama kolom 'metode_pembayaran' dari Supabase
+        final method = (row['metode_pembayaran'] ?? '').toString().toLowerCase();
+        if (method.contains('tunai') || method.contains('cash')) {
           cash += price;
         } else {
           qris += price;
         }
       }
-
-      // 2. Fetch Expenses
-      final expensesResponse = await _supabase
-          .from('expenses')
-          .select('*')
-          .eq('store_id', storeId)
-          .gte('created_at', startDateIso)
-          .order('created_at', ascending: false);
+    }
 
       double pengeluaran = 0;
       for (var row in expensesResponse) {
-        pengeluaran += ((row['amount'] ?? 0) as num).toDouble();
+        pengeluaran += num.tryParse(row['amount']?.toString() ?? '0')?.toDouble() ?? 0.0;
       }
 
       if (mounted) {
@@ -183,22 +196,25 @@ class _ReportScreenState extends State<ReportScreen> {
   Widget build(BuildContext context) {
     final labaBersih = _totalOmset - _totalPengeluaran;
     final profitMargin = _totalOmset > 0 ? ((labaBersih / _totalOmset) * 100).toStringAsFixed(1) : '0';
-
+    final settings = context.watch<SettingsProvider>();
+    
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: settings.bgDark,
       appBar: AppBar(
-        title: const Text('Laporan Keuangan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        title: Text('Laporan Keuangan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: settings.textColor)),
         elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        backgroundColor: settings.cardDark,
+        foregroundColor: settings.textColor,
         actions: [
           DropdownButton<String>(
             value: _filterPeriode,
             underline: const SizedBox(),
+            dropdownColor: settings.cardDark,
+            icon: Icon(Icons.arrow_drop_down, color: settings.textColor),
             items: ['Hari Ini', 'Minggu Ini', 'Bulan Ini'].map((String val) {
               return DropdownMenuItem<String>(
                 value: val,
-                child: Text(val, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                child: Text(val, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: settings.textColor)),
               );
             }).toList(),
             onChanged: (val) {
@@ -227,12 +243,12 @@ class _ReportScreenState extends State<ReportScreen> {
             ),
           );
         },
-        backgroundColor: Colors.pinkAccent,
+        backgroundColor: settings.accentColor,
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text('Pengeluaran', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(child: CircularProgressIndicator(color: settings.accentColor))
           : RefreshIndicator(
               onRefresh: _loadLaporanKeuangan,
               child: ListView(
@@ -246,6 +262,7 @@ class _ReportScreenState extends State<ReportScreen> {
                           amount: _formatRupiah(_totalOmset),
                           color: Colors.green,
                           icon: Icons.arrow_downward_rounded,
+                          settings: settings,
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -255,6 +272,7 @@ class _ReportScreenState extends State<ReportScreen> {
                           amount: _formatRupiah(_totalPengeluaran),
                           color: Colors.redAccent,
                           icon: Icons.arrow_upward_rounded,
+                          settings: settings,
                         ),
                       ),
                     ],
@@ -266,17 +284,16 @@ class _ReportScreenState extends State<ReportScreen> {
                     color: labaBersih >= 0 ? Colors.blue : Colors.orange,
                     icon: Icons.account_balance_wallet_rounded,
                     isFullWidth: true,
+                    settings: settings,
                   ),
                   const SizedBox(height: 20),
 
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: settings.cardDark,
                       borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))
-                      ],
+                      border: Border.all(color: settings.textColor.withOpacity(0.05)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -290,7 +307,7 @@ class _ReportScreenState extends State<ReportScreen> {
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                 decoration: BoxDecoration(
-                                  color: isSelected ? const Color(0xFFEC4899) : Colors.transparent,
+                                  color: isSelected ? settings.accentColor : Colors.transparent,
                                   borderRadius: BorderRadius.circular(20),
                                 ),
                                 child: Text(
@@ -298,7 +315,7 @@ class _ReportScreenState extends State<ReportScreen> {
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
-                                    color: isSelected ? Colors.white : Colors.grey.shade600,
+                                    color: isSelected ? Colors.white : settings.textColor.withOpacity(0.6),
                                   ),
                                 ),
                               ),
@@ -318,14 +335,14 @@ class _ReportScreenState extends State<ReportScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  _buildPaymentMethodCard(),
+                  _buildPaymentMethodCard(settings),
                   const SizedBox(height: 24),
 
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Riwayat Pengeluaran', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                      Text('${_listPengeluaran.length} Transaksi', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                      Text('Riwayat Pengeluaran', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: settings.textColor)),
+                      Text('${_listPengeluaran.length} Transaksi', style: TextStyle(fontSize: 12, color: settings.textColor.withOpacity(0.6))),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -333,12 +350,16 @@ class _ReportScreenState extends State<ReportScreen> {
                   _listPengeluaran.isEmpty
                       ? Container(
                           padding: const EdgeInsets.all(32),
-                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
-                          child: const Column(
+                          decoration: BoxDecoration(
+                            color: settings.cardDark,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: settings.textColor.withOpacity(0.05)),
+                          ),
+                          child: Column(
                             children: [
-                              Icon(Icons.receipt_long_outlined, size: 48, color: Colors.grey),
-                              SizedBox(height: 8),
-                              Text('Belum ada catat pengeluaran', style: TextStyle(color: Colors.grey)),
+                              Icon(Icons.receipt_long_outlined, size: 48, color: settings.textColor.withOpacity(0.4)),
+                              const SizedBox(height: 8),
+                              Text('Belum ada catat pengeluaran', style: TextStyle(color: settings.textColor.withOpacity(0.6))),
                             ],
                           ),
                         )
@@ -348,23 +369,24 @@ class _ReportScreenState extends State<ReportScreen> {
                           itemCount: _listPengeluaran.length,
                           itemBuilder: (context, index) {
                             final item = _listPengeluaran[index];
-                            final amount = ((item['amount'] ?? 0) as num).toDouble();
+                            final amount = num.tryParse(item['amount']?.toString() ?? '0')?.toDouble() ?? 0.0;
                             final note = item['notes'] ?? item['category'] ?? 'Pengeluaran';
                             final category = item['category'] ?? 'Umum';
 
                             return Card(
                               margin: const EdgeInsets.only(bottom: 8),
+                              color: settings.cardDark,
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              elevation: 0.5,
+                              elevation: 0,
                               child: ListTile(
                                 leading: CircleAvatar(
                                   backgroundColor: Colors.redAccent.withOpacity(0.1),
                                   child: const Icon(Icons.remove_circle_outline, color: Colors.redAccent, size: 20),
                                 ),
-                                title: Text(note, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                                title: Text(note, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: settings.textColor)),
                                 subtitle: Text(
                                   '${item['created_at'].toString().split('T')[0]} • $category',
-                                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                  style: TextStyle(fontSize: 11, color: settings.textColor.withOpacity(0.6)),
                                 ),
                                 trailing: Text(
                                   '- ${_formatRupiah(amount)}',
@@ -385,16 +407,15 @@ class _ReportScreenState extends State<ReportScreen> {
     required String amount,
     required Color color,
     required IconData icon,
+    required SettingsProvider settings,
     bool isFullWidth = false,
   }) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: settings.cardDark,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))
-        ],
+        border: Border.all(color: settings.textColor.withOpacity(0.05)),
       ),
       child: Row(
         children: [
@@ -408,11 +429,11 @@ class _ReportScreenState extends State<ReportScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w500)),
+                Text(title, style: TextStyle(fontSize: 11, color: settings.textColor.withOpacity(0.6), fontWeight: FontWeight.w500)),
                 const SizedBox(height: 4),
                 Text(
                   amount,
-                  style: TextStyle(fontSize: isFullWidth ? 17 : 14, fontWeight: FontWeight.bold, color: Colors.black),
+                  style: TextStyle(fontSize: isFullWidth ? 17 : 14, fontWeight: FontWeight.bold, color: settings.textColor),
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
@@ -423,7 +444,7 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
-  Widget _buildPaymentMethodCard() {
+  Widget _buildPaymentMethodCard(SettingsProvider settings) {
     final total = _cashTotal + _qrisTotal;
     final cashPct = total > 0 ? (_cashTotal / total) : 0.0;
     final qrisPct = total > 0 ? (_qrisTotal / total) : 0.0;
@@ -431,20 +452,18 @@ class _ReportScreenState extends State<ReportScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: settings.cardDark,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))
-        ],
+        border: Border.all(color: settings.textColor.withOpacity(0.05)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Metode Pembayaran', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+          Text('Metode Pembayaran', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: settings.textColor)),
           const SizedBox(height: 12),
-          _buildPaymentProgressItem(label: 'Tunai (Cash)', amount: _formatRupiah(_cashTotal), percentage: cashPct, color: Colors.green),
+          _buildPaymentProgressItem(label: 'Tunai (Cash)', amount: _formatRupiah(_cashTotal), percentage: cashPct, color: Colors.green, settings: settings),
           const SizedBox(height: 10),
-          _buildPaymentProgressItem(label: 'QRIS / Transfer', amount: _formatRupiah(_qrisTotal), percentage: qrisPct, color: Colors.blueAccent),
+          _buildPaymentProgressItem(label: 'QRIS / Transfer', amount: _formatRupiah(_qrisTotal), percentage: qrisPct, color: Colors.blueAccent, settings: settings),
         ],
       ),
     );
@@ -455,6 +474,7 @@ class _ReportScreenState extends State<ReportScreen> {
     required String amount,
     required double percentage,
     required Color color,
+    required SettingsProvider settings,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -462,8 +482,8 @@ class _ReportScreenState extends State<ReportScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w500)),
-            Text('${(percentage * 100).toStringAsFixed(0)}%', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+            Text(label, style: TextStyle(fontSize: 11, color: settings.textColor.withOpacity(0.6), fontWeight: FontWeight.w500)),
+            Text('${(percentage * 100).toStringAsFixed(0)}%', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: settings.textColor)),
           ],
         ),
         const SizedBox(height: 4),
@@ -475,7 +495,7 @@ class _ReportScreenState extends State<ReportScreen> {
           borderRadius: BorderRadius.circular(4),
         ),
         const SizedBox(height: 2),
-        Text(amount, style: const TextStyle(fontSize: 10, color: Colors.black87, fontWeight: FontWeight.w600)),
+        Text(amount, style: TextStyle(fontSize: 10, color: settings.textColor, fontWeight: FontWeight.w600)),
       ],
     );
   }

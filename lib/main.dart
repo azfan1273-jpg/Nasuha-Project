@@ -38,7 +38,7 @@ class NasuhaApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'NASUHA Kasir',
+      title: 'LNDR',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,

@@ -5,32 +5,12 @@
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>nasuha</title>
+  <title>LNDR</title>
   <link rel="manifest" href="manifest.json">
 </head>
 <body style="background-color: #0F1115;">
   <script src="flutter_bootstrap.js" async></script>
 </body>
-<!-- FLOATING MODERN DEBUG CONSOLE -->
-<div id="debug-floating-container" style="position: fixed; top: 20px; right: 20px; z-index: 999999; cursor: move;">
-  <!-- Tombol Badge Floating -->
-  <button id="debug-toggle-btn" onclick="toggleDebugConsole()" style="background: #1E1E2E; color: #FFF; border: 1.5px solid rgba(255,255,255,0.2); padding: 8px 14px; border-radius: 20px; font-size: 12px; font-weight: bold; box-shadow: 0 4px 12px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 6px; cursor: pointer;">
-    <span>⚡ Console</span>
-    <span id="debug-error-badge" style="background: #EF4444; color: white; border-radius: 10px; padding: 1px 6px; font-size: 10px; display: none;">0</span>
-  </button>
-
-  <!-- Jendela Log Console -->
-  <div id="debug-console" style="display: none; position: absolute; top: 40px; right: 0; width: 360px; max-height: 260px; background: rgba(30, 30, 46, 0.95); border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); backdrop-filter: blur(8px); overflow: hidden; font-family: monospace;">
-    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: rgba(255,255,255,0.05); border-bottom: 1px solid rgba(255,255,255,0.1);">
-      <span style="color: #06B6D4; font-size: 11px; font-weight: bold;">LOG CONSOLE</span>
-      <div style="display: flex; gap: 8px;">
-        <span onclick="clearDebugLogs()" style="color: #EF4444; cursor: pointer; font-size: 11px;">Clear</span>
-        <span onclick="toggleDebugConsole()" style="color: #9CA3AF; cursor: pointer; font-size: 12px; font-weight: bold;">✕</span>
-      </div>
-    </div>
-    <div id="debug-logs" style="padding: 10px; max-height: 200px; overflow-y: auto; font-size: 11px; color: #A7F3D0;"></div>
-  </div>
-</div>
 
 <script>
   let errorCount = 0;

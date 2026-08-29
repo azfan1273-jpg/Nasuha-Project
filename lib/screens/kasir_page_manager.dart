@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:url_launcher/url_launcher.dart'; // Jangan lupa install url_launcher
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/settings_provider.dart';
 import 'kasir_home_screen.dart';
 import 'order_status_screen.dart';
@@ -18,6 +18,7 @@ import '../providers/order_provider.dart';
 import '../helpers/database_helper.dart';
 import 'discount_screen.dart';
 import 'splash_screen.dart';  
+import 'login_screen.dart';
 
 class KasirPageManager extends StatefulWidget {
   const KasirPageManager({Key? key}) : super(key: key);
@@ -34,7 +35,7 @@ class _KasirPageManagerState extends State<KasirPageManager> {
   // State untuk Broadcast Announcement dari Developer
   Map<String, dynamic>? _announcement;
 
- @override
+  @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: 0);
@@ -53,7 +54,7 @@ class _KasirPageManagerState extends State<KasirPageManager> {
     });
   }
 
-  // 📡 METODE TARIK PENGUMUMAN DEV DARI SUPABASE
+  // METODE TARIK PENGUMUMAN DEV DARI SUPABASE
   Future<void> _fetchDeveloperAnnouncement() async {
     try {
       final res = await Supabase.instance.client
@@ -64,7 +65,7 @@ class _KasirPageManagerState extends State<KasirPageManager> {
           .limit(1)
           .maybeSingle();
 
-        print('📡 Data Pengumuman: $res'); // Cek di terminal Flutter kamu
+      debugPrint('Data Pengumuman: $res');
 
       if (res != null && mounted) {
         setState(() {
@@ -72,11 +73,11 @@ class _KasirPageManagerState extends State<KasirPageManager> {
         });
       }
     } catch (e) {
-      print('❌ Error Pengumuman: $e');// Handle silently jika tabel belum dibuat
+      debugPrint('Error Pengumuman: $e');
     }
   }
 
-  // 🔗 METODE BUKA LINK OUTSIDE APP
+  // METODE BUKA LINK OUTSIDE APP
   Future<void> _openAnnouncementUrl(String urlString) async {
     final Uri url = Uri.parse(urlString);
     if (await canLaunchUrl(url)) {
@@ -96,20 +97,17 @@ class _KasirPageManagerState extends State<KasirPageManager> {
 
   @override
   Widget build(BuildContext context) {
-    const Color creamLightColor = Color(0xFFFAF5F7);
-    const Color goldAccent = Color(0xFFEC4899);
     final settings = context.watch<SettingsProvider>();
 
     final currentUser = Supabase.instance.client.auth.currentUser;
     final String emailReal = currentUser?.email ?? 'Belum Login';
 
-    // 1. NAMA TOKO: Fallback diubah menjadi 'Nama Toko'
     final String namaTokoReal = settings.namaToko.isEmpty
         ? 'Nama Toko'
         : settings.namaToko;
 
     return Scaffold(
-      backgroundColor: creamLightColor,
+      backgroundColor: settings.bgDark,
       drawer: _buildCustomSidebar(context, settings, emailReal, namaTokoReal),
       body: SafeArea(
         child: Column(
@@ -121,6 +119,7 @@ class _KasirPageManagerState extends State<KasirPageManager> {
               namaToko: namaTokoReal,
               userRole: settings.userRole,
               emailToko: emailReal,
+              settings: settings,
               onRefresh: () {
                 _kasirHomeKey.currentState?.refreshData();
                 _fetchDeveloperAnnouncement();
@@ -128,7 +127,7 @@ class _KasirPageManagerState extends State<KasirPageManager> {
             ),
             const SizedBox(height: 6),
 
-            // 2. BANNER PENGUMUMAN BROADCAST DEV (Dinamis + Link Clickable)
+            // 2. BANNER PENGUMUMAN BROADCAST DEV
             if (_announcement != null)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -136,16 +135,16 @@ class _KasirPageManagerState extends State<KasirPageManager> {
               ),
             const SizedBox(height: 8),
 
-            // 3. TAB BAR NAVIGASI (Mentok Kiri)
+            // 3. TAB BAR NAVIGASI
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.start,
                 children: [
-                  _buildTabButton(0, 'Beranda Kasir', Icons.home_rounded, goldAccent),
+                  _buildTabButton(0, 'Beranda Kasir', Icons.home_rounded, settings.accentColor),
                   const SizedBox(width: 8),
-                  _buildTabButton(1, 'Order Status', Icons.bar_chart_rounded, goldAccent),
+                  _buildTabButton(1, 'Order Status', Icons.bar_chart_rounded, settings.accentColor),
                 ],
               ),
             ),
@@ -257,6 +256,7 @@ class _KasirPageManagerState extends State<KasirPageManager> {
     required String namaToko,
     required String userRole,
     required String emailToko,
+    required SettingsProvider settings,
     required VoidCallback onRefresh,
   }) {
     return Container(
@@ -264,8 +264,10 @@ class _KasirPageManagerState extends State<KasirPageManager> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        gradient: const LinearGradient(
-          colors: [Color(0xFFFFF59D), Color(0xFFF8BBD0)],
+        gradient: LinearGradient(
+          colors: settings.selectedTheme == 'gold'
+              ? [const Color(0xFF2C2C2E), const Color(0xFF1E1E22)]
+              : [const Color(0xFFFFF59D), const Color(0xFFF8BBD0)],
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
         ),
@@ -281,11 +283,13 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                     onTap: () => Scaffold.of(context).openDrawer(),
                     child: Container(
                       padding: const EdgeInsets.all(8),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFFCE7F3),
+                      decoration: BoxDecoration(
+                        color: settings.selectedTheme == 'gold'
+                            ? const Color(0xFF121212)
+                            : const Color(0xFFFCE7F3),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.storefront_rounded, color: Color(0xFFEC4899), size: 20),
+                      child: Icon(Icons.storefront_rounded, color: settings.accentColor, size: 20),
                     ),
                   ),
                 ),
@@ -300,10 +304,10 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                         children: [
                           Flexible(
                             child: Text(
-                              namaToko, // 🟢 Tampil 'Nama Toko' jika data belum terisi
+                              namaToko,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Color(0xFF111827),
+                              style: TextStyle(
+                                color: settings.selectedTheme == 'gold' ? Colors.white : const Color(0xFF111827),
                                 fontWeight: FontWeight.bold,
                                 fontSize: 14,
                               ),
@@ -313,7 +317,7 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFEC4899),
+                              color: settings.accentColor,
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Text(
@@ -326,7 +330,10 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                       Text(
                         emailToko,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: Colors.grey[700], fontSize: 11),
+                        style: TextStyle(
+                          color: settings.selectedTheme == 'gold' ? Colors.grey[400] : Colors.grey[700],
+                          fontSize: 11,
+                        ),
                       ),
                     ],
                   ),
@@ -335,7 +342,10 @@ class _KasirPageManagerState extends State<KasirPageManager> {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: Color(0xFF111827)),
+            icon: Icon(
+              Icons.refresh_rounded,
+              color: settings.selectedTheme == 'gold' ? Colors.white : const Color(0xFF111827),
+            ),
             onPressed: onRefresh,
           ),
         ],
@@ -385,13 +395,10 @@ class _KasirPageManagerState extends State<KasirPageManager> {
     );
   }
 
-  // SIDEBAR DRAWER (Sesuai kode kamu)
+  // SIDEBAR DRAWER (SUDAH DISUAIKAN DENGAN PEMILIH TEMA)
   Widget _buildCustomSidebar(BuildContext context, SettingsProvider settings, String email, String namaToko) {
-    const Color bgPink = Color(0xFFFFF1F2);
-    const Color textDark = Color(0xFF1E293B);
-
     return Drawer(
-      backgroundColor: bgPink,
+      backgroundColor: settings.cardDark,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.only(topRight: Radius.circular(24), bottomRight: Radius.circular(24)),
       ),
@@ -406,11 +413,11 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: settings.bgDark,
                       shape: BoxShape.circle,
                       boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
                     ),
-                    child: const Icon(Icons.storefront_rounded, color: Color(0xFFEC4899), size: 24),
+                    child: Icon(Icons.storefront_rounded, color: settings.accentColor, size: 24),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -424,13 +431,13 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                                 namaToko,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textDark),
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: settings.textColor),
                               ),
                             ),
                             const SizedBox(width: 6),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(color: const Color(0xFFEC4899), borderRadius: BorderRadius.circular(12)),
+                              decoration: BoxDecoration(color: settings.accentColor, borderRadius: BorderRadius.circular(12)),
                               child: Text(
                                 settings.userRole.toUpperCase(),
                                 style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
@@ -439,14 +446,14 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                           ],
                         ),
                         const SizedBox(height: 2),
-                        Text(email, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: Colors.black45)),
+                        Text(email, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: settings.textColor.withOpacity(0.6))),
                       ],
                     ),
                   ),
                 ],
               ),
             ),
-            const Divider(height: 1, color: Color(0xFFF1F5F9), indent: 16, endIndent: 16),
+            Divider(height: 1, color: settings.textColor.withOpacity(0.1), indent: 16, endIndent: 16),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -454,6 +461,7 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                   _buildSidebarItem(
                     icon: Icons.person_outline_rounded,
                     title: 'Profil',
+                    settings: settings,
                     onTap: () {
                       Navigator.pop(context);
                       Navigator.push(context, MaterialPageRoute(builder: (_) => const OwnerScreen()));
@@ -462,6 +470,7 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                   _buildSidebarItem(
                     icon: Icons.badge_outlined,
                     title: 'Kelola Kasir',
+                    settings: settings,
                     onTap: () {
                       Navigator.pop(context);
                       Navigator.push(context, MaterialPageRoute(builder: (_) => const KasirScreen()));
@@ -470,6 +479,7 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                   _buildSidebarItem(
                     icon: Icons.local_laundry_service_outlined,
                     title: 'Daftar Layanan',
+                    settings: settings,
                     onTap: () {
                       Navigator.pop(context);
                       Navigator.push(context, MaterialPageRoute(builder: (_) => const EditLayananScreen()));
@@ -478,6 +488,7 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                   _buildSidebarItem(
                     icon: Icons.groups_outlined,
                     title: 'Daftar Pelanggan',
+                    settings: settings,
                     onTap: () {
                       Navigator.pop(context);
                       Navigator.push(context, MaterialPageRoute(builder: (_) => const CariPelangganScreen()));
@@ -486,38 +497,41 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                   _buildSidebarItem(
                     icon: Icons.opacity_outlined,
                     title: 'Daftar Parfum',
+                    settings: settings,
                     onTap: () {
                       Navigator.pop(context);
                       Navigator.push(context, MaterialPageRoute(builder: (_) => const ParfumScreen()));
                     },
                   ),
-                  // 🟢 KODE PERBAIKAN:
                   _buildSidebarItem(
                     icon: Icons.confirmation_number_outlined,
                     title: 'Pengaturan Diskon',
+                    settings: settings,
                     onTap: () {
-                      Navigator.pop(context); // Tutup drawer/sidebar dulu
+                      Navigator.pop(context);
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (_) => const DiscountScreen()),
                       );
                     },
                   ),
-                  _buildSectionDivider(),
+                  _buildSectionDivider(settings),
                   _buildSidebarItem(
                     icon: Icons.print_outlined,
                     title: 'Printer & Nota',
+                    settings: settings,
                     onTap: () {
                       Navigator.pop(context);
                       Navigator.push(context, MaterialPageRoute(builder: (_) => const PrinterScreen()));
                     },
                   ),
-                  _buildSectionDivider(),
+                  _buildSectionDivider(settings),
                   _buildSidebarItem(
                     icon: Icons.bar_chart_rounded,
                     title: 'Laporan Keuangan',
+                    settings: settings,
                     onTap: () {
-                      Navigator.pop(context); // Tutup drawer/sidebar dulu
+                      Navigator.pop(context);
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (context) => const ReportScreen()),
@@ -527,8 +541,9 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                   _buildSidebarItem(
                     icon: Icons.analytics_outlined,
                     title: 'Analisis Pelanggan',
+                    settings: settings,
                     onTap: () {
-                      Navigator.pop(context); // Tutup drawer/sidebar
+                      Navigator.pop(context);
                       Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -537,68 +552,196 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                       );
                     },
                   ),
-                  _buildSectionDivider(),
+
+                  _buildSectionDivider(settings),
+
+                  // 🟢 SEKSI PEMILIH TEMA (POSITIONED BELOW ANALISIS PELANGGAN)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Theme',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: settings.textColor.withOpacity(0.6),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            // Option 1: Pink
+                            InkWell(
+                              onTap: () {
+                                context.read<SettingsProvider>().setTheme('default');
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      settings.selectedTheme == 'default'
+                                          ? Icons.radio_button_checked
+                                          : Icons.radio_button_off,
+                                      size: 16,
+                                      color: const Color(0xFFEC4899),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'Pink',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: settings.textColor,
+                                        fontWeight: settings.selectedTheme == 'default'
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+
+                            // Option 2: Black / Gold
+                            InkWell(
+                              onTap: () {
+                                context.read<SettingsProvider>().setTheme('gold');
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      settings.selectedTheme == 'gold'
+                                          ? Icons.radio_button_checked
+                                          : Icons.radio_button_off,
+                                      size: 16,
+                                      color: settings.selectedTheme == 'gold'
+                                          ? const Color(0xFFFFD700)
+                                          : Colors.grey,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'Black',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: settings.textColor,
+                                        fontWeight: settings.selectedTheme == 'gold'
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  _buildSectionDivider(settings),
+
                   _buildSidebarItem(
                     icon: Icons.workspace_premium_outlined,
                     title: 'Premium Akun',
+                    settings: settings,
                     onTap: () => Navigator.pop(context),
                   ),
                   _buildSidebarItem(
                     icon: Icons.info_outline_rounded,
                     title: 'About Us',
+                    settings: settings,
                     onTap: () => Navigator.pop(context),
                   ),
                 ],
               ),
             ),
-            const Divider(height: 1, color: Color(0xFFF1F5F9)),
+            Divider(height: 1, color: settings.textColor.withOpacity(0.1)),
             Padding(
               padding: const EdgeInsets.all(12),
               child: _buildSidebarItem(
                 icon: Icons.logout_rounded,
                 title: 'LogOut Akun',
+                settings: settings,
                 textColor: Colors.redAccent,
                 iconColor: Colors.redAccent,
                 onTap: () async {
-						  Navigator.pop(context); // Tutup drawer/sidebar
-
-						  if (context.mounted) {
-						    // 1. Bersihkan settings
-						    context.read<SettingsProvider>().clearSettings();
-
-						    // 2. Bersihkan state orders toko sebelumnya
-						    context.read<OrderProvider>().clearState();
-						  }
-
-						  // 3. Bersihkan database lokal dari memori
-						  await DatabaseHelper.instance.clearLocalOrders();
-
-						  // 4. Logout dari Supabase
-						  await Supabase.instance.client.auth.signOut();
-
-						  // 🟢 5. LEMPAR USER KEMBALI KE SPLASH SCREEN & SAPU CLEAN STACK SCREEN
-						  if (context.mounted) {
-						    Navigator.of(context).pushAndRemoveUntil(
-						      MaterialPageRoute(builder: (_) => SplashScreen()),
-						      (route) => false,
-						    );
-						  }
-						},				              
-					  ),
-		            ),
-		          ],
-		        ),
-		      ),
-		    );
-		  }
+                    // 🟢 1. Simpan rujukan Navigator sebelum proses async dimulai
+                    final navigator = Navigator.of(context);
+  
+                    // 🟢 2. Tutup sidebar drawer
+                    navigator.pop();
+  
+                    // 🟢 3. Tampilkan dialog loading
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (_) => PopScope(
+                        canPop: false,
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            color: settings.accentColor,
+                          ),
+                        ),
+                      ),
+                    );
+  
+                    // 🟢 4. Reset State Provider (Aman dengan try-catch)
+                    try {
+                      if (context.mounted) {
+                        context.read<SettingsProvider>().clearSettings();
+                        context.read<OrderProvider>().clearState();
+                      }
+                    } catch (e) {
+                      debugPrint('Error clear provider: $e');
+                    }
+  
+                    // 🟢 5. Hapus DB Lokal (Dibungkus try-catch agar jika gagal di Web/HP tidak nge-hang)
+                    try {
+                      await DatabaseHelper.instance.clearLocalOrders();
+                    } catch (e) {
+                      debugPrint('Error clear local DB: $e');
+                    }
+  
+                    // 🟢 6. Sign Out Supabase
+                    try {
+                      await Supabase.instance.client.auth.signOut();
+                    } catch (e) {
+                      debugPrint('Error sign out: $e');
+                    }
+  
+                    // 🟢 7. DIJAMIN PASTI DILEMPAR KE LOGIN SCREEN
+                    navigator.pushAndRemoveUntil(
+                      MaterialPageRoute(builder: (_) => const LoginScreen()),
+                      (route) => false,
+                    );
+                  },                             
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _buildSidebarItem({
     required IconData icon,
     required String title,
+    required SettingsProvider settings,
     required VoidCallback onTap,
-    Color textColor = const Color(0xFF334155),
-    Color iconColor = const Color(0xFF64748B),
+    Color? textColor,
+    Color? iconColor,
   }) {
+    final finalTextColor = textColor ?? settings.textColor;
+    final finalIconColor = iconColor ?? settings.textColor.withOpacity(0.7);
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Material(
@@ -608,18 +751,18 @@ class _KasirPageManagerState extends State<KasirPageManager> {
           dense: true,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           horizontalTitleGap: 12,
-          leading: Icon(icon, color: iconColor, size: 20),
-          title: Text(title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textColor)),
+          leading: Icon(icon, color: finalIconColor, size: 20),
+          title: Text(title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: finalTextColor)),
           onTap: onTap,
         ),
       ),
     );
   }
 
-  Widget _buildSectionDivider() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 6),
-      child: Divider(height: 1, color: Color(0xFFE2E8F0)),
+  Widget _buildSectionDivider(SettingsProvider settings) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Divider(height: 1, color: settings.textColor.withOpacity(0.1)),
     );
   }
 }

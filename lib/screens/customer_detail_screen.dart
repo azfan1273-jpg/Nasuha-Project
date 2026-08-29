@@ -26,7 +26,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
 
   // Filter Active
   String _selectedTimeFilter = 'Semua';
-  String _selectedMetricFilter = 'Harga';
+  String _selectedMetricFilter = 'Harga'; // Pilihan: 'Harga' atau 'Transaksi'
 
   @override
   void initState() {
@@ -38,7 +38,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     final String str = number.toInt().toString();
     final RegExp reg = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
     final String result = str.replaceAllMapped(reg, (Match m) => '${m[1]}.');
-    return 'Rp. $result';
+    return 'Rp $result';
   }
 
   Future<void> _fetchCustomerOrders() async {
@@ -53,7 +53,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       final customerPhone = widget.customer['phone'] ?? widget.customer['customer_phone'];
       final customerName = widget.customer['name'] ?? widget.customer['customer_name'];
 
-      // 🟢 1. Fetch Transaksi Pelanggan Ini Terisolasi Berdasarkan store_id
+      // 1. Fetch Transaksi Pelanggan Terisolasi store_id
       var query = Supabase.instance.client
           .from('orders')
           .select()
@@ -68,7 +68,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       final response = await query.order('created_at', ascending: false);
       final List<Map<String, dynamic>> fetched = List<Map<String, dynamic>>.from(response);
 
-      // 🟢 2. Fetch Total Omset Keseluruhan Toko Ini (Untuk Hitung % Kontribusi)
+      // 2. Fetch Total Omset Keseluruhan Toko
       final allOrdersResp = await Supabase.instance.client
           .from('orders')
           .select('total_price')
@@ -134,9 +134,18 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     });
   }
 
+  // 🟢 LOGIKA GRAFIK DINAMIS BERDASARKAN DROPDOWN (HARGA VS TRANSAKSI)
   List<FlSpot> _generateChartData() {
     if (_filteredOrders.isEmpty) {
-      return const [FlSpot(1, 0), FlSpot(5, 0), FlSpot(10, 0), FlSpot(15, 0), FlSpot(20, 0), FlSpot(25, 0), FlSpot(31, 0)];
+      return const [
+        FlSpot(1, 0),
+        FlSpot(5, 0),
+        FlSpot(10, 0),
+        FlSpot(15, 0),
+        FlSpot(20, 0),
+        FlSpot(25, 0),
+        FlSpot(31, 0)
+      ];
     }
 
     Map<int, double> dayMap = {1: 0, 5: 0, 10: 0, 15: 0, 20: 0, 25: 0, 31: 0};
@@ -144,14 +153,27 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     for (var o in _filteredOrders) {
       final dt = DateTime.tryParse(o['created_at']?.toString() ?? '');
       if (dt != null) {
-        final val = double.tryParse(o['total_price']?.toString() ?? '0') ?? 0;
+        double val = 0;
+        if (_selectedMetricFilter == 'Harga') {
+          val = double.tryParse(o['total_price']?.toString() ?? '0') ?? 0;
+        } else {
+          val = 1; // 🟢 Tambahkan 1 transaksi jika mode 'Transaksi'
+        }
+
         int targetDay = 1;
-        if (dt.day >= 28) targetDay = 31;
-        else if (dt.day >= 23) targetDay = 25;
-        else if (dt.day >= 18) targetDay = 20;
-        else if (dt.day >= 13) targetDay = 15;
-        else if (dt.day >= 8) targetDay = 10;
-        else if (dt.day >= 3) targetDay = 5;
+        if (dt.day >= 28) {
+          targetDay = 31;
+        } else if (dt.day >= 23) {
+          targetDay = 25;
+        } else if (dt.day >= 18) {
+          targetDay = 20;
+        } else if (dt.day >= 13) {
+          targetDay = 15;
+        } else if (dt.day >= 8) {
+          targetDay = 10;
+        } else if (dt.day >= 3) {
+          targetDay = 5;
+        }
 
         dayMap[targetDay] = (dayMap[targetDay] ?? 0) + val;
       }
@@ -168,39 +190,56 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     ];
   }
 
+  // Hitung Nilai Tertinggi Sumbu Y
+  double _getMaxY() {
+    final spots = _generateChartData();
+    double maxVal = 0;
+    for (var spot in spots) {
+      if (spot.y > maxVal) maxVal = spot.y;
+    }
+    if (_selectedMetricFilter == 'Transaksi') {
+      return maxVal < 4 ? 4 : maxVal + 1;
+    } else {
+      return maxVal < 50000 ? 50000 : maxVal * 1.2;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final settings = context.watch<SettingsProvider>();
     final name = (widget.customer['name'] ?? widget.customer['customer_name'] ?? 'Pelanggan').toString();
     final phone = (widget.customer['phone'] ?? widget.customer['customer_phone'] ?? '-').toString();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF0F5),
+      backgroundColor: settings.bgDark,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: Icon(Icons.arrow_back, color: settings.textColor),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           'Details Pelanggan',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18),
+          style: TextStyle(color: settings.textColor, fontWeight: FontWeight.bold, fontSize: 18),
         ),
         centerTitle: true,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(child: CircularProgressIndicator(color: settings.accentColor))
           : SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // CARD HEADER PELANGGAN
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF222224),
+                      color: settings.cardDark,
                       borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: settings.textColor.withOpacity(0.05)),
                     ),
                     child: Column(
                       children: [
@@ -208,7 +247,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                           children: [
                             CircleAvatar(
                               radius: 20,
-                              backgroundColor: Colors.grey.shade400,
+                              backgroundColor: settings.textColor.withOpacity(0.2),
+                              child: Icon(Icons.person, color: settings.textColor),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -217,11 +257,11 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                                 children: [
                                   Text(
                                     name,
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                                    style: TextStyle(color: settings.textColor, fontWeight: FontWeight.bold, fontSize: 16),
                                   ),
                                   Text(
                                     phone,
-                                    style: const TextStyle(color: Colors.grey, fontSize: 12),
+                                    style: TextStyle(color: settings.textColor.withOpacity(0.6), fontSize: 12),
                                   ),
                                 ],
                               ),
@@ -229,7 +269,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
-                                color: Colors.amber.shade700,
+                                color: settings.accentColor,
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: const Row(
@@ -247,9 +287,9 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceAround,
                           children: [
-                            _buildStatItem('Total Transaksi', '$_totalTransaksi', const Color(0xFF00E676)),
-                            _buildStatItem('Total Kontribusi', _formatRupiah(_totalKontribusi), const Color(0xFF00E676)),
-                            _buildStatItem('% kontribusi', '${_persenKontribusi.toStringAsFixed(0)}%', const Color(0xFF00E676)),
+                            _buildStatItem('Total Transaksi', '$_totalTransaksi', settings.accentColor, settings),
+                            _buildStatItem('Total Kontribusi', _formatRupiah(_totalKontribusi), settings.accentColor, settings),
+                            _buildStatItem('% Kontribusi', '${_persenKontribusi.toStringAsFixed(0)}%', settings.accentColor, settings),
                           ],
                         ),
                       ],
@@ -257,43 +297,54 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                   ),
                   const SizedBox(height: 16),
 
+                  // DROPDOWN PILIHAN METRIK GRAFIK
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF2C2C2E),
+                      color: settings.cardDark,
                       borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: settings.textColor.withOpacity(0.08)),
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
                         value: _selectedMetricFilter,
-                        dropdownColor: const Color(0xFF2C2C2E),
-                        icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        dropdownColor: settings.cardDark,
+                        icon: Icon(Icons.arrow_drop_down, color: settings.textColor),
+                        style: TextStyle(color: settings.textColor, fontWeight: FontWeight.bold, fontSize: 12),
                         onChanged: (val) {
-                          if (val != null) setState(() => _selectedMetricFilter = val);
+                          if (val != null) {
+                            setState(() => _selectedMetricFilter = val);
+                          }
                         },
                         items: ['Harga', 'Transaksi'].map((m) {
-                          return DropdownMenuItem(value: m, child: Text(m));
+                          return DropdownMenuItem(
+                            value: m,
+                            child: Text(m, style: TextStyle(color: settings.textColor)),
+                          );
                         }).toList(),
                       ),
                     ),
                   ),
                   const SizedBox(height: 10),
 
+                  // CONTAINER GRAFIK
                   Container(
                     height: 220,
                     width: double.infinity,
-                    padding: const EdgeInsets.only(top: 20, right: 16, left: 0, bottom: 10),
+                    padding: const EdgeInsets.only(top: 20, right: 16, left: 4, bottom: 10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF222224),
+                      color: settings.cardDark,
                       borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: settings.textColor.withOpacity(0.05)),
                     ),
                     child: LineChart(
                       LineChartData(
-                        gridData: const FlGridData(
+                        maxY: _getMaxY(),
+                        minY: 0,
+                        gridData: FlGridData(
                           show: true,
                           drawVerticalLine: false,
-                          getDrawingHorizontalLine: _getHorizontalLine,
+                          getDrawingHorizontalLine: (val) => FlLine(color: settings.textColor.withOpacity(0.08), strokeWidth: 1),
                         ),
                         titlesData: FlTitlesData(
                           rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -303,12 +354,23 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                               showTitles: true,
                               reservedSize: 55,
                               getTitlesWidget: (val, meta) {
-                                if (val == 0) return const Text('0', style: TextStyle(color: Colors.white70, fontSize: 10));
-                                if (val == 50000) return const Text('50,000', style: TextStyle(color: Colors.white70, fontSize: 10));
-                                if (val == 100000) return const Text('100,000', style: TextStyle(color: Colors.white70, fontSize: 10));
-                                if (val == 150000) return const Text('150,000', style: TextStyle(color: Colors.white70, fontSize: 10));
-                                if (val == 200000) return const Text('200,000', style: TextStyle(color: Colors.white70, fontSize: 10));
-                                return Container();
+                                if (val < 0) return const SizedBox.shrink();
+                                String label = '';
+                                if (_selectedMetricFilter == 'Transaksi') {
+                                  if (val % 1 == 0) label = val.toInt().toString();
+                                } else {
+                                  if (val >= 1000000) {
+                                    label = '${(val / 1000000).toStringAsFixed(1)}M';
+                                  } else if (val >= 1000) {
+                                    label = '${(val / 1000).toInt()}k';
+                                  } else {
+                                    label = val.toInt().toString();
+                                  }
+                                }
+                                return Text(
+                                  label,
+                                  style: TextStyle(color: settings.textColor.withOpacity(0.6), fontSize: 10),
+                                );
                               },
                             ),
                           ),
@@ -318,7 +380,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                               getTitlesWidget: (val, meta) {
                                 return Text(
                                   '${val.toInt()}',
-                                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                  style: TextStyle(color: settings.textColor, fontSize: 11, fontWeight: FontWeight.bold),
                                 );
                               },
                             ),
@@ -329,7 +391,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                           LineChartBarData(
                             spots: _generateChartData(),
                             isCurved: true,
-                            color: const Color(0xFF00E676),
+                            color: settings.accentColor,
                             barWidth: 2,
                             isStrokeCapRound: true,
                             dotData: const FlDotData(show: true),
@@ -340,10 +402,11 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                   ),
                   const SizedBox(height: 14),
 
+                  // FILTER WAKTU (SEMUA, MINGGU, BULAN, TAHUN)
                   Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF3A3A3C),
+                      color: settings.cardDark,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
@@ -355,12 +418,16 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                             decoration: BoxDecoration(
-                              color: isSel ? Colors.grey.shade600 : Colors.transparent,
+                              color: isSel ? settings.accentColor : Colors.transparent,
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
                               f,
-                              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                              style: TextStyle(
+                                color: isSel ? Colors.white : settings.textColor,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         );
@@ -369,8 +436,17 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                   ),
                   const SizedBox(height: 14),
 
+                  // LIST TRANSAKSI PELANGGAN
                   _filteredOrders.isEmpty
-                      ? const Center(child: Padding(padding: EdgeInsets.all(20), child: Text('Belum ada transaksi')))
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Text(
+                              'Belum ada transaksi',
+                              style: TextStyle(color: settings.textColor.withOpacity(0.6)),
+                            ),
+                          ),
+                        )
                       : ListView.builder(
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
@@ -378,7 +454,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                           itemBuilder: (context, index) {
                             final item = _filteredOrders[index];
                             final num price = num.tryParse(item['total_price']?.toString() ?? '0') ?? 0;
-                            final String nota = item['nota_number'] ?? 'lndr - ${(item['id'] ?? 0).toString().padLeft(5, '0')}';
+                            final String nota = item['nota_number'] ?? 'LNDR-${(item['id'] ?? 0).toString().padLeft(5, '0')}';
                             final String rawDate = item['created_at'] ?? '';
 
                             return GestureDetector(
@@ -395,8 +471,9 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                                 margin: const EdgeInsets.only(bottom: 8),
                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF3A3A3C),
+                                  color: settings.cardDark,
                                   borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: settings.textColor.withOpacity(0.05)),
                                 ),
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -406,18 +483,18 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                                       children: [
                                         Text(
                                           _formatDateReadable(rawDate),
-                                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                          style: TextStyle(color: settings.textColor, fontSize: 12, fontWeight: FontWeight.bold),
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
                                           nota,
-                                          style: const TextStyle(color: Colors.grey, fontSize: 11),
+                                          style: TextStyle(color: settings.textColor.withOpacity(0.6), fontSize: 11),
                                         ),
                                       ],
                                     ),
                                     Text(
                                       _formatRupiah(price),
-                                      style: const TextStyle(color: Color(0xFF00E676), fontSize: 12, fontWeight: FontWeight.bold),
+                                      style: TextStyle(color: settings.accentColor, fontSize: 12, fontWeight: FontWeight.bold),
                                     ),
                                   ],
                                 ),
@@ -431,12 +508,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     );
   }
 
-  static FlLine _getHorizontalLine(double value) => const FlLine(color: Colors.white10, strokeWidth: 1);
-
-  Widget _buildStatItem(String title, String value, Color valueColor) {
+  Widget _buildStatItem(String title, String value, Color valueColor, SettingsProvider settings) {
     return Column(
       children: [
-        Text(title, style: const TextStyle(color: Colors.grey, fontSize: 10)),
+        Text(title, style: TextStyle(color: settings.textColor.withOpacity(0.6), fontSize: 10)),
         const SizedBox(height: 4),
         Text(value, style: TextStyle(color: valueColor, fontWeight: FontWeight.bold, fontSize: 13)),
       ],
