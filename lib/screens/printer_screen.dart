@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:blue_thermal_printer/blue_thermal_printer.dart';
+import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import '../providers/settings_provider.dart';
-import '../main.dart'; // Sesuaikan lokasi import supabase client kamu
+import '../main.dart'; // Client Supabase
 
 class PrinterScreen extends StatefulWidget {
   const PrinterScreen({super.key});
@@ -16,10 +17,8 @@ class _PrinterScreenState extends State<PrinterScreen> {
   static const Color _purpleAccent = Color(0xFF9333EA);
   static const Color _textBlack = Color(0xFF111827);
 
-  final BlueThermalPrinter _bluetooth = BlueThermalPrinter.instance;
-
-  List<BluetoothDevice> _devices = [];
-  BluetoothDevice? _selectedDevice;
+  List<BluetoothInfo> _devices = [];
+  BluetoothInfo? _selectedDevice;
   bool _isConnected = false;
   bool _isSearching = false;
 
@@ -45,7 +44,6 @@ class _PrinterScreenState extends State<PrinterScreen> {
     super.initState();
     _checkCurrentConnection();
     
-    // BACA PENGATURAN LANGSUNG DARI SETTINGSPROVIDER
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadSettingsFromProvider();
     });
@@ -61,7 +59,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
     super.dispose();
   }
 
-  // 🔹 1. BACA PENGATURAN DARI SETTINGSPROVIDER (EFISIEN, TANPA QUERY REPETITIF)
+  // 1. BACA PENGATURAN DARI SETTINGSPROVIDER
   void _loadSettingsFromProvider() {
     final settingsProv = context.read<SettingsProvider>();
     _storeId = settingsProv.storeId;
@@ -84,7 +82,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
     }
   }
 
-  // 🔹 2. SIMPAN / UPSERT PENGATURAN KE SUPABASE & SINKRONKAN KE PROVIDER
+  // 2. SIMPAN PENGATURAN KE SUPABASE
   Future<void> _saveSettingsToSupabase() async {
     if (_storeId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -109,13 +107,10 @@ class _PrinterScreenState extends State<PrinterScreen> {
         'paper_size': _selectedPaperSize,
       };
 
-      // Upsert: update jika store_id ada, insert jika belum ada row
       await supabase.from('store_settings').upsert(payload, onConflict: 'store_id');
 
       if (mounted) {
-        // 🟢 SINKRONKAN STATE DENGAN MENGHUBUNGKAN KE PROVIDER
         await context.read<SettingsProvider>().fetchStoreSettings();
-
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Pengaturan Nota berhasil disimpan!')),
         );
@@ -131,36 +126,82 @@ class _PrinterScreenState extends State<PrinterScreen> {
     }
   }
 
-  // 🔹 LOGIKA BLUETOOTH PRINTER
+  // 3. LOGIKA PRINTER BLUETOOTH DENGAN PRINT_BLUETOOTH_THERMAL
   Future<void> _checkCurrentConnection() async {
-    bool? isConnected = await _bluetooth.isConnected;
-    if (isConnected == true) {
-      setState(() => _isConnected = true);
+    bool isConnected = await PrintBluetoothThermal.connectionStatus;
+    if (mounted) {
+      setState(() => _isConnected = isConnected);
     }
   }
 
   Future<void> _scanDevices() async {
     setState(() => _isSearching = true);
-    try {
-      List<BluetoothDevice> devices = await _bluetooth.getBondedDevices();
-      setState(() {
-        _devices = devices;
-        _isSearching = false;
-      });
-    } catch (_) {
-      setState(() => _isSearching = false);
+
+    // Minta Perizinan Runtime Bluetooth & Lokasi
+    Map<Permission, PermissionStatus> statuses = await [
+      Permission.bluetoothScan,
+      Permission.bluetoothConnect,
+      Permission.location,
+    ].request();
+
+    if (statuses[Permission.bluetoothConnect]!.isGranted ||
+        statuses[Permission.bluetoothScan]!.isGranted) {
+      try {
+        final List<BluetoothInfo> listResult = await PrintBluetoothThermal.pairedBluetooths;
+        setState(() {
+          _devices = listResult;
+          _isSearching = false;
+        });
+
+        if (listResult.isEmpty && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Tidak ada printer paired. Sambungkan printer terlebih dahulu di Settings Bluetooth HP.')),
+          );
+        }
+      } catch (e) {
+        if (mounted) setState(() => _isSearching = false);
+      }
+    } else {
+      if (mounted) {
+        setState(() => _isSearching = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Izin Bluetooth ditolak.')),
+        );
+      }
     }
   }
 
-  Future<void> _connectToDevice(BluetoothDevice device) async {
+  Future<void> _connectToDevice(BluetoothInfo device) async {
     try {
-      if (_isConnected) await _bluetooth.disconnect();
-      await _bluetooth.connect(device);
-      setState(() {
-        _selectedDevice = device;
-        _isConnected = true;
-      });
-    } catch (_) {}
+      if (_isConnected) {
+        await PrintBluetoothThermal.disconnect;
+        setState(() => _isConnected = false);
+      }
+
+      final bool result = await PrintBluetoothThermal.connect(macPrinterAddress: device.macAdress);
+
+      if (mounted) {
+        if (result) {
+          setState(() {
+            _selectedDevice = device;
+            _isConnected = true;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Berhasil terhubung ke ${device.name}')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal terhubung ke ${device.name}')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error koneksi: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -227,10 +268,11 @@ class _PrinterScreenState extends State<PrinterScreen> {
                   separatorBuilder: (_, __) => const Divider(height: 1),
                   itemBuilder: (context, index) {
                     final device = _devices[index];
-                    final isThisConnected = _selectedDevice?.address == device.address && _isConnected;
+                    final isThisConnected = _selectedDevice?.macAdress == device.macAdress && _isConnected;
                     return ListTile(
                       dense: true,
-                      title: Text(device.name ?? 'Device', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      title: Text(device.name.isNotEmpty ? device.name : 'Unknown Device', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      subtitle: Text(device.macAdress, style: const TextStyle(fontSize: 10, color: Colors.black45)),
                       trailing: ElevatedButton(
                         style: ElevatedButton.styleFrom(backgroundColor: isThisConnected ? Colors.redAccent : _purpleAccent),
                         onPressed: () => _connectToDevice(device),
