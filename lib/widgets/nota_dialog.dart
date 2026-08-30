@@ -35,9 +35,15 @@ class _NotaDialogState extends State<NotaDialog> {
     }
   }
 
-  // 🟢 FUNGSI EKSEKUSI CETAK THERMAL REAL-TIME
+  // 🟢 FUNGSI PEMBANTU RATA KIRI-KANAN DINAMIS (SESUAI UKURAN KERTAS)
+  String _formatTwoColumns(String left, String right, {int width = 32}) {
+    int spaceCount = width - left.length - right.length;
+    if (spaceCount < 1) spaceCount = 1;
+    return '$left${' ' * spaceCount}$right';
+  }
+
+  // 🟢 FUNGSI EKSEKUSI CETAK THERMAL REAL-TIME (SINKRON DENGAN PENGATURAN)
   Future<void> _printReceiptToBluetooth(BuildContext context, bool isCustomerMode) async {
-    // 1. Cek Koneksi Fisik Printer
     bool isConnected = await PrintBluetoothThermal.connectionStatus;
     if (!isConnected) {
       if (context.mounted) {
@@ -51,21 +57,32 @@ class _NotaDialogState extends State<NotaDialog> {
     final settingsProv = context.read<SettingsProvider>();
     final storeSettings = settingsProv.storeSettings;
     
+    // 1. AMBIL INPUT MANUAL & SWITCH TOGGLE DARI SETTINGS
     final String namaToko = settingsProv.namaToko.isNotEmpty ? settingsProv.namaToko.toUpperCase() : 'NAMA TOKO';
     final String subHeader = storeSettings?['header_nama_toko'] ?? '';
+    final String headerHp = storeSettings?['header_hp'] ?? '';
     final String footerNota = storeSettings?['footer_nota'] ?? '';
+    
+    final bool showNamaKasir = storeSettings?['show_nama_kasir'] ?? true;
     final bool showFooter = storeSettings?['show_footer_nota'] ?? true;
+    final String paperSize = storeSettings?['paper_size'] ?? '58 mm';
+    
+    // Tentukan lebar karakter (58mm = 32 char, 80mm = 48 char)
+    final int printWidth = (paperSize == '80 mm') ? 48 : 32;
 
+    // 2. PARSING DATA TRANSAKSI
     final String nota = (widget.order['nota_number'] ?? 'LNDR-${(widget.order['id'] ?? 0).toString().padLeft(5, '0')}').toString();
     final String customerName = (widget.order['customer_name'] ?? 'Pelanggan').toString();
+    final String kasirName = (widget.order['kasir_name'] ?? widget.order['user_name'] ?? 'Admin').toString();
     final String parfum = (widget.order['parfum'] ?? 'Standard').toString();
     final String paymentStatus = (widget.order['status_pembayaran'] ?? widget.order['payment_status'] ?? 'Belum Lunas').toString();
     final String createdDate = _formatTanggal(widget.order['created_at']);
     final String estDate = _formatTanggal(widget.order['estimated_at']);
     final String notes = (widget.order['catatan'] ?? widget.order['notes'] ?? '-').toString();
     final num totalPrice = num.tryParse(widget.order['total_price']?.toString() ?? '0') ?? 0;
+    final num discount = num.tryParse(widget.order['discount']?.toString() ?? '0') ?? 0;
+    final num subTotal = totalPrice + discount;
 
-    // Items List untuk cetak
     final List<dynamic> itemsFromDb = widget.order['order_items'] is List ? widget.order['order_items'] : [];
     final List<Map<String, dynamic>> itemsList = [];
 
@@ -81,53 +98,81 @@ class _NotaDialogState extends State<NotaDialog> {
       }
     }
 
-    // Susun Teks Struk ESC/POS
+    final String lineDivider = '-' * printWidth;
+    final String doubleDivider = '=' * printWidth;
+
     StringBuffer sb = StringBuffer();
 
     if (isCustomerMode) {
+      // 🟢 HEADER TOKO & NO HP MANUAL
       sb.writeln(namaToko);
       if (subHeader.isNotEmpty) sb.writeln(subHeader);
-      sb.writeln("--------------------------------");
-      sb.writeln("Pelanggan : $customerName");
-      sb.writeln("No. Nota  : $nota");
-      sb.writeln("Masuk     : $createdDate");
-      sb.writeln("Selesai   : $estDate");
-      sb.writeln("--------------------------------");
+      if (headerHp.isNotEmpty && headerHp != '{{HP :}}') sb.writeln("No. HP: $headerHp");
+      sb.writeln(lineDivider);
+      
+      // 🟢 PELANGGAN, NOTA, & NAMA KASIR (JIKA SWITCH AKTIF)
+      sb.writeln(customerName.toUpperCase());
+      sb.writeln(nota);
+      if (showNamaKasir) {
+        sb.writeln(_formatTwoColumns("Kasir:", kasirName, width: printWidth));
+      }
+      sb.writeln();
+      
+      // TANGGAL
+      sb.writeln(_formatTwoColumns("Tgl Masuk", createdDate, width: printWidth));
+      sb.writeln(_formatTwoColumns("Est. Selesai", estDate, width: printWidth));
+      sb.writeln(lineDivider);
+      
+      // ITEMS
       for (var item in itemsList) {
         final name = (item['service_name'] ?? 'Layanan').toString();
         final unit = (item['unit'] ?? 'kg').toString();
         final qty = (item['qty'] ?? 1).toString();
-        sb.writeln("$name x$qty $unit");
+        sb.writeln(_formatTwoColumns(name, "$qty $unit", width: printWidth));
       }
-      sb.writeln("--------------------------------");
-      sb.writeln("Parfum    : $parfum");
-      sb.writeln("Status    : ${paymentStatus.toUpperCase()}");
-      sb.writeln("TOTAL     : ${_formatRupiah(totalPrice)}");
-      sb.writeln("--------------------------------");
+      sb.writeln(lineDivider);
+      
+      // PARFUM & STATUS
+      sb.writeln(_formatTwoColumns("Parfum:", parfum, width: printWidth));
+      sb.writeln(_formatTwoColumns("STATUS:", paymentStatus.toUpperCase(), width: printWidth));
+      if (notes != '-' && notes.isNotEmpty) {
+        sb.writeln("(Ket: $notes)");
+      }
+      sb.writeln(lineDivider);
+      
+      // RINCIAN HARGA LENGKAP
+      sb.writeln(_formatTwoColumns("Sub Total", _formatRupiah(subTotal), width: printWidth));
+      sb.writeln(_formatTwoColumns("Discount", _formatRupiah(discount), width: printWidth));
+      sb.writeln(_formatTwoColumns("TOTAL", _formatRupiah(totalPrice), width: printWidth));
+      sb.writeln(lineDivider);
+      
+      // 🟢 FOOTER NOTA MANUAL (JIKA SWITCH AKTIF)
       if (showFooter && footerNota.isNotEmpty) {
         sb.writeln(footerNota);
+        sb.writeln();
       }
       sb.writeln("**** TERIMA KASIH ****\n\n\n");
     } else {
+      // MODE PRODUKSI
       sb.writeln("[ NOTA PRODUKSI / WORKSHOP ]");
       sb.writeln(namaToko);
-      sb.writeln("NO: $nota");
+      sb.writeln(nota);
       sb.writeln("Pelanggan: $customerName");
-      sb.writeln("================================");
+      sb.writeln(doubleDivider);
       for (var item in itemsList) {
         final name = (item['service_name'] ?? 'Layanan').toString();
         final unit = (item['unit'] ?? 'Pcs').toString();
         final qty = (item['qty'] ?? 1).toString();
-        sb.writeln("$name ($qty $unit)");
+        sb.writeln(_formatTwoColumns(name, "[$qty $unit]", width: printWidth));
       }
-      sb.writeln("================================");
-      sb.writeln("PARFUM: ${parfum.toUpperCase()}");
-      sb.writeln("DEADLINE: $estDate");
-      sb.writeln("CATATAN: $notes");
-      sb.writeln("================================\n\n\n");
+      sb.writeln(doubleDivider);
+      sb.writeln(_formatTwoColumns("PARFUM:", parfum.toUpperCase(), width: printWidth));
+      sb.writeln(_formatTwoColumns("TGL MASUK:", createdDate, width: printWidth));
+      sb.writeln(_formatTwoColumns("DEADLINE:", estDate, width: printWidth));
+      sb.writeln("CATATAN PRODUKSI:\n$notes");
+      sb.writeln("$doubleDivider\n\n\n");
     }
 
-    // 2. Kirim Perintah Data ke Mesin Printer
     bool result = await PrintBluetoothThermal.writeString(
       printText: PrintTextSize(size: 1, text: sb.toString()),
     );
