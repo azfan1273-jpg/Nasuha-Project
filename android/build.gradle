@@ -1,0 +1,29 @@
+// LOKASI: android/build.gradle
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.buildDir = '../build'
+subprojects {
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
+}
+subprojects {
+    project.evaluationDependsOn(':app')
+}
+
+tasks.register("clean", Delete) {
+    delete rootProject.buildDir
+}
+
+// 🟢 PERBAIKAN STABIL: Menggunakan plugins.withId agar namespace disuntikkan secara presisi
+subprojects {
+    plugins.withId('com.android.library') {
+        if (!project.android.hasProperty('namespace') || project.android.namespace == null) {
+            project.android.namespace = "com.example.${project.name.replaceAll('-', '_')}"
+        }
+    }
+}
