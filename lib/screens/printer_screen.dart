@@ -46,6 +46,13 @@ class _PrinterScreenState extends State<PrinterScreen> {
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadSettingsFromProvider();
+       // 🟢 BACAKAN REKAMAN PRINTER YANG TERHUBUNG DI PROVIDER
+      final savedPrinter = context.read<SettingsProvider>().selectedPrinter;
+      if (savedPrinter != null && mounted) {
+        setState(() {
+          _selectedDevice = savedPrinter;
+        });
+      }
     });
   }
 
@@ -171,39 +178,48 @@ class _PrinterScreenState extends State<PrinterScreen> {
     }
   }
 
-  Future<void> _connectToDevice(BluetoothInfo device) async {
-    try {
-      if (_isConnected) {
-        await PrintBluetoothThermal.disconnect;
-        setState(() => _isConnected = false);
-      }
-
-      final bool result = await PrintBluetoothThermal.connect(macPrinterAddress: device.macAdress);
-
-      if (mounted) {
-        if (result) {
-          setState(() {
-            _selectedDevice = device;
-            _isConnected = true;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Berhasil terhubung ke ${device.name}')),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Gagal terhubung ke ${device.name}')),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error koneksi: $e')),
-        );
-      }
-    }
-  }
-
+ Future<void> _connectToDevice(BluetoothInfo device) async {
+     try {
+       if (_isConnected) {
+         await PrintBluetoothThermal.disconnect;
+         if (mounted) {
+           context.read<SettingsProvider>().setSelectedPrinter(null);
+           setState(() {
+             _selectedDevice = null;
+             _isConnected = false;
+           });
+         }
+       }
+ 
+       final bool result = await PrintBluetoothThermal.connect(macPrinterAddress: device.macAdress);
+ 
+       if (mounted) {
+         if (result) {
+           // 🟢 Simpan ke Provider global supaya tidak lupa saat pindah layar
+           context.read<SettingsProvider>().setSelectedPrinter(device);
+ 
+           setState(() {
+             _selectedDevice = device;
+             _isConnected = true;
+           });
+           ScaffoldMessenger.of(context).showSnackBar(
+             SnackBar(content: Text('Berhasil terhubung ke ${device.name}')),
+           );
+         } else {
+           ScaffoldMessenger.of(context).showSnackBar(
+             SnackBar(content: Text('Gagal terhubung ke ${device.name}')),
+           );
+         }
+       }
+     } catch (e) {
+       if (mounted) {
+         ScaffoldMessenger.of(context).showSnackBar(
+           SnackBar(content: Text('Error koneksi: $e')),
+         );
+       }
+     }
+   }
+          
   @override
   Widget build(BuildContext context) {
     return Scaffold(

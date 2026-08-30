@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 
 class SettingsProvider with ChangeNotifier {
   // --- STORE & PROFILE DATA ---
@@ -11,6 +12,10 @@ class SettingsProvider with ChangeNotifier {
 
   Map<String, dynamic>? _storeSettings;
   bool _isLoading = false;
+
+  // 🟢 TAMBAHKAN DEKLARASI VARIABEL PRINTER DI SINI:
+    BluetoothInfo? _selectedPrinter;
+    BluetoothInfo? get selectedPrinter => _selectedPrinter;
 
   // --- DYNAMIC THEME STATE ---
   // Mode: 'default' (Pink) | 'gold' (Hitam Emas)
@@ -164,5 +169,11 @@ class SettingsProvider with ChangeNotifier {
     _storeSettings = null;
     _selectedTheme = 'default';
     notifyListeners();
-  }  
+  } 
+
+ // 🟢 SETTER TERHUBUNG DENGAN VARIABEL DI ATAS
+  void setSelectedPrinter(BluetoothInfo? device) {
+    _selectedPrinter = device;
+    notifyListeners();
+  }
 }

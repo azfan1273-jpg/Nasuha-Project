@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import '../providers/settings_provider.dart';
 
 class NotaDialog extends StatefulWidget {
@@ -34,9 +35,113 @@ class _NotaDialogState extends State<NotaDialog> {
     }
   }
 
+  // 🟢 FUNGSI EKSEKUSI CETAK THERMAL REAL-TIME
+  Future<void> _printReceiptToBluetooth(BuildContext context, bool isCustomerMode) async {
+    // 1. Cek Koneksi Fisik Printer
+    bool isConnected = await PrintBluetoothThermal.connectionStatus;
+    if (!isConnected) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Printer tidak terhubung! Hubungkan di menu Printer & Nota.')),
+        );
+      }
+      return;
+    }
+
+    final settingsProv = context.read<SettingsProvider>();
+    final storeSettings = settingsProv.storeSettings;
+    
+    final String namaToko = settingsProv.namaToko.isNotEmpty ? settingsProv.namaToko.toUpperCase() : 'NAMA TOKO';
+    final String subHeader = storeSettings?['header_nama_toko'] ?? '';
+    final String footerNota = storeSettings?['footer_nota'] ?? '';
+    final bool showFooter = storeSettings?['show_footer_nota'] ?? true;
+
+    final String nota = (widget.order['nota_number'] ?? 'LNDR-${(widget.order['id'] ?? 0).toString().padLeft(5, '0')}').toString();
+    final String customerName = (widget.order['customer_name'] ?? 'Pelanggan').toString();
+    final String parfum = (widget.order['parfum'] ?? 'Standard').toString();
+    final String paymentStatus = (widget.order['status_pembayaran'] ?? widget.order['payment_status'] ?? 'Belum Lunas').toString();
+    final String createdDate = _formatTanggal(widget.order['created_at']);
+    final String estDate = _formatTanggal(widget.order['estimated_at']);
+    final String notes = (widget.order['catatan'] ?? widget.order['notes'] ?? '-').toString();
+    final num totalPrice = num.tryParse(widget.order['total_price']?.toString() ?? '0') ?? 0;
+
+    // Items List untuk cetak
+    final List<dynamic> itemsFromDb = widget.order['order_items'] is List ? widget.order['order_items'] : [];
+    final List<Map<String, dynamic>> itemsList = [];
+
+    if (itemsFromDb.isNotEmpty) {
+      for (var item in itemsFromDb) {
+        if (item is Map) itemsList.add(Map<String, dynamic>.from(item));
+      }
+    } else {
+      final String rawServices = (widget.order['service_name'] ?? '').toString();
+      for (var s in rawServices.split(',')) {
+        final trimmed = s.trim();
+        if (trimmed.isNotEmpty) itemsList.add({'service_name': trimmed, 'qty': 1});
+      }
+    }
+
+    // Susun Teks Struk ESC/POS
+    StringBuffer sb = StringBuffer();
+
+    if (isCustomerMode) {
+      sb.writeln(namaToko);
+      if (subHeader.isNotEmpty) sb.writeln(subHeader);
+      sb.writeln("--------------------------------");
+      sb.writeln("Pelanggan : $customerName");
+      sb.writeln("No. Nota  : $nota");
+      sb.writeln("Masuk     : $createdDate");
+      sb.writeln("Selesai   : $estDate");
+      sb.writeln("--------------------------------");
+      for (var item in itemsList) {
+        final name = (item['service_name'] ?? 'Layanan').toString();
+        final unit = (item['unit'] ?? 'kg').toString();
+        final qty = (item['qty'] ?? 1).toString();
+        sb.writeln("$name x$qty $unit");
+      }
+      sb.writeln("--------------------------------");
+      sb.writeln("Parfum    : $parfum");
+      sb.writeln("Status    : ${paymentStatus.toUpperCase()}");
+      sb.writeln("TOTAL     : ${_formatRupiah(totalPrice)}");
+      sb.writeln("--------------------------------");
+      if (showFooter && footerNota.isNotEmpty) {
+        sb.writeln(footerNota);
+      }
+      sb.writeln("**** TERIMA KASIH ****\n\n\n");
+    } else {
+      sb.writeln("[ NOTA PRODUKSI / WORKSHOP ]");
+      sb.writeln(namaToko);
+      sb.writeln("NO: $nota");
+      sb.writeln("Pelanggan: $customerName");
+      sb.writeln("================================");
+      for (var item in itemsList) {
+        final name = (item['service_name'] ?? 'Layanan').toString();
+        final unit = (item['unit'] ?? 'Pcs').toString();
+        final qty = (item['qty'] ?? 1).toString();
+        sb.writeln("$name ($qty $unit)");
+      }
+      sb.writeln("================================");
+      sb.writeln("PARFUM: ${parfum.toUpperCase()}");
+      sb.writeln("DEADLINE: $estDate");
+      sb.writeln("CATATAN: $notes");
+      sb.writeln("================================\n\n\n");
+    }
+
+    // 2. Kirim Perintah Data ke Mesin Printer
+    bool result = await PrintBluetoothThermal.writeString(
+      printText: PrintTextSize(size: 1, text: sb.toString()),
+    );
+
+    if (!result && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gagal mengirim data ke mesin printer!')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // 🟢 1. AKSES STATE DARI SETTINGSPROVIDER
+    // 1. AKSES STATE DARI SETTINGSPROVIDER
     final settingsProv = context.watch<SettingsProvider>();
     final storeSettings = settingsProv.storeSettings;
 
@@ -202,15 +307,17 @@ class _NotaDialogState extends State<NotaDialog> {
                   backgroundColor: _selectedMode == 'customer' ? Colors.blue : Colors.orange,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                onPressed: () {
+                onPressed: () async {
+                  final isCustomer = _selectedMode == 'customer';
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        'Mengirim ${_selectedMode == 'customer' ? 'Nota Customer' : 'Nota Produksi'} ke Printer...',
+                        'Mengirim ${isCustomer ? 'Nota Customer' : 'Nota Produksi'} ke Printer...',
                       ),
                     ),
                   );
+                  await _printReceiptToBluetooth(context, isCustomer);
                 },
                 icon: const Icon(Icons.print, color: Colors.white, size: 18),
                 label: Text(
@@ -225,7 +332,7 @@ class _NotaDialogState extends State<NotaDialog> {
     );
   }
 
-  // 🟢 BUILDER PREVIEW NOTA CUSTOMER (LAYOUT REVISI TERBARU)
+  // BUILDER PREVIEW NOTA CUSTOMER
   Widget _buildCustomerReceipt({
     required String namaToko,
     required String subHeader,
@@ -248,7 +355,7 @@ class _NotaDialogState extends State<NotaDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // 1. NAMA TOKO & SUB HEADER (CENTER)
+        // 1. NAMA TOKO & SUB HEADER
         Text(
           namaToko,
           textAlign: TextAlign.center,
@@ -266,7 +373,7 @@ class _NotaDialogState extends State<NotaDialog> {
         const SizedBox(height: 6),
         Text('---------------------------------------------------', style: TextStyle(fontSize: 10, color: Colors.grey.shade400)),
 
-        // 2. NAMA PELANGGAN & NOTA (CENTER)
+        // 2. NAMA PELANGGAN & NOTA
         Text(
           customerName.toUpperCase(),
           textAlign: TextAlign.center,
@@ -396,7 +503,7 @@ class _NotaDialogState extends State<NotaDialog> {
     );
   }
 
-  // BUILDER PREVIEW NOTA PRODUKSI (SIMPLE TAG)
+  // BUILDER PREVIEW NOTA PRODUKSI
   Widget _buildProduksiReceipt({
     required String namaToko,
     required String nota,
