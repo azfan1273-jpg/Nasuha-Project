@@ -33,40 +33,38 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
   }
 
   // AMBIL DATA TERISOLASI BERDASARKAN STORE_ID
-    Future<void> _fetchOrders() async {
-      if (!mounted) return;
-      setState(() => _isLoading = true);
-  
-      try {
-        // 1. Ambil store_id langsung dari SettingsProvider
-        final currentStoreId = context.read<SettingsProvider>().storeId;
-  
-        if (currentStoreId == null) {
-          debugPrint('Log: store_id tidak ditemukan');
-          return;
-        }
-  
-        // 2. Ambil data orders berdasarkan store_id
-        final List<dynamic> data = await supabase
-            .from('orders')
-            .select('*, order_items(*)')
-            .eq('store_id', currentStoreId)
-            .order('created_at', ascending: false);
-  
-        if (mounted) {
-          setState(() {
-            _allOrders.clear();
-            _allOrders.addAll(List<Map<String, dynamic>>.from(data));
-          });
-        }
-      } catch (e) {
-        debugPrint('Error fetch orders: $e');
-      } finally {
-        if (mounted) {
-          setState(() => _isLoading = false);
-        }
+  Future<void> _fetchOrders() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final currentStoreId = context.read<SettingsProvider>().storeId;
+
+      if (currentStoreId == null) {
+        debugPrint('Log: store_id tidak ditemukan');
+        return;
+      }
+
+      final List<dynamic> data = await supabase
+          .from('orders')
+          .select('*, order_items(*)')
+          .eq('store_id', currentStoreId)
+          .order('created_at', ascending: false);
+
+      if (mounted) {
+        setState(() {
+          _allOrders.clear();
+          _allOrders.addAll(List<Map<String, dynamic>>.from(data));
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetch orders: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
       }
     }
+  }
 
   // HITUNG JUMLAH ORDER UNTUK COUNTER TAB
   int _countOrdersByStatus(String filterKey) {
@@ -79,6 +77,8 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
           return status == 'PROSES' || status == 'PREPARED';
         case 'DELIVERED':
           return status == 'SELESAI' || status == 'DELIVERED';
+        case 'CANCELED': // 🟢 Filter Batal
+          return status == 'BATAL' || status == 'CANCEL' || status == 'CANCELED';
         default:
           return false;
       }
@@ -103,6 +103,8 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
           return status == 'PROSES' || status == 'PREPARED';
         case 'DELIVERED':
           return status == 'SELESAI' || status == 'DELIVERED';
+        case 'CANCELED': // 🟢 Filter Batal
+          return status == 'BATAL' || status == 'CANCEL' || status == 'CANCELED';
         default:
           return true;
       }
@@ -165,21 +167,23 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
                 ),
                 const SizedBox(height: 12),
                 
-                // HORIZONTAL TAB FILTER (PENDING, PREPARED, DELIVERED)
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
-                    borderRadius: BorderRadius.circular(25),
+                // HORIZONTAL TAB FILTER
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(25),
+                    ),
+                    child: Row(
+                      children: [
+                        _buildTabButton('PENDING', 'Pending', settings),
+                        _buildTabButton('PREPARED', 'Prepared', settings),
+                        _buildTabButton('DELIVERED', 'Delivered', settings),
+                        _buildTabButton('CANCELED', 'Batal', settings),
+                      ],
+                    ),
                   ),
-                  child: Row(
-                    children: [
-                      _buildTabButton('PENDING', 'Pending', settings),
-                      _buildTabButton('PREPARED', 'Prepared', settings),
-                      _buildTabButton('DELIVERED', 'Delivered', settings),
-                    ],
-                  ),
-                ),
               ],
             ),
           ),
@@ -226,44 +230,47 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
           _buildTransactionButton(settings),
         ],
       ),
-    );
+    );  
   }
 
   Widget _buildTabButton(String filterKey, String label, SettingsProvider settings) {
-    final bool isSelected = _selectedFilter == filterKey;
-    final int count = _countOrdersByStatus(filterKey);
-
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _selectedFilter = filterKey),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: isSelected ? Colors.white : Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : [],
-          ),
-          child: Text(
-            '$label ($count)',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-              color: isSelected ? Colors.black87 : Colors.black54,
+      final bool isSelected = _selectedFilter == filterKey;
+      final int count = _countOrdersByStatus(filterKey);
+  
+      return Expanded(
+        child: GestureDetector(
+          onTap: () => setState(() => _selectedFilter = filterKey),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              // 🟢 Warna saat dipilih menggunakan warna tema/cardDark
+              color: isSelected ? settings.cardDark : Colors.transparent,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: isSelected
+                  ? [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ]
+                  : [],
+            ),
+            child: Text(
+              '$label ($count)',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                // 🟢 Teks aktif memakai accentColor/textColor tema
+                color: isSelected ? settings.accentColor : Colors.black54,
+              ),
             ),
           ),
         ),
-      ),
-    );
-  }
+      );
+    }
 
   Widget _buildOrderCardBar(Map<String, dynamic> item) {
     final String customerName = (item['customer_name'] ?? item['nama_pelanggan'] ?? 'Pelanggan').toString();

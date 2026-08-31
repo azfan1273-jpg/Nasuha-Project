@@ -3,8 +3,6 @@ import 'package:provider/provider.dart';
 import '../main.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/buat_order_dialog.dart';
-import 'login_screen.dart';
-import '../screens/report_screen.dart';
 import 'daftar_order_by_status_screen.dart';
 import '../helpers/customer_insight_engine.dart';
 import 'customer_detail_screen.dart';
@@ -18,6 +16,7 @@ class KasirHomeScreen extends StatefulWidget {
 
 class KasirHomeScreenState extends State<KasirHomeScreen> {
   final List<Map<String, dynamic>> _ordersHariIni = [];
+  double _totalOmsetHariIniVal = 0.0;
   double _totalPengeluaranHariIniVal = 0.0;
   bool _isLoading = false;
 
@@ -33,9 +32,7 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
     try {
       final dt = DateTime.parse(rawDate).toLocal();
       final now = DateTime.now();
-      return dt.year == now.year &&
-          dt.month == now.month &&
-          dt.day == now.day;
+      return dt.year == now.year && dt.month == now.month && dt.day == now.day;
     } catch (_) {
       return false;
     }
@@ -56,14 +53,12 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
   @override
   void initState() {
     super.initState();
-    _ordersHariIni.clear();
-    _loadOrdersFromSupabase();
-    _fetchPengeluaranHariIni();
+    refreshData();
   }
 
   Future<void> refreshData() async {
     await _loadOrdersFromSupabase();
-    await _fetchPengeluaranHariIni();
+    await _fetchKeuanganHariIniViaRPC();
   }
 
   Future<void> _loadOrdersFromSupabase() async {
@@ -72,11 +67,7 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
 
     try {
       final currentStoreId = context.read<SettingsProvider>().storeId;
-
-      if (currentStoreId == null) {
-        debugPrint('Log: store_id tidak ditemukan');
-        return;
-      }
+      if (currentStoreId == null) return;
 
       final List<dynamic> data = await supabase
           .from('orders')
@@ -103,56 +94,32 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
     } catch (e) {
       debugPrint('Error load orders home: $e');
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _fetchPengeluaranHariIni() async {
+  // 🟢 AMBIL DATA KEUANGAN HARI INI PRESISI DARI ENGINE RPC SUPABASE
+  Future<void> _fetchKeuanganHariIniViaRPC() async {
     try {
       final currentStoreId = context.read<SettingsProvider>().storeId;
       if (currentStoreId == null) return;
 
-      final now = DateTime.now();
-      final startOfDay = DateTime(now.year, now.month, now.day).toIso8601String();
-      final endOfDay = DateTime(now.year, now.month, now.day, 23, 59, 59).toIso8601String();
+      final response = await supabase.rpc('get_financial_report_by_store', params: {
+        'p_store_id': currentStoreId,
+        'p_filter_periode': 'Hari Ini',
+      });
 
-      final List<dynamic> data = await supabase
-          .from('expenses')
-          .select('amount')
-          .eq('store_id', currentStoreId)
-          .gte('created_at', startOfDay)
-          .lte('created_at', endOfDay);
-
-      double total = 0.0;
-      for (var item in data) {
-        final num price = (item['amount'] as num?) ?? 0;
-        total += price.toDouble();
-      }
-
-      if (mounted) {
+      if (mounted && response != null) {
+        final Map<String, dynamic> data = Map<String, dynamic>.from(response);
         setState(() {
-          _totalPengeluaranHariIniVal = total;
+          _totalOmsetHariIniVal = num.tryParse(data['total_omset']?.toString() ?? '0')?.toDouble() ?? 0.0;
+          _totalPengeluaranHariIniVal = num.tryParse(data['total_pengeluaran']?.toString() ?? '0')?.toDouble() ?? 0.0;
         });
       }
     } catch (e) {
-      debugPrint('Error fetch pengeluaran home: $e');
+      debugPrint('Error fetch keuangan RPC: $e');
     }
   }
-
-  double get _totalOmsetHariIni {
-    double total = 0.0;
-    for (var item in _ordersHariIni) {
-      if (item['status'] != 'Pengeluaran' && _isHariIni(item['created_at'])) {
-        final num price = num.tryParse(item['total_price']?.toString() ?? '0') ?? 0;
-        total += price.toDouble();
-      }
-    }
-    return total;
-  }
-
-  double get _totalPengeluaranHariIni => _totalPengeluaranHariIniVal;
 
   @override
   Widget build(BuildContext context) {
@@ -316,7 +283,7 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
 
   Widget _buildFinancialSummaryCard(SettingsProvider settings) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: settings.cardDark,
         borderRadius: BorderRadius.circular(12),
@@ -352,7 +319,7 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                 style: TextStyle(fontSize: 10, color: settings.textColor),
               ),
               Text(
-                _formatRupiah(_totalOmsetHariIni),
+                _formatRupiah(_totalOmsetHariIniVal),
                 style: const TextStyle(
                   color: Colors.green,
                   fontWeight: FontWeight.bold,
@@ -361,7 +328,7 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
               ),
             ],
           ),
-          const Divider(height: 16, color: Colors.black12),
+          const Divider(height: 12, color: Colors.black12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -370,7 +337,7 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                 style: TextStyle(fontSize: 11, color: settings.textColor),
               ),
               Text(
-                _formatRupiah(_totalPengeluaranHariIni),
+                _formatRupiah(_totalPengeluaranHariIniVal),
                 style: const TextStyle(
                   color: Colors.red,
                   fontWeight: FontWeight.bold,
@@ -427,7 +394,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
           const SizedBox(height: 12),
 
           FutureBuilder<List<Map<String, dynamic>>>(
-            // 🟢 PASS STORE_ID AGAR ISOLASI MULTI-TENANT 100% AMAN
             future: CustomerInsightEngine.fetchTomorrowPredictions(storeId: settings.storeId),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
@@ -544,13 +510,13 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                       ),
                     ),
 
-                    // 2. KOLOM SCROLLABLE HORIZONTAL (TERMASUK TOTAL TX & KONTRIBUSI)
+                    // 2. KOLOM SCROLLABLE HORIZONTAL
                     Expanded(
                       child: SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         physics: const BouncingScrollPhysics(),
                         child: SizedBox(
-                          width: 590, // Total lebar area scroll horizontal
+                          width: 590,
                           child: Column(
                             children: [
                               Container(
@@ -595,7 +561,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                                     ),
                                     child: Row(
                                       children: [
-                                        // Skor
                                         SizedBox(
                                           width: 60,
                                           child: Text(
@@ -607,7 +572,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                                             ),
                                           ),
                                         ),
-                                        // Status Siklus
                                         SizedBox(
                                           width: 120,
                                           child: Text(
@@ -616,7 +580,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
-                                        // Est. Omset
                                         SizedBox(
                                           width: 100,
                                           child: Text(
@@ -624,7 +587,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                                             style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 11),
                                           ),
                                         ),
-                                        // Layanan Favorit
                                         SizedBox(
                                           width: 110,
                                           child: Text(
@@ -633,7 +595,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
-                                        // Total Transaksi
                                         SizedBox(
                                           width: 70,
                                           child: Container(
@@ -648,7 +609,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                                             ),
                                           ),
                                         ),
-                                        // Kontribusi
                                         SizedBox(
                                           width: 80,
                                           child: Text(
@@ -656,7 +616,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                                             style: TextStyle(color: settings.textColor.withOpacity(0.8), fontSize: 10, fontWeight: FontWeight.w600),
                                           ),
                                         ),
-                                        // Aksi
                                         SizedBox(
                                           width: 50,
                                           child: Icon(Icons.chevron_right_rounded, size: 18, color: settings.accentColor),

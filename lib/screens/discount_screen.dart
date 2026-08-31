@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-
-final supabase = Supabase.instance.client;
+import 'package:provider/provider.dart';
+import '../main.dart'; // Instance supabase global
+import '../providers/settings_provider.dart';
 
 class DiscountScreen extends StatefulWidget {
   const DiscountScreen({super.key});
@@ -23,7 +23,7 @@ class _DiscountScreenState extends State<DiscountScreen> {
 
   List<Map<String, dynamic>> _discountsList = [];
   bool _isLoading = false;
-  String? _editingId; // Untuk menyimpan ID diskon jika sedang mode EDIT
+  String? _editingId; // Mode edit
 
   @override
   void initState() {
@@ -51,32 +51,33 @@ class _DiscountScreenState extends State<DiscountScreen> {
     return 'Rp ${chunks.reversed.join('.')}';
   }
 
-  // 🟢 1. FETCH DATA DISKON DARI SUPABASE (Otomatis difilter RLS)
+  // 🟢 1. FETCH DATA DISKON DENGAN RPC
   Future<void> _fetchDiscounts() async {
     setState(() => _isLoading = true);
     try {
-      final user = supabase.auth.currentUser;
-      if (user == null) return;
+      final storeId = context.read<SettingsProvider>().storeId;
+      if (storeId == null) {
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
 
-      // Kueri bersih standar: Supabase RLS otomatis menyaring berdasarkan store_id
-      final response = await supabase
-          .from('discounts')
-          .select()
-          .order('created_at', ascending: false);
+      final response = await supabase.rpc('get_discounts_by_store', params: {
+        'p_store_id': storeId,
+      });
 
       if (mounted) {
         setState(() {
-          _discountsList = List<Map<String, dynamic>>.from(response);
+          _discountsList = List<Map<String, dynamic>>.from(response ?? []);
         });
       }
     } catch (e) {
-      debugPrint('Error fetch discounts: $e');
+      debugPrint('Error fetch discounts RPC: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // 🟢 2. PROSES TAMBAH / UPDATE DISKON
+  // 🟢 2. PROSES TAMBAH / UPDATE DISKON DENGAN RPC
   Future<void> _saveDiscount({required String type}) async {
     final isPercent = type == 'percent';
     final ket = isPercent ? _ketPercentController.text.trim() : _ketNominalController.text.trim();
@@ -100,30 +101,21 @@ class _DiscountScreenState extends State<DiscountScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final user = supabase.auth.currentUser;
-      if (user == null) throw Exception('User null');
+      final storeId = context.read<SettingsProvider>().storeId;
+      if (storeId == null) throw Exception('Store ID null');
 
-      // Ambil store_id dari profile untuk ditautkan saat membuat data baru
-      final profile = await supabase
-          .from('profiles')
-          .select('store_id')
-          .eq('id', user.id)
-          .maybeSingle();
+      final discountId = _editingId != null ? int.tryParse(_editingId!) : null;
 
-      final storeId = profile?['store_id'];
+      // Diskon nominal diselaraskan menjadi 'fixed' agar kalkulasi kasir presisi
+      final String saveType = isPercent ? 'percent' : 'fixed';
 
-      final payload = {
-        'store_id': storeId,
-        'title': ket,
-        'type': type, // 'percent' atau 'nominal'
-        'value': qtyVal,
-      };
-
-      if (_editingId != null) {
-        await supabase.from('discounts').update(payload).eq('id', _editingId!);
-      } else {
-        await supabase.from('discounts').insert(payload);
-      }
+      await supabase.rpc('upsert_discount_by_store', params: {
+        'p_id': discountId,
+        'p_store_id': storeId,
+        'p_title': ket,
+        'p_type': saveType,
+        'p_value': qtyVal,
+      });
 
       _clearForm();
       await _fetchDiscounts();
@@ -135,19 +127,26 @@ class _DiscountScreenState extends State<DiscountScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        _editingId = null;
       }
     } catch (e) {
-      debugPrint('Error save discount: $e');
+      debugPrint('Error save discount RPC: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // 🟢 3. HAPUS DISKON
-  Future<void> _deleteDiscount(String id) async {
+  // 🟢 3. HAPUS DISKON DENGAN RPC
+  Future<void> _deleteDiscount(dynamic id) async {
     try {
-      await supabase.from('discounts').delete().eq('id', id);
+      final storeId = context.read<SettingsProvider>().storeId;
+      final intId = int.tryParse(id.toString());
+      if (storeId == null || intId == null) return;
+
+      await supabase.rpc('delete_discount_by_store', params: {
+        'p_id': intId,
+        'p_store_id': storeId,
+      });
+
       await _fetchDiscounts();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -155,7 +154,7 @@ class _DiscountScreenState extends State<DiscountScreen> {
         );
       }
     } catch (e) {
-      debugPrint('Error delete discount: $e');
+      debugPrint('Error delete discount RPC: $e');
     }
   }
 
@@ -170,12 +169,17 @@ class _DiscountScreenState extends State<DiscountScreen> {
   void _onEditPressed(Map<String, dynamic> item) {
     setState(() {
       _editingId = item['id'].toString();
-      if (item['type'] == 'percent') {
+      final type = (item['type'] ?? '').toString();
+      if (type == 'percent') {
         _ketPercentController.text = item['title'] ?? '';
         _qtyPercentController.text = (item['value'] ?? '').toString();
+        _ketNominalController.clear();
+        _qtyNominalController.clear();
       } else {
         _ketNominalController.text = item['title'] ?? '';
         _qtyNominalController.text = (item['value'] ?? '').toString();
+        _ketPercentController.clear();
+        _qtyPercentController.clear();
       }
     });
   }
@@ -278,7 +282,7 @@ class _DiscountScreenState extends State<DiscountScreen> {
                 ),
                 const SizedBox(width: 6),
                 IconButton(
-                  onPressed: () => _saveDiscount(type: 'nominal'),
+                  onPressed: () => _saveDiscount(type: 'fixed'),
                   icon: const Icon(Icons.add_circle, color: _primaryPink, size: 30),
                 ),
               ],
@@ -336,7 +340,7 @@ class _DiscountScreenState extends State<DiscountScreen> {
                                   ),
                                   IconButton(
                                     icon: const Icon(Icons.delete, size: 18, color: Colors.red),
-                                    onPressed: () => _deleteDiscount(item['id'].toString()),
+                                    onPressed: () => _deleteDiscount(item['id']),
                                   ),
                                 ],
                               ),

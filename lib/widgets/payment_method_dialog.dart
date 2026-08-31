@@ -28,7 +28,7 @@ class _PaymentMethodDialogState extends State<PaymentMethodDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context), // Kembalikan null jika batal
+          onPressed: () => Navigator.pop(context), // Kembalikan null jika dibatalkan
           child: const Text('Batal', style: TextStyle(color: Colors.grey, fontSize: 12)),
         ),
         ElevatedButton(
@@ -36,7 +36,7 @@ class _PaymentMethodDialogState extends State<PaymentMethodDialog> {
             backgroundColor: const Color(0xFF22C55E),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
-          onPressed: () => Navigator.pop(context, _selectedMethod), // Kembalikan hasil pilihan
+          onPressed: () => Navigator.pop(context, _selectedMethod), // Kembalikan string opsi terpilih
           child: const Text(
             'KONFIRMASI',
             style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),

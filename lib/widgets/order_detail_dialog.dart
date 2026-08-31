@@ -53,29 +53,41 @@ class OrderDetailDialog extends StatelessWidget {
   }
 
   Future<void> _updatePayment(BuildContext context, String method) async {
-    try {
-      // 🟢 FIX: Update kedua variasi nama kolom agar sinkron dengan ReportScreen
-      await Supabase.instance.client
-          .from('orders')
-          .update({
-            'status_pembayaran': 'Lunas',
-            'payment_status': 'Lunas',
-            'metode_pembayaran': method,
-            'payment_method': method,
-          })
-          .eq('id', order['id']);
-
-      if (context.mounted) {
-        onOrderUpdated?.call();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Pembayaran ($method) berhasil dicatat LUNAS!')),
-        );
-        Navigator.pop(context);
+      try {
+        final orderId = int.tryParse(order['id'].toString());
+        if (orderId == null) return;
+  
+        // 🟢 PAKSA PANGGIL RPC SUAPBASE UNTUK PELUNASAN
+        await Supabase.instance.client.rpc('update_order_status_by_store', params: {
+          'p_order_id': orderId,
+          'p_store_id': order['store_id']?.toString() ?? '',
+          'p_new_status': order['status'] ?? 'Selesai',
+          'p_metode_pembayaran': method,
+        });
+  
+        if (context.mounted) {
+          onOrderUpdated?.call();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Pembayaran ($method) berhasil dicatat LUNAS!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.pop(context);
+        }
+      } catch (e) {
+        debugPrint('Error update pembayaran: $e');
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Gagal memperbarui pembayaran: $e'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
       }
-    } catch (e) {
-      debugPrint('Error update pembayaran: $e');
     }
-  }
 
   Future<void> _sendWaNotification(BuildContext context) async {
     String rawPhone = (order['customer_phone'] ?? '').toString().trim();
@@ -128,7 +140,11 @@ class OrderDetailDialog extends StatelessWidget {
     final String customerName = (order['customer_name'] ?? 'Pelanggan').toString();
     final String customerPhone = (order['customer_phone'] ?? '-').toString();
     final String parfum = (order['parfum'] ?? 'Standard').toString();
-    final String paymentStatus = (order['status_pembayaran'] ?? order['payment_status'] ?? 'Belum Lunas').toString();
+    
+    // 🟢 Deklarasi variabel pembayaran
+    final String paymentStatus = (order['status_pembayaran'] ?? order['payment_status'] ?? 'Belum Lunas').toString().trim();
+    final bool isLunas = paymentStatus.toUpperCase() == 'LUNAS';
+
     final String createdDate = _formatTanggal(order['created_at']);
     final String estDate = _formatTanggal(order['estimated_at']);
     final String notes = (order['catatan'] ?? order['notes'] ?? 'Tidak ada catatan').toString();
@@ -311,7 +327,7 @@ class OrderDetailDialog extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
-                        color: paymentStatus.toUpperCase() == 'LUNAS' ? Colors.green : Colors.red,
+                        color: isLunas ? Colors.green : Colors.red,
                       ),
                     ),
                   ),
@@ -408,13 +424,13 @@ class OrderDetailDialog extends StatelessWidget {
                   ),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF22C55E),
+                      backgroundColor: isLunas ? Colors.grey : const Color(0xFF22C55E),
                       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
-                    onPressed: paymentStatus.toUpperCase() == 'LUNAS' ? null : () => _handlePaymentProcess(context),
+                    onPressed: isLunas ? null : () => _handlePaymentProcess(context),
                     child: Text(
-                      paymentStatus.toUpperCase() == 'LUNAS' ? 'LUNAS' : 'BAYAR',
+                      isLunas ? 'LUNAS' : 'BAYAR',
                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                     ),
                   ),

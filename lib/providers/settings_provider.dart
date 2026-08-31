@@ -13,9 +13,9 @@ class SettingsProvider with ChangeNotifier {
   Map<String, dynamic>? _storeSettings;
   bool _isLoading = false;
 
-  // 🟢 TAMBAHKAN DEKLARASI VARIABEL PRINTER DI SINI:
-    BluetoothInfo? _selectedPrinter;
-    BluetoothInfo? get selectedPrinter => _selectedPrinter;
+  // PRINTER
+  BluetoothInfo? _selectedPrinter;
+  BluetoothInfo? get selectedPrinter => _selectedPrinter;
 
   // --- DYNAMIC THEME STATE ---
   // Mode: 'default' (Pink) | 'gold' (Hitam Emas)
@@ -32,15 +32,15 @@ class SettingsProvider with ChangeNotifier {
   // Getter Tema Aktif
   String get selectedTheme => _selectedTheme;
 
-  // 🟢 CONSTRUCTOR: Otomatis muat tema dari penyimpanan HP saat aplikasi pertama kali dibuka
-    SettingsProvider() {
-      _loadThemeFromPrefs();
-    }
+  // CONSTRUCTOR: Otomatis muat tema dari penyimpanan HP saat aplikasi pertama kali dibuka
+  SettingsProvider() {
+    _loadThemeFromPrefs();
+  }
 
   // --- GETTER WARNA DINAMIS ---
   Color get bgDark => _selectedTheme == 'gold' 
       ? const Color(0xFF121212) // Hitam Pekat Latar Belakang
-      : const Color(0xFFFAF5F7); // Pink Soft Soft Latar Belakang
+      : const Color(0xFFFAF5F7); // Pink Soft Latar Belakang
 
   Color get cardDark => _selectedTheme == 'gold' 
       ? const Color(0xFF1E1E22) // Hitam Kartu Elegan
@@ -54,33 +54,32 @@ class SettingsProvider with ChangeNotifier {
       ? const Color(0xFFF3F4F6) // Teks Terang (Gelap Mode)
       : const Color(0xFF111827); // Teks Gelap (Terang Mode)
 
-  // 🟢 1. MUAT TEMA TERSIMPAN
-      Future<void> _loadThemeFromPrefs() async {
-        try {
-          final prefs = await SharedPreferences.getInstance();
-          _selectedTheme = prefs.getString('app_theme') ?? 'default';
-          notifyListeners();
-        } catch (e) {
-          debugPrint('Error loading theme from prefs: $e');
-        }
-      }
-    
-      // 🟢 2. SIMPAN PILIHAN TEMA SECARA PERMANEN
-      Future<void> setTheme(String themeName) async {
-        if (_selectedTheme == themeName) return;
-        _selectedTheme = themeName;
-        notifyListeners(); // Ubah UI secara instan
-    
-        // Simpan ke memori HP
-        try {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('app_theme', themeName);
-        } catch (e) {
-          debugPrint('Error saving theme to prefs: $e');
-        }
-      }
+  // 1. MUAT TEMA TERSIMPAN
+  Future<void> _loadThemeFromPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _selectedTheme = prefs.getString('app_theme') ?? 'default';
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error loading theme from prefs: $e');
+    }
+  }
 
-  // 1. FUNGSI FETCH STORE ID & PROFILE
+  // 2. SIMPAN PILIHAN TEMA SECARA PERMANEN
+  Future<void> setTheme(String themeName) async {
+    if (_selectedTheme == themeName) return;
+    _selectedTheme = themeName;
+    notifyListeners(); // Ubah UI secara instan
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('app_theme', themeName);
+    } catch (e) {
+      debugPrint('Error saving theme to prefs: $e');
+    }
+  }
+
+  // 3. FUNGSI FETCH STORE ID & PROFILE (DIPERBAIKI)
   Future<void> fetchStoreId() async {
     try {
       final user = Supabase.instance.client.auth.currentUser;
@@ -88,22 +87,24 @@ class SettingsProvider with ChangeNotifier {
         debugPrint('Log: User belum login / null');
         return;
       }
-  
+
       final response = await Supabase.instance.client
           .from('profiles')
           .select('store_id, nama_toko')
           .eq('id', user.id)
           .maybeSingle();
-  
+
       if (response != null) {
         final Map<String, dynamic> data = Map<String, dynamic>.from(response);
         
         _storeId = data['store_id']?.toString();
         _namaToko = data['nama_toko']?.toString() ?? '';
-        notifyListeners();
-  
+
+        // JANGAN notifyListeners() di sini agar UI tidak melakukan query saat store_settings belum selesai
         if (_storeId != null && _storeId!.isNotEmpty) {
           await fetchStoreSettings();
+        } else {
+          notifyListeners();
         }
       } else {
         debugPrint('Log: Profile user tidak ditemukan di database');
@@ -113,20 +114,20 @@ class SettingsProvider with ChangeNotifier {
     }
   }
 
-  // 2. FUNGSI FETCH DATA PENGATURAN TOKO
+  // 4. FUNGSI FETCH DATA PENGATURAN TOKO
   Future<void> fetchStoreSettings() async {
     if (_storeId == null) return;
-  
+
     _isLoading = true;
     notifyListeners();
-  
+
     try {
       final response = await Supabase.instance.client
           .from('store_settings')
           .select()
           .eq('store_id', _storeId!)
           .maybeSingle();
-  
+
       if (response != null) {
         _storeSettings = Map<String, dynamic>.from(response);
       } else {
@@ -156,11 +157,11 @@ class SettingsProvider with ChangeNotifier {
       debugPrint('Error fetch or auto-create store settings: $e');
     } finally {
       _isLoading = false;
-      notifyListeners();
+      notifyListeners(); // Mengirimkan signal ke seluruh listener bahwa storeId & settings sudah siap
     }
   }
 
-  // 3. FUNGSI CLEAR SETTINGS (SAAT LOGOUT)
+  // 5. FUNGSI CLEAR SETTINGS (SAAT LOGOUT)
   void clearSettings() {
     _storeId = null;
     _namaToko = '';
@@ -171,7 +172,7 @@ class SettingsProvider with ChangeNotifier {
     notifyListeners();
   } 
 
- // 🟢 SETTER TERHUBUNG DENGAN VARIABEL DI ATAS
+  // SETTER PRINTER
   void setSelectedPrinter(BluetoothInfo? device) {
     _selectedPrinter = device;
     notifyListeners();

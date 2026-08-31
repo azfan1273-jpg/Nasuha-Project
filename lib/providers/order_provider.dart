@@ -38,7 +38,7 @@ class OrderProvider with ChangeNotifier {
     }
   }
 
-  // Create Order menggunakan storeId yang dipass langsung
+  // Create Order menggunakan RPC Supabase
   Future<bool> createOrder({
     required String storeId,
     required String customerName,
@@ -56,50 +56,30 @@ class OrderProvider with ChangeNotifier {
       final user = _supabase.auth.currentUser;
       if (user == null) throw Exception('User belum login');
 
-      // Penomoran nota dikombinasikan dengan 4 karakter akhir ID user agar unik
-      final String userSuffix = user.id.length >= 4 ? user.id.substring(0, 4).toUpperCase() : 'LNDR';
-      final String notaNumber = 'NDR-$userSuffix-${DateTime.now().millisecondsSinceEpoch}';
+      // Ringkasan layanan untuk kolom service_name
+      final String serviceSummary = items.map((e) => e['service_name']).join(', ');
 
-      // 1. Simpan Header Order
-      final orderResponse = await _supabase
-          .from('orders')
-          .insert({
-            'user_id': user.id,
-            'store_id': storeId,
-            'nota_number': notaNumber,
-            'customer_name': customerName,
-            'customer_phone': customerPhone,
-            'status': 'antrian',
-            'payment_status': paymentStatus,
-            'payment_method': paymentMethod,
-            'perfume': perfume,
-            'total': totalAmount,
-          })
-          .select('id')
-          .single();
-
-      final int orderId = orderResponse['id'];
-
-      // 2. Simpan Detail Item Order
-      final List<Map<String, dynamic>> itemsPayload = items.map((item) {
-        return {
-          'store_id': storeId,
-          'user_id': user.id,
-          'order_id': orderId,
-          'service_name': item['service_name'],
-          'qty': item['qty'],
-          'price': item['price'],
-          'subtotal': item['subtotal'],
-        };
-      }).toList();
-
-      await _supabase.from('order_items').insert(itemsPayload);
+      // 🟢 PANGGIL RPC SUPABASE (Format NASUHA- & waktu_pelunasan dihandle backend)
+      await _supabase.rpc('create_order_with_items', params: {
+        'p_store_id': storeId,
+        'p_customer_name': customerName,
+        'p_customer_phone': customerPhone,
+        'p_service_summary': serviceSummary,
+        'p_total_price': totalAmount,
+        'p_estimated_at': DateTime.now().add(const Duration(days: 2)).toIso8601String(),
+        'p_status': 'Pending',
+        'p_metode_pembayaran': paymentStatus.toLowerCase() == 'lunas' ? paymentMethod : null,
+        'p_items': items,
+        'p_created_at': DateTime.now().toIso8601String(),
+        'p_parfum': perfume,
+        'p_catatan': '-',
+      });
 
       // Refresh data order menggunakan storeId yang sama
       await fetchOrders(storeId);
       return true;
     } catch (e) {
-      debugPrint('Error createOrder: $e');
+      debugPrint('Error createOrder via RPC: $e');
       return false;
     } finally {
       _isLoading = false;

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../helpers/database_helper.dart';
 import '../providers/settings_provider.dart';
 import '../screens/cari_pelanggan_screen.dart';
 import '../screens/daftar_layanan_screen.dart';
@@ -38,7 +37,6 @@ class FormOrderDialogState extends State<FormOrderDialog> {
   List<Map<String, dynamic>> _discountList = [];
   Map<String, dynamic>? _selectedDiscountItem;
 
-  // 🟢 STATE TANGGAL TRANSAKSI (DEFAULT: TANGGAL HARI INI)
   DateTime _selectedOrderDate = DateTime.now();
 
   @override
@@ -50,28 +48,47 @@ class FormOrderDialogState extends State<FormOrderDialog> {
     });
   }
 
-  // 🟢 METHOD UNTUK PILIH TANGGAL LAMPAU / KUSTOM
   Future<void> _selectOrderDate(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedOrderDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-    );
-    if (picked != null) {
-      setState(() {
         final now = DateTime.now();
-        _selectedOrderDate = DateTime(
-          picked.year,
-          picked.month,
-          picked.day,
-          now.hour,
-          now.minute,
-          now.second,
+        // 🟢 Longgarkan batas hingga 31 hari ke belakang untuk rekap data bulanan
+        final minDate = now.subtract(const Duration(days: 31));
+    
+        final DateTime? picked = await showDatePicker(
+          context: context,
+          initialDate: _selectedOrderDate.isBefore(minDate) ? minDate : _selectedOrderDate,
+          firstDate: minDate, // 🔒 Kunci: Maksimal 31 hari yang lalu
+          lastDate: now,      // 🔒 Kunci: Tetap cegah pilihan tanggal besok/masa depan
         );
-      });
-    }
-  }
+    
+        if (picked != null) {
+          final isBackdate = picked.year != now.year ||
+              picked.month != now.month ||
+              picked.day != now.day;
+    
+          if (isBackdate && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Perhatian: Transaksi dicatat pada tanggal mundur (${picked.day}/${picked.month}/${picked.year}).',
+                ),
+                backgroundColor: Colors.orange.shade800,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+    
+          setState(() {
+            _selectedOrderDate = DateTime(
+              picked.year,
+              picked.month,
+              picked.day,
+              now.hour,
+              now.minute,
+              now.second,
+            );
+          });
+        }
+      }
 
   Future<void> _fetchDiscounts() async {
     try {
@@ -202,117 +219,87 @@ class FormOrderDialogState extends State<FormOrderDialog> {
     }
   }
 
-  Future<void> _submitOrder() async {
-    if (_selectedCustomer == null || _selectedServices.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pilih pelanggan dan minimal 1 layanan!')),
-      );
-      return;
-    }
-
-    setState(() => _isSubmitting = true);
-
-    final String serviceNames = _selectedServices
-        .map((s) => (s['name'] ?? '').toString())
-        .join(', ');
-
-    int maxDays = 1;
-    for (var s in _selectedServices) {
-      final String rawEst = (s['estimation'] ?? s['duration'] ?? '1').toString();
-      final String cleanEst = rawEst.replaceAll(RegExp(r'[^0-9]'), ''); 
-      final int days = int.tryParse(cleanEst) ?? 1;
+  // 🟢 METHOD SUBMIT ORDER MEMANGGIL ENGINE RPC BACKEND
+    Future<void> _submitOrder() async {
+      if (_selectedCustomer == null || _selectedServices.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pilih pelanggan dan minimal 1 layanan!')),
+        );
+        return;
+      }
+  
+      setState(() => _isSubmitting = true);
+  
+      final String serviceNames = _selectedServices
+          .map((s) => (s['name'] ?? '').toString())
+          .join(', ');
+  
+      int maxDays = 1;
+      for (var s in _selectedServices) {
+        final String rawEst = (s['estimation'] ?? s['duration'] ?? '1').toString();
+        final String cleanEst = rawEst.replaceAll(RegExp(r'[^0-9]'), ''); 
+        final int days = int.tryParse(cleanEst) ?? 1;
+        
+        if (days > maxDays) maxDays = days;
+      }
       
-      if (days > maxDays) maxDays = days;
-    }
-    
-    // 🟢 Estimasi dihitung berbasis tanggal order yang dipilih
-    final DateTime estimatedDate = _selectedOrderDate.add(Duration(days: maxDays));
-
-    try {
-      final user = supabase.auth.currentUser;
-      if (user == null) throw Exception('User belum login');
-
-      final String? currentStoreId = context.read<SettingsProvider>().storeId;
-      if (currentStoreId == null) throw Exception('ID Toko tidak ditemukan');
-
-      final Map<String, dynamic> payload = {
-        'user_id': user.id,
-        'store_id': currentStoreId,
-        'customer_name': _selectedCustomer!['name'],
-        'customer_phone': _selectedCustomer!['phone'],
-        'service_name': serviceNames,
-        'status': 'Antrian',
-        'subtotal': _subtotal,
-        'discount': _discountAmount,
-        'discount_percent': _selectedDiscount,
-        'total_price': _totalPrice,
-        'catatan': _catatanController.text,
-        'parfum': _selectedParfum,
-        'created_at': _selectedOrderDate.toIso8601String(), // 🟢 SIMPAN TANGGAL KUSTOM
-        'estimated_at': estimatedDate.toIso8601String(),
-      };
-
-      final orderResponse = await supabase
-          .from('orders')
-          .insert(payload)
-          .select()
-          .single();
-
-      final dynamic orderId = orderResponse['id'];
-      final String notaNumber = 'LNDR-${orderId.toString().padLeft(5, '0')}';
-
-      await supabase
-          .from('orders')
-          .update({'nota_number': notaNumber})
-          .eq('id', orderId);
-
-      final List<Map<String, dynamic>> orderItemsPayload = _selectedServices.map((s) {
-        final double price = (s['price'] as num).toDouble();
-        final double qty = (s['quantity'] as num).toDouble();
-        return {
-          'user_id': user.id,
-          'store_id': currentStoreId,
-          'order_id': orderId,
-          'service_name': s['name'] ?? '',
-          'qty': qty,
-          'price': price,
-          'subtotal': price * qty,
-          'unit': s['unit'] ?? 'Pcs',
-        };
-      }).toList();
-
-      await supabase.from('order_items').insert(orderItemsPayload);
-
+      final DateTime estimatedDate = _selectedOrderDate.add(Duration(days: maxDays));
+  
       try {
-        await DatabaseHelper.instance.insertOrder(payload);
+        final String? currentStoreId = context.read<SettingsProvider>().storeId;
+        if (currentStoreId == null) throw Exception('ID Toko tidak ditemukan');
+  
+        final List<Map<String, dynamic>> itemsPayload = _selectedServices.map((s) {
+          final double price = (s['price'] as num).toDouble();
+          final double qty = (s['quantity'] as num).toDouble();
+          return {
+            'service_name': s['name'] ?? '',
+            'price': price,
+            'qty': qty,
+            'subtotal': price * qty,
+          };
+        }).toList();
+  
+        // Panggil Stored Procedure create_order_with_items di Supabase
+        await supabase.rpc('create_order_with_items', params: {
+          'p_store_id': currentStoreId,
+          'p_customer_name': _selectedCustomer!['name'],
+          'p_customer_phone': _selectedCustomer!['phone'] ?? '-',
+          'p_service_summary': serviceNames,
+          'p_total_price': _totalPrice,
+          'p_estimated_at': estimatedDate.toIso8601String(),
+          'p_status': 'Pending',
+          'p_metode_pembayaran': null, // 🟢 Jangan isi metode pembayaran saat buat transaksi baru
+          'p_items': itemsPayload,
+          'p_created_at': _selectedOrderDate.toIso8601String(),
+          'p_parfum': _selectedParfum,
+          'p_catatan': _catatanController.text,
+        });
+  
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Transaksi Berhasil Disimpan!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          widget.onOrderSuccess();
+          Navigator.pop(context);
+        }
       } catch (e) {
-        debugPrint('Local SQLite insert skipped: $e');
+        debugPrint('Error submit order via RPC: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Gagal menyimpan transaksi: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isSubmitting = false);
       }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Transaksi Berhasil Disimpan!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        widget.onOrderSuccess();
-        Navigator.pop(context);
-      }
-    } catch (e) {
-      debugPrint('Error submit order: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal menyimpan transaksi: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSubmitting = false);
     }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -324,7 +311,7 @@ class FormOrderDialogState extends State<FormOrderDialog> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 🟢 WIDGET FIELD TANGGAL TRANSAKSI
+              // FIELD TANGGAL TRANSAKSI
               const Text(
                 'Tanggal Transaksi',
                 style: TextStyle(fontSize: 11, color: Colors.black45, fontWeight: FontWeight.w500),

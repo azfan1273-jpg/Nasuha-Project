@@ -327,7 +327,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 12),
                       const Text(
-                        'LNDR KASIR LAUNDRY',
+                        'NASUHA KASIR LAUNDRY',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w900,
@@ -337,7 +337,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 2),
                       const Text(
-                        'Masuk ke akun LNDR Anda',
+                        'Masuk ke akun NASUHA Anda',
                         style: TextStyle(fontSize: 11, color: Colors.black45),
                       ),
                       const SizedBox(height: 20),

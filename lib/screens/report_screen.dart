@@ -1,11 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:excel/excel.dart' as excel_lib;
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 
+import '../main.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/form_pengeluaran_dialog.dart';
 import 'chart_screen.dart';
@@ -18,14 +18,17 @@ class ReportScreen extends StatefulWidget {
 }
 
 class _ReportScreenState extends State<ReportScreen> {
-  final _supabase = Supabase.instance.client;
   bool _isLoading = true;
   bool _isExporting = false;
 
   String _filterPeriode = 'Hari Ini';
   String _activeTabChart = 'Omset';
 
+  // 🟢 VARIABEL UNTUK KUSTOM TANGGAL
+  DateTimeRange? _customDateRange;
+
   double _totalOmset = 0;
+  double _totalPendapatan = 0;
   double _totalPengeluaran = 0;
   
   double _cashTotal = 0;
@@ -50,84 +53,73 @@ class _ReportScreenState extends State<ReportScreen> {
         return;
       }
 
-      // 🟢 1. BUAT KUERI ORDERS (DISESUAIKAN NAMA KOLOM SUPABASE)
-      var ordersQuery = _supabase
-          .from('orders')
-          .select('total_price, metode_pembayaran, created_at, store_id')
-          .eq('store_id', storeId);
+      final Map<String, dynamic> params = {
+        'p_store_id': storeId,
+        'p_filter_periode': _filterPeriode == 'Sesuaikan Tanggal...' ? 'Custom' : _filterPeriode,
+      };
 
-      var expensesQuery = _supabase
-          .from('expenses')
-          .select('*')
-          .eq('store_id', storeId);
-
-      // 🟢 2. FILTER TANGGAL LOKAL (WIB)
-      final now = DateTime.now();
-      DateTime? startDate;
-
-      if (_filterPeriode == 'Hari Ini') {
-        startDate = DateTime(now.year, now.month, now.day, 0, 0, 0);
-      } else if (_filterPeriode == 'Minggu Ini') {
-        final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
-        startDate = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day, 0, 0, 0);
-      } else if (_filterPeriode == 'Bulan Ini') {
-        startDate = DateTime(now.year, now.month, 1, 0, 0, 0);
+      // 🟢 MASUKKAN PARAMETER TANGGAL KUSTOM JIKA DIPILIH
+      if (_filterPeriode == 'Sesuaikan Tanggal...' && _customDateRange != null) {
+        params['p_start_date'] = _customDateRange!.start.toIso8601String().split('T')[0];
+        params['p_end_date'] = _customDateRange!.end.toIso8601String().split('T')[0];
       }
 
-      if (startDate != null) {
-        final startDateIso = startDate.toIso8601String();
-        ordersQuery = ordersQuery.gte('created_at', startDateIso);
-        expensesQuery = expensesQuery.gte('created_at', startDateIso);
-      }
+      final response = await supabase.rpc('get_financial_report_by_store', params: params);
 
-      final ordersResponse = await ordersQuery;
-      final expensesResponse = await expensesQuery.order('created_at', ascending: false);
+      if (mounted && response != null) {
+        final Map<String, dynamic> data = Map<String, dynamic>.from(response);
 
-      debugPrint('LOG REPORT - storeId: $storeId');
-      debugPrint('LOG REPORT - Data Order Ditemukan: ${ordersResponse.length}');
-
-      double omset = 0;
-      double cash = 0;
-      double qris = 0;
-
-      for (var row in ordersResponse) {
-        final price = num.tryParse(row['total_price']?.toString() ?? '0')?.toDouble() ?? 0.0;
-        omset += price;
-        
-		// 🟢 Rincian Kas/QRIS HANYA dihitung jika uang sudah benar-benar diterima (Lunas)
-        final status = (row['status_pembayaran'] ?? '').toString().toLowerCase();
-        if (status == 'lunas') {
-
-        // Match nama kolom 'metode_pembayaran' dari Supabase
-        final method = (row['metode_pembayaran'] ?? '').toString().toLowerCase();
-        if (method.contains('tunai') || method.contains('cash')) {
-          cash += price;
-        } else {
-          qris += price;
-        }
-      }
-    }
-
-      double pengeluaran = 0;
-      for (var row in expensesResponse) {
-        pengeluaran += num.tryParse(row['amount']?.toString() ?? '0')?.toDouble() ?? 0.0;
-      }
-
-      if (mounted) {
         setState(() {
-          _totalOmset = omset;
-          _totalPengeluaran = pengeluaran;
-          _cashTotal = cash;
-          _qrisTotal = qris;
-          _rawOrders = ordersResponse;
-          _rawExpenses = expensesResponse;
-          _listPengeluaran = List<Map<String, dynamic>>.from(expensesResponse);
+          _totalOmset = num.tryParse(data['total_omset']?.toString() ?? '0')?.toDouble() ?? 0.0;
+          _totalPendapatan = num.tryParse(data['total_pendapatan']?.toString() ?? '0')?.toDouble() ?? 0.0;
+          _totalPengeluaran = num.tryParse(data['total_pengeluaran']?.toString() ?? '0')?.toDouble() ?? 0.0;
+          _cashTotal = num.tryParse(data['cash_total']?.toString() ?? '0')?.toDouble() ?? 0.0;
+          _qrisTotal = num.tryParse(data['qris_total']?.toString() ?? '0')?.toDouble() ?? 0.0;
+          
+          _rawOrders = List<dynamic>.from(data['orders'] ?? []);
+          _rawExpenses = List<dynamic>.from(data['expenses'] ?? []);
+          _listPengeluaran = List<Map<String, dynamic>>.from(data['expenses'] ?? []);
           _isLoading = false;
         });
       }
     } catch (e) {
-      debugPrint('Error load report: $e');
+      debugPrint('Error load report RPC: $e');
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // 🟢 DIALOG PICKER TANGGAL KUSTOM
+  Future<void> _pickCustomDateRange() async {
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDateRange: _customDateRange ??
+          DateTimeRange(
+            start: DateTime.now().subtract(const Duration(days: 7)),
+            end: DateTime.now(),
+          ),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.dark(
+              primary: Theme.of(context).primaryColor,
+              onPrimary: Colors.white,
+              surface: const Color(0xFF1E1E1E),
+              onSurface: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _customDateRange = picked;
+        _filterPeriode = 'Sesuaikan Tanggal...';
+      });
+      _loadLaporanKeuangan();
     }
   }
 
@@ -142,15 +134,19 @@ class _ReportScreenState extends State<ReportScreen> {
       sheet1.appendRow([]);
       sheet1.appendRow([excel_lib.TextCellValue('Kategori'), excel_lib.TextCellValue('Nominal')]);
       sheet1.appendRow([excel_lib.TextCellValue('Total Omset'), excel_lib.TextCellValue(_totalOmset.toString())]);
+      sheet1.appendRow([excel_lib.TextCellValue('Total Pendapatan Riil'), excel_lib.TextCellValue(_totalPendapatan.toString())]);
       sheet1.appendRow([excel_lib.TextCellValue('Total Pengeluaran'), excel_lib.TextCellValue(_totalPengeluaran.toString())]);
-      sheet1.appendRow([excel_lib.TextCellValue('Laba Bersih'), excel_lib.TextCellValue((_totalOmset - _totalPengeluaran).toString())]);
+      sheet1.appendRow([excel_lib.TextCellValue('Laba Bersih'), excel_lib.TextCellValue((_totalPendapatan - _totalPengeluaran).toString())]);
 
       final excel_lib.Sheet sheet2 = excel['Detail Pengeluaran'];
       sheet2.appendRow([excel_lib.TextCellValue('Tanggal'), excel_lib.TextCellValue('Kategori'), excel_lib.TextCellValue('Catatan'), excel_lib.TextCellValue('Nominal')]);
 
       for (var item in _listPengeluaran) {
+        final rawDate = item['expense_date'] ?? item['created_at'];
+        final displayDate = rawDate.toString().split('T')[0];
+
         sheet2.appendRow([
-          excel_lib.TextCellValue(item['created_at'].toString().split('T')[0]),
+          excel_lib.TextCellValue(displayDate),
           excel_lib.TextCellValue(item['category'] ?? 'Lain-lain'),
           excel_lib.TextCellValue(item['notes'] ?? '-'),
           excel_lib.TextCellValue((item['amount'] ?? 0).toString()),
@@ -187,15 +183,17 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 
   String _formatRupiah(double amount) {
-    final str = amount.toInt().toString();
+    final isNeg = amount < 0;
+    final str = amount.abs().toInt().toString();
     final reg = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
-    return 'Rp ${str.replaceAllMapped(reg, (Match m) => '${m[1]}.')}';
+    final formatted = str.replaceAllMapped(reg, (Match m) => '${m[1]}.');
+    return isNeg ? '-Rp $formatted' : 'Rp $formatted';
   }
 
   @override
   Widget build(BuildContext context) {
-    final labaBersih = _totalOmset - _totalPengeluaran;
-    final profitMargin = _totalOmset > 0 ? ((labaBersih / _totalOmset) * 100).toStringAsFixed(1) : '0';
+    final labaBersih = _totalPendapatan - _totalPengeluaran;
+    final profitMargin = _totalPendapatan > 0 ? ((labaBersih / _totalPendapatan) * 100).toStringAsFixed(1) : '0';
     final settings = context.watch<SettingsProvider>();
     
     return Scaffold(
@@ -211,7 +209,14 @@ class _ReportScreenState extends State<ReportScreen> {
             underline: const SizedBox(),
             dropdownColor: settings.cardDark,
             icon: Icon(Icons.arrow_drop_down, color: settings.textColor),
-            items: ['Hari Ini', 'Minggu Ini', 'Bulan Ini'].map((String val) {
+            items: [
+              'Hari Ini',
+              'Minggu Ini',
+              'Bulan Ini',
+              '7 Hari Terakhir',
+              '30 Hari Terakhir',
+              'Sesuaikan Tanggal...',
+            ].map((String val) {
               return DropdownMenuItem<String>(
                 value: val,
                 child: Text(val, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: settings.textColor)),
@@ -219,8 +224,15 @@ class _ReportScreenState extends State<ReportScreen> {
             }).toList(),
             onChanged: (val) {
               if (val != null) {
-                setState(() => _filterPeriode = val);
-                _loadLaporanKeuangan();
+                if (val == 'Sesuaikan Tanggal...') {
+                  _pickCustomDateRange();
+                } else {
+                  setState(() {
+                    _filterPeriode = val;
+                    _customDateRange = null;
+                  });
+                  _loadLaporanKeuangan();
+                }
               }
             },
           ),
@@ -254,6 +266,29 @@ class _ReportScreenState extends State<ReportScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  // 🟢 SUBTITLE TANGGAL JIKA FILTER KUSTOM AKTIF
+                  if (_filterPeriode == 'Sesuaikan Tanggal...' && _customDateRange != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: settings.accentColor.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.calendar_month, size: 16, color: settings.accentColor),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Periode: ${_customDateRange!.start.toString().split(' ')[0]} s/d ${_customDateRange!.end.toString().split(' ')[0]}',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: settings.textColor),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
                   Row(
                     children: [
                       Expanded(
@@ -278,10 +313,11 @@ class _ReportScreenState extends State<ReportScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
+
                   _buildSummaryCard(
                     title: 'Laba Bersih (Margin: $profitMargin%)',
                     amount: _formatRupiah(labaBersih),
-                    color: labaBersih >= 0 ? Colors.blue : Colors.orange,
+                    color: labaBersih >= 0 ? Colors.blue : Colors.redAccent,
                     icon: Icons.account_balance_wallet_rounded,
                     isFullWidth: true,
                     settings: settings,
@@ -373,6 +409,9 @@ class _ReportScreenState extends State<ReportScreen> {
                             final note = item['notes'] ?? item['category'] ?? 'Pengeluaran';
                             final category = item['category'] ?? 'Umum';
 
+                            final rawDate = item['expense_date'] ?? item['created_at'] ?? '';
+                            final displayDate = rawDate.toString().split('T')[0];
+
                             return Card(
                               margin: const EdgeInsets.only(bottom: 8),
                               color: settings.cardDark,
@@ -385,7 +424,7 @@ class _ReportScreenState extends State<ReportScreen> {
                                 ),
                                 title: Text(note, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: settings.textColor)),
                                 subtitle: Text(
-                                  '${item['created_at'].toString().split('T')[0]} • $category',
+                                  '$displayDate • $category',
                                   style: TextStyle(fontSize: 11, color: settings.textColor.withOpacity(0.6)),
                                 ),
                                 trailing: Text(

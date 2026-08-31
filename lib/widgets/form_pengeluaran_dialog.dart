@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../main.dart'; // 🟢 Menggunakan supabase dari main.dart
 import '../providers/settings_provider.dart';
-
-final supabase = Supabase.instance.client;
 
 class RupiahFormatter extends TextInputFormatter {
   @override
@@ -520,6 +518,7 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
     );
   }
 
+  // 🟢 SIMPAN PENGELUARAN DENGAN RPC BACKEND
   Future<void> _simpanPengeluaran() async {
     final String rawTotal = _totalController.text.replaceAll('.', '').trim();
     final double totalHarga = double.tryParse(rawTotal) ?? 0.0;
@@ -548,13 +547,14 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
         throw Exception("storeId tidak ditemukan");
       }
 
-      await supabase.from('expenses').insert({
-        'store_id': storeId,
-        'category': _selectedKategori,
-        'amount': totalHarga,
-        'notes': _catatanController.text.trim(),
-        'expense_date': _selectedDate.toIso8601String().split('T')[0],
-        'created_at': _selectedDate.toIso8601String(),
+      final formattedDate = _selectedDate.toIso8601String().split('T')[0];
+
+      await supabase.rpc('insert_expense_by_store', params: {
+        'p_store_id': storeId,
+        'p_category': _selectedKategori,
+        'p_amount': totalHarga,
+        'p_notes': _catatanController.text.trim(),
+        'p_expense_date': formattedDate,
       });
 
       _totalController.clear();
@@ -569,14 +569,10 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
 
       await _fetchPengeluaran();
     } catch (e) {
-      debugPrint('Error simpan pengeluaran: $e');
+      debugPrint('Error simpan pengeluaran RPC: $e');
       if (mounted) {
-        String errMsg = e.toString();
-        if (e is PostgrestException) {
-          errMsg = e.message;
-        }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal menyimpan pengeluaran: $errMsg')),
+          SnackBar(content: Text('Gagal menyimpan pengeluaran: $e')),
         );
       }
     } finally {
@@ -845,7 +841,6 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
 
                   Row(
                     children: [
-                      // INPUT TANGGAL
                       Expanded(
                         flex: 4,
                         child: Column(
@@ -880,7 +875,6 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
                       ),
                       const SizedBox(width: 10),
 
-                      // DROPDOWN KATEGORI
                       Expanded(
                         flex: 6,
                         child: Column(
@@ -932,7 +926,6 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
                   ),
                   const SizedBox(height: 10),
 
-                  // TOTAL PENGELUARAN INPUT
                   const Text('Total Pengeluaran (Rp)',
                       style:
                           TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
@@ -950,7 +943,6 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
                   ),
                   const SizedBox(height: 10),
 
-                  // CATATAN TAMBAHAN
                   const Text('Catatan Tambahan',
                       style:
                           TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
@@ -964,7 +956,6 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
                   ),
                   const SizedBox(height: 10),
 
-                  // TOMBOL "+ KATEGORI"
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       foregroundColor: _textBlack,
@@ -988,7 +979,6 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
             ),
             const SizedBox(height: 16),
 
-            // TOMBOL SIMPAN
             SizedBox(
               width: double.infinity,
               height: 44,

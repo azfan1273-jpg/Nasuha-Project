@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../main.dart'; // Instance supabase global
 import '../providers/settings_provider.dart';
-
-final supabase = Supabase.instance.client;
 
 class ParfumScreen extends StatefulWidget {
   const ParfumScreen({super.key});
@@ -26,7 +24,7 @@ class _ParfumScreenState extends State<ParfumScreen> {
     _fetchParfums();
   }
 
-  // 🟢 FETCH PARFUM DENGAN FILTER STORE_ID EKSPLISIT
+  // 🟢 FETCH PARFUM DENGAN RPC
   Future<void> _fetchParfums() async {
     setState(() => _isLoading = true);
     try {
@@ -36,24 +34,23 @@ class _ParfumScreenState extends State<ParfumScreen> {
         return;
       }
 
-      final data = await supabase
-          .from('parfums')
-          .select()
-          .eq('store_id', storeId)
-          .order('name', ascending: true);
+      final data = await supabase.rpc('get_parfums_by_store', params: {
+        'p_store_id': storeId,
+      });
 
       if (mounted) {
         setState(() {
-          _parfums = List<Map<String, dynamic>>.from(data);
+          _parfums = List<Map<String, dynamic>>.from(data ?? []);
           _isLoading = false;
         });
       }
     } catch (e) {
-      debugPrint('Error fetch parfums: $e');
+      debugPrint('Error fetch parfums RPC: $e');
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  // 🟢 SIMPAN / EDIT PARFUM DENGAN RPC
   Future<void> _showFormParfumDialog([Map<String, dynamic>? item]) async {
     final nameController = TextEditingController(text: item?['name'] ?? '');
     final isEdit = item != null;
@@ -86,29 +83,24 @@ class _ParfumScreenState extends State<ParfumScreen> {
               final val = nameController.text.trim();
               if (val.isEmpty) return;
 
-              final settings = context.read<SettingsProvider>();
+              final storeId = context.read<SettingsProvider>().storeId;
+              if (storeId == null) return;
+
+              final parfumId = isEdit ? int.tryParse(item['id'].toString()) : null;
 
               Navigator.pop(ctx);
               setState(() => _isLoading = true);
 
               try {
-                if (isEdit) {
-                  await supabase
-                      .from('parfums')
-                      .update({'name': val})
-                      .eq('id', item['id']);
-                } else {
-                  await supabase.from('parfums').insert({
-                    'name': val,
-                    'store_id': settings.storeId,
-                  });
-                }
+                await supabase.rpc('upsert_parfum_by_store', params: {
+                  'p_id': parfumId,
+                  'p_store_id': storeId,
+                  'p_name': val,
+                });
                 _fetchParfums();
               } catch (e) {
-                debugPrint('Error save parfum: $e');
-                if (mounted) {
-                  setState(() => _isLoading = false);
-                }
+                debugPrint('Error save parfum RPC: $e');
+                if (mounted) setState(() => _isLoading = false);
               }
             },
             child: const Text('Simpan', style: TextStyle(color: Colors.white)),
@@ -118,12 +110,21 @@ class _ParfumScreenState extends State<ParfumScreen> {
     );
   }
 
-  Future<void> _deleteParfum(int id) async {
+  // 🟢 HAPUS PARFUM DENGAN RPC
+  Future<void> _deleteParfum(dynamic id) async {
     try {
-      await supabase.from('parfums').delete().eq('id', id);
+      final storeId = context.read<SettingsProvider>().storeId;
+      final intId = int.tryParse(id.toString());
+      if (storeId == null || intId == null) return;
+
+      await supabase.rpc('delete_parfum_by_store', params: {
+        'p_id': intId,
+        'p_store_id': storeId,
+      });
+
       _fetchParfums();
     } catch (e) {
-      debugPrint('Error delete parfum: $e');
+      debugPrint('Error delete parfum RPC: $e');
     }
   }
 
@@ -155,39 +156,41 @@ class _ParfumScreenState extends State<ParfumScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: _orangeAccent))
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _parfums.length,
-              itemBuilder: (context, index) {
-                final item = _parfums[index];
-                return Card(
-                  elevation: 0,
-                  margin: const EdgeInsets.only(bottom: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: ListTile(
-                    leading: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(8)),
-                      child: const Icon(Icons.local_florist_rounded, color: _orangeAccent, size: 20),
-                    ),
-                    title: Text(item['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.edit_outlined, color: Colors.blue, size: 18),
-                          onPressed: () => _showFormParfumDialog(item),
+          : _parfums.isEmpty
+              ? const Center(child: Text('Belum ada aroma parfum tersimpan'))
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _parfums.length,
+                  itemBuilder: (context, index) {
+                    final item = _parfums[index];
+                    return Card(
+                      elevation: 0,
+                      margin: const EdgeInsets.only(bottom: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      child: ListTile(
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(color: _cardDark, borderRadius: BorderRadius.circular(8)),
+                          child: const Icon(Icons.local_florist_rounded, color: _orangeAccent, size: 20),
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline_rounded, color: Colors.red, size: 18),
-                          onPressed: () => _deleteParfum(item['id']),
+                        title: Text(item['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit_outlined, color: Colors.blue, size: 18),
+                              onPressed: () => _showFormParfumDialog(item),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline_rounded, color: Colors.red, size: 18),
+                              onPressed: () => _deleteParfum(item['id']),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
+                      ),
+                    );
+                  },
+                ),
     );
   }
 }

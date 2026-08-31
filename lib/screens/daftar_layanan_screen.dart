@@ -47,42 +47,44 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
     return 'Rp $result';
   }
 
+  // 🟢 LOAD DATA MENGGUNAKAN ENGINE RPC BACKEND SUPABASE
   Future<void> _loadData() async {
-              setState(() => _isLoading = true);
-              try {
-                // 1. Ambil storeId dari SettingsProvider dulu
-                final storeId = context.read<SettingsProvider>().storeId;
-                if (storeId == null) return;
-          
-                // 2. Query data yang sudah difilter store_id
-                final servicesData = await supabase
-                    .from('services')
-                    .select('*')
-                    .eq('is_active', true)
-                    .eq('store_id', storeId) // Filter store_id
-                    .order('category_order', ascending: true)
-                    .order('name', ascending: true);
+    setState(() => _isLoading = true);
+    try {
+      final storeId = context.read<SettingsProvider>().storeId;
+      if (storeId == null) {
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
 
-			      List<String> rawCategories = [];
-			      for (var item in servicesData) {
-			        final catName = (item['category'] ?? '').toString().trim();
-			        if (catName.isNotEmpty && !rawCategories.contains(catName)) {
-			          rawCategories.add(catName);
-			        }
-			      }
+      // Panggil Stored Procedure get_services_by_store
+      final response = await supabase.rpc('get_services_by_store', params: {
+        'p_store_id': storeId,
+        'p_keyword': '',
+      });
 
-			      if (mounted) {
-			        setState(() {
-			          _servicesList = List<Map<String, dynamic>>.from(servicesData);
-			          _categoriesList = ['Semua', ...rawCategories];
-			          _isLoading = false;
-			        });
-			      }
-			    } catch (e) {
-			      debugPrint('Error fetch services: $e');
-			      if (mounted) setState(() => _isLoading = false);
-			    }
-			  }
+      final servicesData = List<Map<String, dynamic>>.from(response ?? []);
+
+      List<String> rawCategories = [];
+      for (var item in servicesData) {
+        final catName = (item['category'] ?? '').toString().trim();
+        if (catName.isNotEmpty && !rawCategories.contains(catName)) {
+          rawCategories.add(catName);
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _servicesList = servicesData;
+          _categoriesList = ['Semua', ...rawCategories];
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetch services RPC: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   List<Map<String, dynamic>> get _filteredServices {
     return _servicesList.where((service) {
@@ -124,10 +126,12 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
           children: [
             Text(
               'Harga: ${_formatRupiah((service['price'] as num?) ?? 0)} / $unit',
-              style: const TextStyle(fontSize: 11, color: Colors.black,
-              fontWeight: FontWeight.bold,
-             ),
-           ),
+              style: const TextStyle(
+                fontSize: 11,
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const SizedBox(height: 12),
             TextField(
               controller: qtyController,
@@ -137,24 +141,22 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
               decoration: InputDecoration(
                 labelText: 'Jumlah / Qty ($unit)',
                 hintText: 'Contoh: 2.5 atau 3',
-                // 👈 TAMBAHKAN BARIS INI UNTUK MENGUBAH WARNA HINT
-                  hintStyle: const TextStyle(
-                    color: Colors.black38, // Warna abu-abu yang lembut/tidak mencolok
-                    fontSize: 12,
-                    fontWeight: FontWeight.normal,
-                  ),
-                  
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10), 
-                    borderSide: BorderSide.none,
-                 ),
-               ),
-             ),
-           ],
-         ),
+                hintStyle: const TextStyle(
+                  color: Colors.black38,
+                  fontSize: 12,
+                  fontWeight: FontWeight.normal,
+                ),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10), 
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogCtx),
@@ -207,39 +209,38 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
           const SizedBox(width: 4),
         ],
       ),
-	  bottomNavigationBar: Container(
-	          padding: const EdgeInsets.all(16),
-	          decoration: const BoxDecoration(
-	            color: Colors.white,
-	            boxShadow: [
-	              BoxShadow(
-	                color: Colors.black12,
-	                blurRadius: 4,
-	                offset: Offset(0, -2),
-	              ),
-	            ],
-	          ),
-	          child: ElevatedButton.icon(
-	            style: ElevatedButton.styleFrom(
-	              backgroundColor: const Color(0xFFEC4899),
-	              padding: const EdgeInsets.symmetric(vertical: 14),
-	              shape: RoundedRectangleBorder(
-	                borderRadius: BorderRadius.circular(12),
-	              ),
-	            ),
-	            onPressed: _navigateToEditLayanan,
-	            icon: const Icon(Icons.add_rounded, color: Colors.white),
-	            label: const Text(
-	              'Tambah Layanan',
-	              style: TextStyle(
-	                color: Colors.white,
-	                fontWeight: FontWeight.bold,
-	                fontSize: 14,
-	              ),
-	            ),
-	          ),
-	        ),
-      
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 4,
+              offset: Offset(0, -2),
+            ),
+          ],
+        ),
+        child: ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFEC4899),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          onPressed: _navigateToEditLayanan,
+          icon: const Icon(Icons.add_rounded, color: Colors.white),
+          label: const Text(
+            'Tambah Layanan',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+        ),
+      ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),

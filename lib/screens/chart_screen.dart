@@ -31,7 +31,7 @@ class ReportChartWidget extends StatelessWidget {
       );
     }
 
-    // 🟢 1. TAB PENGELUARAN: DONUT CHART (DIPOSISIKAN DI TENGAH TANPA TEKS TOTAL)
+    // 🟢 DONUT CHART PENGELUARAN
     if (activeTab == 'Pengeluaran') {
       final Map<String, double> categoryMap = {};
       double totalExpense = 0.0;
@@ -81,7 +81,6 @@ class ReportChartWidget extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // 🟢 DONUT CHART MURNI (TANPA TEKS DI TENGAH)
             SizedBox(
               width: 130,
               height: 130,
@@ -91,7 +90,6 @@ class ReportChartWidget extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 20),
-            // LEGEND KATEGORI PENGELUARAN
             Expanded(
               child: ListView.builder(
                 shrinkWrap: true,
@@ -131,44 +129,50 @@ class ReportChartWidget extends StatelessWidget {
       );
     }
 
-    // 🟢 2. TAB OMSET, PENDAPATAN, PROFIT: LINE CHART
+    // 🟢 PERBAIKAN LOGIKA PENGELOMPOKAN GRAFIK
     final Map<String, Map<String, double>> dailyMap = {};
-
+    
     for (var item in items) {
       final String rawDate = item['created_at']?.toString() ?? '';
       if (rawDate.isEmpty) continue;
-      final String dateKey = _formatShortDate(rawDate);
+      
+      // Gunakan YYYY-MM-DD sebagai key agar pengurutan tanggal akurat
+      final String dateKey = rawDate.split('T')[0]; 
       final double amount = num.tryParse(item['total_price']?.toString() ?? '0')?.toDouble() ?? 0.0;
-      final bool isLunas = item['status_pembayaran'] == 'Lunas';
-
+      final bool isLunas = (item['status_pembayaran'] ?? '').toString().toLowerCase() == 'lunas';
+    
       dailyMap.putIfAbsent(dateKey, () => {'omset': 0.0, 'pendapatan': 0.0, 'pengeluaran': 0.0});
       dailyMap[dateKey]!['omset'] = (dailyMap[dateKey]!['omset'] ?? 0.0) + amount;
       if (isLunas) {
         dailyMap[dateKey]!['pendapatan'] = (dailyMap[dateKey]!['pendapatan'] ?? 0.0) + amount;
       }
     }
-
+    
     for (var item in expenses) {
       final String rawDate = item['created_at']?.toString() ?? '';
       if (rawDate.isEmpty) continue;
-      final String dateKey = _formatShortDate(rawDate);
+      
+      final String dateKey = rawDate.split('T')[0]; 
       final double amount = num.tryParse(item['amount']?.toString() ?? '0')?.toDouble() ?? 0.0;
-
+    
       dailyMap.putIfAbsent(dateKey, () => {'omset': 0.0, 'pendapatan': 0.0, 'pengeluaran': 0.0});
       dailyMap[dateKey]!['pengeluaran'] = (dailyMap[dateKey]!['pengeluaran'] ?? 0.0) + amount;
     }
-
+    
+    // 1. Urutkan ISO Date string (YYYY-MM-DD) secara akurat dari tanggal lama ke baru
     final List<String> sortedDates = dailyMap.keys.toList()..sort();
-    final List<Map<String, dynamic>> chartData = sortedDates.map((dateKey) {
-      final double o = dailyMap[dateKey]!['omset'] ?? 0.0;
-      final double p = dailyMap[dateKey]!['pendapatan'] ?? 0.0;
-      final double e = dailyMap[dateKey]!['pengeluaran'] ?? 0.0;
+    
+    // 2. Petakan data dan ubah key menjadi format tampilan pendek
+    final List<Map<String, dynamic>> chartData = sortedDates.map((isoDate) {
+      final double o = dailyMap[isoDate]!['omset'] ?? 0.0;
+      final double p = dailyMap[isoDate]!['pendapatan'] ?? 0.0;
+      final double e = dailyMap[isoDate]!['pengeluaran'] ?? 0.0;
       return {
-        'date': dateKey,
+        'date': _formatShortDate(isoDate), // Diformat di sini khusus untuk tampilan label sumbu-X
         'omset': o,
         'pendapatan': p,
         'pengeluaran': e,
-        'profit': o - e,
+        'profit': p - e,
       };
     }).toList();
 
@@ -207,7 +211,6 @@ class ReportChartWidget extends StatelessWidget {
   }
 }
 
-// 🟢 DONUT CHART PAINTER
 class DonutChartPainter extends CustomPainter {
   final List<Map<String, dynamic>> data;
   final double totalExpense;
@@ -245,7 +248,7 @@ class DonutChartPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
-// 🟢 LINE CHART PAINTER
+// 🟢 PAINTER GRAFIK DENGAN DUKUNGAN TITIK NOL DI TENGAH (RUGI / UNTUNG)
 class DynamicLineChartPainter extends CustomPainter {
   final List<Map<String, dynamic>> data;
   final String activeTab;
@@ -261,7 +264,7 @@ class DynamicLineChartPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    const double paddingLeft = 50.0;
+    const double paddingLeft = 55.0;
     const double paddingBottom = 25.0;
     const double paddingTop = 12.0;
     const double paddingRight = 12.0;
@@ -280,7 +283,7 @@ class DynamicLineChartPainter extends CustomPainter {
       lineThemeColor = const Color(0xFF16A34A);
     }
 
-    double maxVal = 10000.0;
+    double maxVal = 0.0;
     double minVal = 0.0;
 
     for (var item in data) {
@@ -289,14 +292,18 @@ class DynamicLineChartPainter extends CustomPainter {
       if (v < minVal) minVal = v;
     }
 
-    if (activeTab == 'Profit' && minVal < 0) {
-      double absMax = max(maxVal.abs(), minVal.abs());
-      maxVal = absMax;
-      minVal = -absMax;
+    // 🟢 DUKUNGAN TITIK NOL DI TENGAH UNTUK TAB PROFIT / LOSS
+    if (activeTab == 'Profit') {
+      double bound = max(maxVal.abs(), minVal.abs());
+      if (bound == 0) bound = 50000.0; // Fallback skala
+      maxVal = bound;
+      minVal = -bound;
+    } else {
+      if (maxVal == 0) maxVal = 50000.0;
+      minVal = 0.0;
     }
 
     double range = maxVal - minVal;
-    if (range == 0) range = 10000.0;
 
     final gridPaint = Paint()
       ..color = textColor.withOpacity(0.08)
@@ -305,28 +312,28 @@ class DynamicLineChartPainter extends CustomPainter {
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
     const int steps = 4;
 
-    if (activeTab == 'Profit' && minVal < 0) {
-      final double yZero = paddingTop + chartHeight - (((0 - minVal) / range) * chartHeight);
-      final zeroLinePaint = Paint()
-        ..color = Colors.redAccent.withOpacity(0.5)
-        ..strokeWidth = 1.5;
-
-      canvas.drawLine(
-        Offset(paddingLeft, yZero),
-        Offset(size.width - paddingRight, yZero),
-        zeroLinePaint,
-      );
-    }
-
+    // GAMBAR GARIS GRID DAN SUBTITEL Y-AXIS
     for (int i = 0; i <= steps; i++) {
       final double y = paddingTop + (chartHeight / steps) * i;
       final double currentVal = maxVal - ((range / steps) * i);
 
-      canvas.drawLine(Offset(paddingLeft, y), Offset(size.width - paddingRight, y), gridPaint);
+      // Garis Nol Merah Khusus
+      if (activeTab == 'Profit' && currentVal.round() == 0) {
+        final zeroPaint = Paint()
+          ..color = Colors.redAccent.withOpacity(0.6)
+          ..strokeWidth = 1.5;
+        canvas.drawLine(Offset(paddingLeft, y), Offset(size.width - paddingRight, y), zeroPaint);
+      } else {
+        canvas.drawLine(Offset(paddingLeft, y), Offset(size.width - paddingRight, y), gridPaint);
+      }
 
       textPainter.text = TextSpan(
         text: _formatLabel(currentVal),
-        style: TextStyle(color: textColor.withOpacity(0.6), fontSize: 9.5, fontWeight: FontWeight.w500),
+        style: TextStyle(
+          color: (activeTab == 'Profit' && currentVal < 0) ? Colors.redAccent : textColor.withOpacity(0.6),
+          fontSize: 9.5,
+          fontWeight: FontWeight.w500,
+        ),
       );
       textPainter.layout();
       textPainter.paint(canvas, Offset(paddingLeft - textPainter.width - 6, y - (textPainter.height / 2)));
@@ -351,17 +358,19 @@ class DynamicLineChartPainter extends CustomPainter {
     }
 
     if (points.isNotEmpty) {
-      final path = Path()..moveTo(points.first.dx, paddingTop + chartHeight);
+      final double yZero = paddingTop + chartHeight - (((0 - minVal) / range) * chartHeight);
+
+      final path = Path()..moveTo(points.first.dx, yZero);
       for (var pt in points) {
         path.lineTo(pt.dx, pt.dy);
       }
-      path.lineTo(points.last.dx, paddingTop + chartHeight);
+      path.lineTo(points.last.dx, yZero);
       path.close();
 
       canvas.drawPath(
         path,
         Paint()
-          ..color = lineThemeColor.withOpacity(0.10)
+          ..color = (points.last.dy > yZero ? Colors.redAccent : lineThemeColor).withOpacity(0.12)
           ..style = PaintingStyle.fill,
       );
 
@@ -373,14 +382,17 @@ class DynamicLineChartPainter extends CustomPainter {
       canvas.drawPath(
         linePath,
         Paint()
-          ..color = lineThemeColor
+          ..color = (points.last.dy > yZero ? Colors.redAccent : lineThemeColor)
           ..strokeWidth = 2.2
           ..style = PaintingStyle.stroke
           ..strokeCap = StrokeCap.round,
       );
 
       for (var pt in points) {
-        canvas.drawCircle(pt, 4.0, Paint()..color = lineThemeColor);
+        final bool isLoss = pt.dy > yZero;
+        final pointColor = isLoss ? Colors.redAccent : lineThemeColor;
+
+        canvas.drawCircle(pt, 4.0, Paint()..color = pointColor);
         canvas.drawCircle(pt, 4.0, Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 1.5);
       }
     }

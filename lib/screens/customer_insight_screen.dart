@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../helpers/customer_insight_engine.dart';
 import '../providers/settings_provider.dart';
 import 'customer_detail_screen.dart';
 
@@ -15,7 +16,6 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
   bool _isLoading = true;
   List<Map<String, dynamic>> _predictions = [];
   
-  // Ringkasan Dashboard Engine
   int _totalPotensial = 0;
   num _totalEstOmset = 0;
 
@@ -27,7 +27,6 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
 
   Future<void> _analyzePredictions() async {
     setState(() => _isLoading = true);
-    final supabase = Supabase.instance.client;
 
     try {
       final storeId = context.read<SettingsProvider>().storeId;
@@ -36,117 +35,12 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
         return;
       }
 
-      final customersResp = await supabase
-          .from('customers')
-          .select()
-          .eq('store_id', storeId);
-
-      final sixMonthsAgo = DateTime.now().subtract(const Duration(days: 180)).toIso8601String();
-      final ordersResp = await supabase
-          .from('orders')
-          .select()
-          .eq('store_id', storeId)
-          .gte('created_at', sixMonthsAgo)
-          .order('created_at', ascending: false);
-
-      final List<Map<String, dynamic>> customers = List<Map<String, dynamic>>.from(customersResp);
-      final List<Map<String, dynamic>> orders = List<Map<String, dynamic>>.from(ordersResp);
-
-      List<Map<String, dynamic>> predictions = [];
-      final DateTime tomorrow = DateTime.now().add(const Duration(days: 1));
-
-      // Hitung total omset toko untuk kalkulasi kontribusi
-      num storeTotalSpend = orders.fold(0, (sum, o) => sum + (num.tryParse(o['total_price']?.toString() ?? '0') ?? 0));
-
-      Map<String, List<Map<String, dynamic>>> customerOrdersMap = {};
-      for (var order in orders) {
-        String key = (order['customer_phone'] ?? order['customer_name'] ?? '').toString();
-        if (key.isNotEmpty) {
-          customerOrdersMap.putIfAbsent(key, () => []).add(order);
-        }
-      }
+      final predictions = await CustomerInsightEngine.fetchTomorrowPredictions(storeId: storeId);
 
       num totalOmsetAcc = 0;
-
-      for (var cust in customers) {
-        String phoneKey = (cust['phone'] ?? '').toString();
-        String nameKey = (cust['name'] ?? '').toString();
-        
-        List<Map<String, dynamic>> history = customerOrdersMap[phoneKey] ?? customerOrdersMap[nameKey] ?? [];
-        if (history.isEmpty) continue;
-
-        List<DateTime> dates = history
-            .map((e) => DateTime.tryParse(e['created_at'].toString()))
-            .whereType<DateTime>()
-            .toList()..sort((a, b) => b.compareTo(a));
-
-        if (dates.isEmpty) continue;
-
-        DateTime lastVisit = dates.first;
-        int daysSinceLastVisit = tomorrow.difference(lastVisit).inDays;
-
-        List<int> intervals = [];
-        for (int i = 0; i < dates.length - 1; i++) {
-          intervals.add(dates[i].difference(dates[i + 1]).inDays);
-        }
-
-        double avgInterval = intervals.isNotEmpty
-            ? intervals.reduce((a, b) => a + b) / intervals.length
-            : 7.0;
-
-        double intervalDiff = (daysSinceLastVisit - avgInterval).abs();
-        double intervalScore = 0;
-
-        if (intervalDiff <= 0.5) {
-          intervalScore = 100;
-        } else if (intervalDiff <= 1.0) {
-          intervalScore = 85;
-        } else if (intervalDiff <= 2.0) {
-          intervalScore = 50;
-        } else {
-          intervalScore = 10;
-        }
-
-        if (daysSinceLastVisit > (avgInterval * 2.5) && daysSinceLastVisit > 14) {
-          intervalScore = 0;
-        }
-
-        int sameDayCount = dates.where((d) => d.weekday == tomorrow.weekday).length;
-        double dayHabitScore = (sameDayCount / dates.length) * 100;
-
-        double finalScore = (intervalScore * 0.60) + (dayHabitScore * 0.40);
-
-        if (finalScore >= 40) {
-          num totalSpend = history.fold(0, (sum, o) => sum + (num.tryParse(o['total_price']?.toString() ?? '0') ?? 0));
-          double avgSpend = totalSpend / history.length;
-
-          totalOmsetAcc += avgSpend;
-
-          String reason = "Siklus ${avgInterval.toStringAsFixed(0)} hr";
-          if (dayHabitScore > 50) {
-            reason += " • Rutin hari ini";
-          }
-
-          // Hitung persentase kontribusi pelanggan terhadap total omset toko
-          double contributionPct = storeTotalSpend > 0 ? (totalSpend / storeTotalSpend) * 100 : 0;
-
-          predictions.add({
-            'name': cust['name'] ?? 'Pelanggan',
-            'phone': cust['phone'] ?? '-',
-            'score': finalScore.clamp(0, 99).toInt(),
-            'reason': reason,
-            'est_spend': avgSpend,
-            'favorite_service': _getFavoriteService(history),
-            'last_visit_days': daysSinceLastVisit,
-            'avg_interval': avgInterval.toStringAsFixed(1),
-            'total_tx': history.length, // 🟢 TOTAL TRANSAKSI
-            'contribution': '${contributionPct.toStringAsFixed(1)}%', // 🟢 KONTRIBUSI %
-            'cust_data': cust,
-          });
-        }
+      for (var item in predictions) {
+        totalOmsetAcc += (num.tryParse(item['est_spend']?.toString() ?? '0') ?? 0);
       }
-
-      predictions.sort((a, b) => (b['score'] as int).compareTo(a['score'] as int));
 
       if (mounted) {
         setState(() {
@@ -157,20 +51,26 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
         });
       }
     } catch (e) {
-      debugPrint('Error engine: $e');
+      debugPrint('Error screen engine: $e');
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  String _getFavoriteService(List<Map<String, dynamic>> history) {
-    Map<String, int> counts = {};
-    for (var o in history) {
-      String service = (o['services_summary'] ?? o['item_name'] ?? o['service_name'] ?? 'Cuci Komplit').toString();
-      counts[service] = (counts[service] ?? 0) + 1;
+  Future<void> _sendWhatsAppReminder(String phone, String name) async {
+    final cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
+    String formattedPhone = cleanPhone;
+    if (cleanPhone.startsWith('0')) {
+      formattedPhone = '62${cleanPhone.substring(1)}';
     }
-    if (counts.isEmpty) return 'Cuci Komplit';
-    var sorted = counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
-    return sorted.first.key;
+
+    final message = Uri.encodeComponent(
+      "Halo Kak $name! Laundry pakaiannya sudah masuk jadwal cuci rutin nih. Yuk laundry hari ini agar pakaian tetap bersih & harum! 😊",
+    );
+
+    final url = Uri.parse("https://wa.me/$formattedPhone?text=$message");
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    }
   }
 
   String _formatRupiah(num number) {
@@ -191,7 +91,7 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          'Customer Insight Engine',
+          'AI Customer Insight Engine',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
         ),
         centerTitle: true,
@@ -214,18 +114,18 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
                       Expanded(
                         child: _buildSummaryCard(
                           title: 'Potensi Masuk',
-                          value: '$_totalPotensial Orang',
-                          subtitle: 'Prediksi Akurasi 90%+',
-                          icon: Icons.people_alt_rounded,
+                          value: '$_totalPotensial Pelanggan',
+                          subtitle: 'Prediksi Akurasi AI 90%+',
+                          icon: Icons.psychology_rounded,
                           accentColor: const Color(0xFF00E676),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: _buildSummaryCard(
-                          title: 'Est. Kas Masuk',
+                          title: 'Proyeksi Kas',
                           value: _formatRupiah(_totalEstOmset),
-                          subtitle: 'Proyeksi Esok Hari',
+                          subtitle: 'Estimasi Esok Hari',
                           icon: Icons.account_balance_wallet_rounded,
                           accentColor: Colors.amber,
                         ),
@@ -234,12 +134,12 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
                   ),
                   const SizedBox(height: 20),
                   const Text(
-                    'Daftar Pelanggan Diprediksi Datang Besok',
+                    'Prediksi Pelanggan Datang Esok Hari',
                     style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'Geser tabel ke kanan untuk melihat rincian riwayat & kontribusi',
+                    'Geser tabel ke kanan untuk melihat status RFM & tombol Follow Up WA',
                     style: TextStyle(color: Colors.grey, fontSize: 11),
                   ),
                   const SizedBox(height: 12),
@@ -247,7 +147,7 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
                       ? const Center(
                           child: Padding(
                             padding: EdgeInsets.all(30),
-                            child: Text('Belum ada pelanggan yang masuk siklus esok hari', style: TextStyle(color: Colors.grey)),
+                            child: Text('Belum ada data riwayat yang mencukupi untuk diprediksi', style: TextStyle(color: Colors.grey)),
                           ),
                         )
                       : _buildFrozenPredictionTable(),
@@ -257,7 +157,6 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
     );
   }
 
-  // 🟢 TABEL DENGAN KOLOM NAMA TERKUNCI & SCROLL HORIZONTAL LENGKAP
   Widget _buildFrozenPredictionTable() {
     return Container(
       decoration: BoxDecoration(
@@ -269,9 +168,9 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. KOLOM KIRI (STATIS / FROZEN: NAMA PELANGGAN)
+          // 1. KOLOM STABIL (FROZEN: NAMA PELANGGAN)
           SizedBox(
-            width: 120,
+            width: 130,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -287,6 +186,7 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
                 ),
                 const Divider(height: 1, thickness: 1, color: Colors.white12),
                 ..._predictions.map((item) {
+                  final String tag = item['tag'] ?? 'Aktif';
                   return Container(
                     height: 52,
                     padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -294,10 +194,24 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
                     decoration: const BoxDecoration(
                       border: Border(bottom: BorderSide(color: Colors.white10, width: 0.5)),
                     ),
-                    child: Text(
-                      item['name'] ?? '-',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
-                      overflow: TextOverflow.ellipsis,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item['name'] ?? '-',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          tag,
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: tag == 'VIP' ? Colors.amber : (tag == 'Resiko Churn' ? Colors.redAccent : Colors.lightGreenAccent),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   );
                 }).toList(),
@@ -305,10 +219,9 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
             ),
           ),
 
-          // Pemisah Vertikal Antara Kolom
           Container(width: 1, color: Colors.white12),
 
-          // 2. KOLOM KANAN (SCROLLABLE HORIZONTAL)
+          // 2. KOLOM SCROLLABLE HORIZONTAL
           Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -316,24 +229,22 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Header Scrollable
                   Container(
                     height: 42,
                     color: const Color(0xFF252528),
                     child: const Row(
                       children: [
-                        _HeaderCell(title: 'Skor', width: 65),
-                        _HeaderCell(title: 'Status Siklus', width: 140),
+                        _HeaderCell(title: 'Skor AI', width: 65),
+                        _HeaderCell(title: 'Analisis Siklus', width: 140),
                         _HeaderCell(title: 'Est. Omset', width: 110),
                         _HeaderCell(title: 'Layanan Favorit', width: 130),
-                        _HeaderCell(title: 'Total Tx', width: 90),
-                        _HeaderCell(title: 'Kontribusi', width: 90),
-                        _HeaderCell(title: 'Aksi', width: 60, isCenter: true),
+                        _HeaderCell(title: 'Total Tx', width: 80),
+                        _HeaderCell(title: 'Kontribusi', width: 80),
+                        _HeaderCell(title: 'Follow-Up', width: 90, isCenter: true),
                       ],
                     ),
                   ),
                   const Divider(height: 1, thickness: 1, color: Colors.white12),
-                  // Row Data Scrollable
                   ..._predictions.map((item) {
                     final int score = item['score'] ?? 0;
                     final num estSpend = item['est_spend'] ?? 0;
@@ -341,8 +252,8 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
                     final String contribution = item['contribution'] ?? '0%';
 
                     Color badgeColor = Colors.orange;
-                    if (score >= 85) badgeColor = const Color(0xFF00E676);
-                    else if (score >= 60) badgeColor = Colors.amber;
+                    if (score >= 80) badgeColor = const Color(0xFF00E676);
+                    else if (score >= 55) badgeColor = Colors.amber;
 
                     return Container(
                       height: 52,
@@ -351,7 +262,6 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
                       ),
                       child: Row(
                         children: [
-                          // Skor
                           _DataCell(
                             width: 65,
                             child: Text(
@@ -359,7 +269,6 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
                               style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: badgeColor),
                             ),
                           ),
-                          // Status Siklus
                           _DataCell(
                             width: 140,
                             child: Text(
@@ -368,7 +277,6 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          // Est. Omset
                           _DataCell(
                             width: 110,
                             child: Text(
@@ -376,7 +284,6 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
                               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF00E676)),
                             ),
                           ),
-                          // Layanan Favorit
                           _DataCell(
                             width: 130,
                             child: Text(
@@ -385,44 +292,41 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          // Total Transaksi
                           _DataCell(
-                            width: 90,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: Colors.blue.withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                '$totalTx Order',
-                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.lightBlueAccent),
-                              ),
+                            width: 80,
+                            child: Text(
+                              '$totalTx Order',
+                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.lightBlueAccent),
                             ),
                           ),
-                          // Kontribusi
                           _DataCell(
-                            width: 90,
+                            width: 80,
                             child: Text(
                               contribution,
                               style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white70),
                             ),
                           ),
-                          // Aksi
+                          // Tombol WA Follow Up
                           _DataCell(
-                            width: 60,
-                            child: IconButton(
-                              icon: const Icon(Icons.chevron_right_rounded, size: 20, color: Color(0xFF00E676)),
-                              onPressed: () {
-                                if (item['cust_data'] != null) {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => CustomerDetailScreen(customer: item['cust_data']),
-                                    ),
-                                  );
-                                }
-                              },
+                            width: 90,
+                            child: InkWell(
+                              onTap: () => _sendWhatsAppReminder(item['phone'] ?? '', item['name'] ?? ''),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: Colors.greenAccent.withOpacity(0.4)),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.chat_rounded, size: 12, color: Colors.greenAccent),
+                                    SizedBox(width: 4),
+                                    Text('WA', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                         ],
@@ -471,7 +375,6 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
   }
 }
 
-// Widget Helper Header
 class _HeaderCell extends StatelessWidget {
   final String title;
   final double width;
@@ -498,7 +401,6 @@ class _HeaderCell extends StatelessWidget {
   }
 }
 
-// Widget Helper Cell Data
 class _DataCell extends StatelessWidget {
   final Widget child;
   final double width;

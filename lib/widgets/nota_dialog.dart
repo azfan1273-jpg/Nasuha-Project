@@ -35,14 +35,21 @@ class _NotaDialogState extends State<NotaDialog> {
     }
   }
 
-  // 🟢 FUNGSI PEMBANTU RATA KIRI-KANAN DINAMIS (SESUAI UKURAN KERTAS)
+  // 🟢 FUNGSI RATA TENGAH UNTUK HEADER & FOOTER
+  String _centerText(String text, {int width = 32}) {
+    if (text.length >= width) return text;
+    int leftPadding = (width - text.length) ~/ 2;
+    return '${' ' * leftPadding}$text';
+  }
+
+  // 🟢 FUNGSI RATA KIRI-KANAN UNTUK ITEM & HARGA
   String _formatTwoColumns(String left, String right, {int width = 32}) {
     int spaceCount = width - left.length - right.length;
     if (spaceCount < 1) spaceCount = 1;
     return '$left${' ' * spaceCount}$right';
   }
 
-  // 🟢 FUNGSI EKSEKUSI CETAK THERMAL REAL-TIME (SINKRON DENGAN PENGATURAN)
+  // 🟢 FUNGSI EKSEKUSI CETAK THERMAL PRESISI SINKRON PREVIEW
   Future<void> _printReceiptToBluetooth(BuildContext context, bool isCustomerMode) async {
     bool isConnected = await PrintBluetoothThermal.connectionStatus;
     if (!isConnected) {
@@ -57,7 +64,6 @@ class _NotaDialogState extends State<NotaDialog> {
     final settingsProv = context.read<SettingsProvider>();
     final storeSettings = settingsProv.storeSettings;
     
-    // 1. AMBIL INPUT MANUAL & SWITCH TOGGLE DARI SETTINGS
     final String namaToko = settingsProv.namaToko.isNotEmpty ? settingsProv.namaToko.toUpperCase() : 'NAMA TOKO';
     final String subHeader = storeSettings?['header_nama_toko'] ?? '';
     final String headerHp = storeSettings?['header_hp'] ?? '';
@@ -67,10 +73,8 @@ class _NotaDialogState extends State<NotaDialog> {
     final bool showFooter = storeSettings?['show_footer_nota'] ?? true;
     final String paperSize = storeSettings?['paper_size'] ?? '58 mm';
     
-    // Tentukan lebar karakter (58mm = 32 char, 80mm = 48 char)
     final int printWidth = (paperSize == '80 mm') ? 48 : 32;
 
-    // 2. PARSING DATA TRANSAKSI
     final String nota = (widget.order['nota_number'] ?? 'LNDR-${(widget.order['id'] ?? 0).toString().padLeft(5, '0')}').toString();
     final String customerName = (widget.order['customer_name'] ?? 'Pelanggan').toString();
     final String kasirName = (widget.order['kasir_name'] ?? widget.order['user_name'] ?? 'Admin').toString();
@@ -103,16 +107,29 @@ class _NotaDialogState extends State<NotaDialog> {
 
     StringBuffer sb = StringBuffer();
 
+    // SPASI ENTER ATAS
+    sb.writeln("\n\n\n\n\n");
+
     if (isCustomerMode) {
-      // 🟢 HEADER TOKO & NO HP MANUAL
-      sb.writeln(namaToko);
-      if (subHeader.isNotEmpty) sb.writeln(subHeader);
-      if (headerHp.isNotEmpty && headerHp != '{{HP :}}') sb.writeln("No. HP: $headerHp");
+      // HEADER TOKO RATA TENGAH
+      sb.write("\x1D\x21\x11");
+      sb.writeln(_centerText(namaToko, width: 16));
+      sb.write("\x1D\x21\x00");
+      if (subHeader.isNotEmpty) {
+        for (var line in _wrapText(subHeader, printWidth)) {
+          sb.writeln(_centerText(line, width: printWidth));
+        }
+      }
+      if (headerHp.isNotEmpty && headerHp != '{{HP :}}') {
+        sb.writeln(_centerText("NO. HP: $headerHp", width: printWidth));
+      }
       sb.writeln(lineDivider);
       
-      // 🟢 PELANGGAN, NOTA, & NAMA KASIR (JIKA SWITCH AKTIF)
-      sb.writeln(customerName.toUpperCase());
-      sb.writeln(nota);
+      // PELANGGAN & NOTA
+      sb.write("\x1D\x21\x01");
+      sb.writeln(_centerText(customerName.toUpperCase(), width: printWidth));
+      sb.write("\x1D\x21\x00");
+      sb.writeln(_centerText(nota, width: printWidth));
       if (showNamaKasir) {
         sb.writeln(_formatTwoColumns("Kasir:", kasirName, width: printWidth));
       }
@@ -123,7 +140,7 @@ class _NotaDialogState extends State<NotaDialog> {
       sb.writeln(_formatTwoColumns("Est. Selesai", estDate, width: printWidth));
       sb.writeln(lineDivider);
       
-      // ITEMS
+      // ITEMS LAYANAN
       for (var item in itemsList) {
         final name = (item['service_name'] ?? 'Layanan').toString();
         final unit = (item['unit'] ?? 'kg').toString();
@@ -140,25 +157,37 @@ class _NotaDialogState extends State<NotaDialog> {
       }
       sb.writeln(lineDivider);
       
-      // RINCIAN HARGA LENGKAP
+      // HARGA
       sb.writeln(_formatTwoColumns("Sub Total", _formatRupiah(subTotal), width: printWidth));
       sb.writeln(_formatTwoColumns("Discount", _formatRupiah(discount), width: printWidth));
       sb.writeln(_formatTwoColumns("TOTAL", _formatRupiah(totalPrice), width: printWidth));
       sb.writeln(lineDivider);
       
-      // 🟢 FOOTER NOTA MANUAL (JIKA SWITCH AKTIF)
+      // FOOTER
       if (showFooter && footerNota.isNotEmpty) {
-        sb.writeln(footerNota);
+        for (var line in _wrapText(footerNota, printWidth)) {
+          sb.writeln(_centerText(line, width: printWidth));
+        }
         sb.writeln();
       }
-      sb.writeln("**** TERIMA KASIH ****\n\n\n");
+      sb.writeln(_centerText("**** TERIMA KASIH ****", width: printWidth));
+      sb.writeln("\n\n\n");
     } else {
-      // MODE PRODUKSI
-      sb.writeln("[ NOTA PRODUKSI / WORKSHOP ]");
-      sb.writeln(namaToko);
-      sb.writeln(nota);
-      sb.writeln("Pelanggan: $customerName");
+      // NOTA PRODUKSI / WORKSHOP
+      sb.writeln(_centerText("[ NOTA PRODUKSI / WORKSHOP ]", width: printWidth));
+      sb.writeln();
+      
+      sb.write("\x1D\x21\x11");
+      sb.writeln(_centerText(namaToko, width: 16));
+      sb.write("\x1D\x21\x00");
+      
+      sb.write("\x1D\x21\x01");
+      sb.writeln(_centerText(nota, width: printWidth));
+      sb.write("\x1D\x21\x00");
+      
+      sb.writeln(_centerText("Pelanggan: ${customerName.toUpperCase()}", width: printWidth));
       sb.writeln(doubleDivider);
+      
       for (var item in itemsList) {
         final name = (item['service_name'] ?? 'Layanan').toString();
         final unit = (item['unit'] ?? 'Pcs').toString();
@@ -166,6 +195,7 @@ class _NotaDialogState extends State<NotaDialog> {
         sb.writeln(_formatTwoColumns(name, "[$qty $unit]", width: printWidth));
       }
       sb.writeln(doubleDivider);
+      
       sb.writeln(_formatTwoColumns("PARFUM:", parfum.toUpperCase(), width: printWidth));
       sb.writeln(_formatTwoColumns("TGL MASUK:", createdDate, width: printWidth));
       sb.writeln(_formatTwoColumns("DEADLINE:", estDate, width: printWidth));
@@ -184,9 +214,25 @@ class _NotaDialogState extends State<NotaDialog> {
     }
   }
 
+  List<String> _wrapText(String text, int maxLength) {
+    final words = text.split(' ');
+    final List<String> lines = [];
+    String currentLine = '';
+
+    for (var word in words) {
+      if ((currentLine + word).length + 1 <= maxLength) {
+        currentLine += (currentLine.isEmpty ? '' : ' ') + word;
+      } else {
+        lines.add(currentLine);
+        currentLine = word;
+      }
+    }
+    if (currentLine.isNotEmpty) lines.add(currentLine);
+    return lines;
+  }
+
   @override
   Widget build(BuildContext context) {
-    // 1. AKSES STATE DARI SETTINGSPROVIDER
     final settingsProv = context.watch<SettingsProvider>();
     final storeSettings = settingsProv.storeSettings;
 
@@ -197,7 +243,6 @@ class _NotaDialogState extends State<NotaDialog> {
     final String footerNota = storeSettings?['footer_nota'] ?? '';
     final bool showFooterNota = storeSettings?['show_footer_nota'] ?? true;
 
-    // 2. PARSING DATA ORDER
     final String nota = (widget.order['nota_number'] ?? 'LNDR-${(widget.order['id'] ?? 0).toString().padLeft(5, '0')}').toString();
     final String customerName = (widget.order['customer_name'] ?? 'Pelanggan').toString();
     final String customerPhone = (widget.order['customer_phone'] ?? '-').toString();
@@ -208,7 +253,6 @@ class _NotaDialogState extends State<NotaDialog> {
     final String notes = (widget.order['catatan'] ?? widget.order['notes'] ?? '-').toString();
     final num totalPrice = num.tryParse(widget.order['total_price']?.toString() ?? '0') ?? 0;
 
-    // Items List
     final List<dynamic> itemsFromDb = widget.order['order_items'] is List ? widget.order['order_items'] : [];
     final List<Map<String, dynamic>> itemsList = [];
 
@@ -232,7 +276,6 @@ class _NotaDialogState extends State<NotaDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Header Dialog
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -251,7 +294,6 @@ class _NotaDialogState extends State<NotaDialog> {
             ),
             const SizedBox(height: 12),
 
-            // DUA PILIHAN TAB TOMBOL
             Row(
               children: [
                 Expanded(
@@ -303,12 +345,11 @@ class _NotaDialogState extends State<NotaDialog> {
             ),
             const SizedBox(height: 14),
 
-            // KERTAS PREVIEW NOTA THERMAL (58mm Style)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFFFFDF9), // Warna kertas struk
+                color: const Color(0xFFFFFDF9),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.grey.shade300),
                 boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 2)],
@@ -343,7 +384,6 @@ class _NotaDialogState extends State<NotaDialog> {
             ),
             const SizedBox(height: 16),
 
-            // TOMBOL EKSEKUSI CETAK
             SizedBox(
               width: double.infinity,
               height: 42,
@@ -377,7 +417,6 @@ class _NotaDialogState extends State<NotaDialog> {
     );
   }
 
-  // BUILDER PREVIEW NOTA CUSTOMER
   Widget _buildCustomerReceipt({
     required String namaToko,
     required String subHeader,
@@ -400,7 +439,6 @@ class _NotaDialogState extends State<NotaDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // 1. NAMA TOKO & SUB HEADER
         Text(
           namaToko,
           textAlign: TextAlign.center,
@@ -418,7 +456,6 @@ class _NotaDialogState extends State<NotaDialog> {
         const SizedBox(height: 6),
         Text('---------------------------------------------------', style: TextStyle(fontSize: 10, color: Colors.grey.shade400)),
 
-        // 2. NAMA PELANGGAN & NOTA
         Text(
           customerName.toUpperCase(),
           textAlign: TextAlign.center,
@@ -431,7 +468,6 @@ class _NotaDialogState extends State<NotaDialog> {
         ),
         const SizedBox(height: 6),
 
-        // 3. TANGGAL MASUK & EST. SELESAI
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -449,7 +485,6 @@ class _NotaDialogState extends State<NotaDialog> {
 
         Text('---------------------------------------------------', style: TextStyle(fontSize: 10, color: Colors.grey.shade400)),
 
-        // 4. DAFTAR ITEM LAYANAN
         ...itemsList.map((item) {
           final String name = (item['service_name'] ?? 'Layanan').toString();
           final String unit = (item['unit'] ?? 'kg').toString();
@@ -468,7 +503,6 @@ class _NotaDialogState extends State<NotaDialog> {
 
         Text('---------------------------------------------------', style: TextStyle(fontSize: 10, color: Colors.grey.shade400)),
 
-        // 5. PARFUM, STATUS & CATATAN
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -500,7 +534,6 @@ class _NotaDialogState extends State<NotaDialog> {
 
         Text('---------------------------------------------------', style: TextStyle(fontSize: 10, color: Colors.grey.shade400)),
 
-        // 6. RINCIAN HARGA
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -526,7 +559,6 @@ class _NotaDialogState extends State<NotaDialog> {
 
         Text('---------------------------------------------------', style: TextStyle(fontSize: 10, color: Colors.grey.shade400)),
 
-        // 7. FOOTER NOTA DINAMIS
         if (showFooter && footerNota.isNotEmpty) ...[
           const SizedBox(height: 6),
           Text(
@@ -537,7 +569,6 @@ class _NotaDialogState extends State<NotaDialog> {
           const SizedBox(height: 6),
         ],
 
-        // 8. TEKS FIX PALING BAWAH
         const SizedBox(height: 4),
         const Text(
           '**** TERIMA KASIH ****',
@@ -548,7 +579,6 @@ class _NotaDialogState extends State<NotaDialog> {
     );
   }
 
-  // BUILDER PREVIEW NOTA PRODUKSI
   Widget _buildProduksiReceipt({
     required String namaToko,
     required String nota,
@@ -573,7 +603,6 @@ class _NotaDialogState extends State<NotaDialog> {
         Text('Pelanggan: $customerName', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
         const Text('========================================', style: TextStyle(fontSize: 10, color: Colors.grey)),
 
-        // Items Produksi
         ...itemsList.map((item) {
           final String name = (item['service_name'] ?? 'Layanan').toString();
           final String unit = (item['unit'] ?? 'Pcs').toString();

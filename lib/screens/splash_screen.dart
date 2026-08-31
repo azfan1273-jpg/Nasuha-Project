@@ -91,7 +91,7 @@ import 'dart:math' as math;
 
             // 🟢 TULISAN JUDUL APLIKASI
             const Text(
-              'LNDR',
+              'NASUHA',
               style: TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,

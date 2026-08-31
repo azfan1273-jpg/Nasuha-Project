@@ -4,7 +4,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import '../providers/settings_provider.dart';
 import 'customer_detail_screen.dart';
-import '../helpers/database_helper.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -53,48 +52,32 @@ class _CariPelangganScreenState extends State<CariPelangganScreen> {
     });
   }
 
-  // 🟢 METHOD LOAD PELANGGAN DENGAN FALLBACK OFFLINE
+  // 🟢 FETCH DATA DARI ENGINE BACKEND (RPC)
   Future<void> _loadCustomers([String keyword = '']) async {
     if (!mounted) return;
     setState(() => _isLoading = true);
-  
+
     try {
       final storeId = context.read<SettingsProvider>().storeId;
       if (storeId == null) {
         if (mounted) setState(() => _isLoading = false);
         return;
       }
-  
-      // 1. COBA FETCH DARI SUPABASE (ONLINE MODE)
-      var query = supabase.from('customers').select().eq('store_id', storeId);
-      if (keyword.isNotEmpty) {
-        query = query.or('name.ilike.%$keyword%,phone.ilike.%$keyword%');
-      }
-      final data = await query;
-      final onlineData = List<Map<String, dynamic>>.from(data);
-  
-      // Simpan ke SQLite lokal sebagai cache
-      await DatabaseHelper.instance.saveCustomersLocal(onlineData);
-  
+
+      final response = await supabase.rpc('get_customers_by_store', params: {
+        'p_store_id': storeId,
+        'p_keyword': keyword,
+      });
+
+      final dataList = List<Map<String, dynamic>>.from(response ?? []);
+
       if (mounted) {
         setState(() {
-          _customersList = onlineData;
+          _customersList = dataList;
         });
       }
     } catch (e) {
-      debugPrint('Offline Mode Detected: Fetching from SQLite local ($e)');
-      
-      // 2. FALLBACK: JIKA OFFLINE, AMBIL DARI SQLITE LOKAL
-      try {
-        final localData = await DatabaseHelper.instance.getCustomersLocal(keyword);
-        if (mounted) {
-          setState(() {
-            _customersList = localData;
-          });
-        }
-      } catch (errLocal) {
-        debugPrint('Error read local customers: $errLocal');
-      }
+      debugPrint('Error fetch customers RPC: $e');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -200,51 +183,23 @@ class _CariPelangganScreenState extends State<CariPelangganScreen> {
                 return;
               }
 
-              final newCustomerData = {
-                'store_id': storeId,
-                'name': nameController.text.trim(),
-                'phone': phoneController.text.trim().isEmpty ? '-' : phoneController.text.trim(),
-                'address': addressController.text.trim().isEmpty ? '-' : addressController.text.trim(),
-              };
-
               try {
-                // 1. Coba simpan online ke Supabase
-                final response = await supabase
-                    .from('customers')
-                    .insert(newCustomerData)
-                    .select()
-                    .single();
-
-                // Simpan ke cache lokal
-                await DatabaseHelper.instance.saveCustomersLocal([response]);
+                // 🟢 SIMPAN VIA ENGINE RPC BACKEND
+                final response = await supabase.rpc('insert_customer_by_store', params: {
+                  'p_store_id': storeId,
+                  'p_name': nameController.text.trim(),
+                  'p_phone': phoneController.text.trim().isEmpty ? '-' : phoneController.text.trim(),
+                  'p_address': addressController.text.trim().isEmpty ? '-' : addressController.text.trim(),
+                });
 
                 if (dialogContext.mounted) {
-                  Navigator.pop(dialogContext, response);
+                  Navigator.pop(dialogContext, Map<String, dynamic>.from(response));
                 }
               } catch (e) {
-                debugPrint('Gagal online, menyimpan ke SQLite lokal: $e');
-
-                // 2. Fallback: Simpan ke SQLite lokal saat offline
-                try {
-                  final offlineResponse = await DatabaseHelper.instance.insertCustomerOffline(newCustomerData);
-
-                  if (dialogContext.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Tersimpan di HP (Mode Offline)'),
-                        backgroundColor: Colors.orange,
-                      ),
-                    );
-                    Navigator.pop(dialogContext, offlineResponse);
-                  }
-                } catch (localErr) {
-                  // 3. Jika simpan online DAN offline sama-sama gagal
-                  debugPrint('Error total simpan pelanggan: $localErr');
-                  if (dialogContext.mounted) {
-                    ScaffoldMessenger.of(dialogContext).showSnackBar(
-                      SnackBar(content: Text('Gagal menyimpan pelanggan: $localErr')),
-                    );
-                  }
+                if (dialogContext.mounted) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    SnackBar(content: Text('Gagal menyimpan pelanggan: $e')),
+                  );
                 }
               }
             },
