@@ -9,6 +9,8 @@ import '../main.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/form_pengeluaran_dialog.dart';
 import 'chart_screen.dart';
+import 'piutang_screen.dart';
+import 'custom_date_screen.dart';
 
 class ReportScreen extends StatefulWidget {
   const ReportScreen({Key? key}) : super(key: key);
@@ -30,6 +32,8 @@ class _ReportScreenState extends State<ReportScreen> {
   double _totalOmset = 0;
   double _totalPendapatan = 0;
   double _totalPengeluaran = 0;
+
+  double _totalPiutang = 0; // <-- Tambahkan variabel ini di atas
   
   double _cashTotal = 0;
   double _qrisTotal = 0;
@@ -42,6 +46,7 @@ class _ReportScreenState extends State<ReportScreen> {
   void initState() {
     super.initState();
     _loadLaporanKeuangan();
+    _loadTotalPiutang();
   }
 
   Future<void> _loadLaporanKeuangan() async {
@@ -88,40 +93,54 @@ class _ReportScreenState extends State<ReportScreen> {
     }
   }
 
+  Future<void> _loadTotalPiutang() async {
+        try {
+          final storeId = context.read<SettingsProvider>().storeId;
+          if (storeId == null) return;
+    
+          final response = await supabase
+              .from('orders')
+              .select('total_price') // <-- Ambil langsung kolom yang benar
+              .eq('store_id', storeId)
+              .eq('status_pembayaran', 'Belum Lunas');
+    
+          double sum = 0;
+          for (var item in (response as List)) {
+            final val = num.tryParse(item['total_price']?.toString() ?? '0')?.toDouble() ?? 0.0;
+            sum += val;
+          }
+    
+          if (mounted) {
+            setState(() {
+              _totalPiutang = sum;
+            });
+          }
+        } catch (e) {
+          debugPrint('Error load total piutang: $e');
+        }
+      }
+
   // 🟢 DIALOG PICKER TANGGAL KUSTOM
   Future<void> _pickCustomDateRange() async {
-    final picked = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      initialDateRange: _customDateRange ??
-          DateTimeRange(
-            start: DateTime.now().subtract(const Duration(days: 7)),
-            end: DateTime.now(),
+      // Panggil CustomDateScreen buatanmu dengan Navigator.push
+      final DateTimeRange? picked = await Navigator.push(
+        context,
+        PageRouteBuilder(
+          opaque: false, // Supaya latar belakangnya transparan/dimmed
+          pageBuilder: (context, animation, secondaryAnimation) => CustomDateScreen(
+            initialRange: _customDateRange,
           ),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.dark(
-              primary: Theme.of(context).primaryColor,
-              onPrimary: Colors.white,
-              surface: const Color(0xFF1E1E1E),
-              onSurface: Colors.white,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-
-    if (picked != null) {
-      setState(() {
-        _customDateRange = picked;
-        _filterPeriode = 'Sesuaikan Tanggal...';
-      });
-      _loadLaporanKeuangan();
+        ),
+      );
+  
+      if (picked != null) {
+        setState(() {
+          _customDateRange = picked;
+          _filterPeriode = 'Sesuaikan Tanggal...';
+        });
+        _loadLaporanKeuangan();
+      }
     }
-  }
 
   Future<void> _exportToExcel() async {
     setState(() => _isExporting = true);
@@ -314,16 +333,69 @@ class _ReportScreenState extends State<ReportScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  _buildSummaryCard(
-                    title: 'Laba Bersih (Margin: $profitMargin%)',
-                    amount: _formatRupiah(labaBersih),
-                    color: labaBersih >= 0 ? Colors.blue : Colors.redAccent,
-                    icon: Icons.account_balance_wallet_rounded,
-                    isFullWidth: true,
-                    settings: settings,
-                  ),
+				// Baris 2: Piutang & Laba Bersih (Sejajar / 2 Kolom)
+                  Row(
+                    children: [
+                      // Kartu Piutang (Bisa diklik menuju PiutangScreen)
+                      Expanded(
+                        child: InkWell(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const PiutangScreen()),
+                            ).then((_) {
+                              _loadLaporanKeuangan();
+                              _loadTotalPiutang(); // <-- Refresh juga total piutangnya
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: settings.cardDark,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.orangeAccent.withOpacity(0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(color: Colors.orangeAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                                  child: const Icon(Icons.money_off_rounded, color: Colors.orangeAccent, size: 22),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Piutang', style: TextStyle(fontSize: 11, color: settings.textColor.withOpacity(0.6), fontWeight: FontWeight.w500)),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _formatRupiah(_totalPiutang),
+                                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: settings.textColor),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildSummaryCard(
+                        title: 'Laba Bersih ($profitMargin%)',
+                        amount: _formatRupiah(labaBersih),
+                        color: labaBersih >= 0 ? Colors.blue : Colors.redAccent,
+                        icon: Icons.account_balance_wallet_rounded,
+                        settings: settings,
+                      ),
+                    ),
+                  ],
+                ),
                   const SizedBox(height: 20),
-
+                  
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(

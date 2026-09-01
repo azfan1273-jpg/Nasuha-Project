@@ -17,8 +17,9 @@ import 'customer_insight_screen.dart';
 import '../providers/order_provider.dart';
 import '../helpers/database_helper.dart';
 import 'discount_screen.dart';
-import 'splash_screen.dart';  
 import 'login_screen.dart';
+import 'chat_screen.dart'; 
+
 
 class KasirPageManager extends StatefulWidget {
   const KasirPageManager({Key? key}) : super(key: key);
@@ -32,6 +33,9 @@ class _KasirPageManagerState extends State<KasirPageManager> {
   int _currentIndex = 0;
   final GlobalKey<KasirHomeScreenState> _kasirHomeKey = GlobalKey<KasirHomeScreenState>();
 
+  // Kunci khusus untuk mengontrol Scaffold utama agar drawer tidak freeze
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
   // State untuk Broadcast Announcement dari Developer
   Map<String, dynamic>? _announcement;
 
@@ -42,19 +46,13 @@ class _KasirPageManagerState extends State<KasirPageManager> {
   
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (mounted) {
-        // 1. Await / Tunggu sampai store_id benar-benar selesai di-fetch
         await context.read<SettingsProvider>().fetchStoreId();
-  
-        // 2. Fetch pengumuman dev
         _fetchDeveloperAnnouncement();
-  
-        // 3. Trigger refresh data di layar anak (Home Screen) setelah store_id PASTI ada
         _kasirHomeKey.currentState?.refreshData();
       }
     });
   }
 
-  // METODE TARIK PENGUMUMAN DEV DARI SUPABASE
   Future<void> _fetchDeveloperAnnouncement() async {
     try {
       final res = await Supabase.instance.client
@@ -64,8 +62,6 @@ class _KasirPageManagerState extends State<KasirPageManager> {
           .order('created_at', ascending: false)
           .limit(1)
           .maybeSingle();
-
-      debugPrint('Data Pengumuman: $res');
 
       if (res != null && mounted) {
         setState(() {
@@ -77,7 +73,6 @@ class _KasirPageManagerState extends State<KasirPageManager> {
     }
   }
 
-  // METODE BUKA LINK OUTSIDE APP
   Future<void> _openAnnouncementUrl(String urlString) async {
     final Uri url = Uri.parse(urlString);
     if (await canLaunchUrl(url)) {
@@ -107,8 +102,37 @@ class _KasirPageManagerState extends State<KasirPageManager> {
         : settings.namaToko;
 
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: settings.bgDark,
       drawer: _buildCustomSidebar(context, settings, emailReal, namaTokoReal),
+
+  	 // 🟢 TOMBOL CHAT MENGAMBANG KHUSUS KASIR
+     floatingActionButton: settings.userRole == 'kasir'
+     ? Padding(
+         padding: const EdgeInsets.only(bottom: 50.0), // 🟢 Digeser ke atas sedikit agar tidak menutupi menu bawah
+         child: FloatingActionButton(
+           onPressed: () {
+             Navigator.push(
+               context,
+               MaterialPageRoute(
+                 builder: (_) => const ChatScreen(
+                   chatType: 'kasir_kasir',
+                   title: 'Ruang Gosip Kasir 🤫',
+                 ),
+               ),
+             );
+           },
+           backgroundColor: settings.accentColor,
+           elevation: 4,
+           child: const Icon(
+             Icons.chat_bubble_rounded,
+             color: Colors.white,
+             size: 22,
+           ),
+         ),
+       )
+     : null, // Jika owner yang login, tombolnya null (tidak muncul)
+      
       body: SafeArea(
         child: Column(
           children: [
@@ -127,7 +151,7 @@ class _KasirPageManagerState extends State<KasirPageManager> {
             ),
             const SizedBox(height: 6),
 
-            // 2. BANNER PENGUMUMAN BROADCAST DEV
+            // BANNER PENGUMUMAN
             if (_announcement != null)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -135,7 +159,7 @@ class _KasirPageManagerState extends State<KasirPageManager> {
               ),
             const SizedBox(height: 8),
 
-            // 3. TAB BAR NAVIGASI
+            // TAB BAR NAVIGASI
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
@@ -150,7 +174,7 @@ class _KasirPageManagerState extends State<KasirPageManager> {
             ),
             const SizedBox(height: 6),
 
-            // 4. HALAMAN UTAMA
+            // HALAMAN UTAMA
             Expanded(
               child: PageView(
                 controller: _pageController,
@@ -173,7 +197,6 @@ class _KasirPageManagerState extends State<KasirPageManager> {
     );
   }
 
-  // WIDGET BANNER BROADCAST DEV
   Widget _buildBannerAnnouncement(SettingsProvider settings) {
     final title = _announcement?['title'] ?? 'Pengumuman Aplikasi';
     final subtitle = _announcement?['subtitle'] ?? 'Klik untuk info selengkapnya';
@@ -251,7 +274,6 @@ class _KasirPageManagerState extends State<KasirPageManager> {
     );
   }
 
-  // HEADER TOKO
   Widget _buildTokoHeader({
     required String namaToko,
     required String userRole,
@@ -278,19 +300,19 @@ class _KasirPageManagerState extends State<KasirPageManager> {
           Expanded(
             child: Row(
               children: [
-                Builder(
-                  builder: (context) => GestureDetector(
-                    onTap: () => Scaffold.of(context).openDrawer(),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: settings.selectedTheme == 'gold'
-                            ? const Color(0xFF121212)
-                            : const Color(0xFFFCE7F3),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(Icons.storefront_rounded, color: settings.accentColor, size: 20),
+                GestureDetector(
+                  onTap: () {
+                    _scaffoldKey.currentState?.openDrawer();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: settings.selectedTheme == 'gold'
+                          ? const Color(0xFF121212)
+                          : const Color(0xFFFCE7F3),
+                      shape: BoxShape.circle,
                     ),
+                    child: Icon(Icons.storefront_rounded, color: settings.accentColor, size: 20),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -353,7 +375,6 @@ class _KasirPageManagerState extends State<KasirPageManager> {
     );
   }
 
-  // TAB BUTTON
   Widget _buildTabButton(int index, String title, IconData icon, Color activeColor) {
     final isSelected = _currentIndex == index;
     return Material(
@@ -395,7 +416,7 @@ class _KasirPageManagerState extends State<KasirPageManager> {
     );
   }
 
-  // SIDEBAR DRAWER (SUDAH DISUAIKAN DENGAN PEMILIH TEMA)
+  // SIDEBAR DRAWER YANG AMAN & BERSIH
   Widget _buildCustomSidebar(BuildContext context, SettingsProvider settings, String email, String namaToko) {
     return Drawer(
       backgroundColor: settings.cardDark,
@@ -405,6 +426,7 @@ class _KasirPageManagerState extends State<KasirPageManager> {
       child: SafeArea(
         child: Column(
           children: [
+            // HEADER PROFIL DALAM SIDEBAR
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
               child: Row(
@@ -439,7 +461,7 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                               decoration: BoxDecoration(color: settings.accentColor, borderRadius: BorderRadius.circular(12)),
                               child: Text(
-                                settings.userRole.toUpperCase(),
+                                settings.userRole.isEmpty ? 'KASIR' : settings.userRole.toUpperCase(),
                                 style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
                               ),
                             ),
@@ -454,6 +476,8 @@ class _KasirPageManagerState extends State<KasirPageManager> {
               ),
             ),
             Divider(height: 1, color: settings.textColor.withOpacity(0.1), indent: 16, endIndent: 16),
+            
+            // LIST MENU UTAMA DENGAN PEMBATASAN ROLE
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -467,55 +491,58 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                       Navigator.push(context, MaterialPageRoute(builder: (_) => const OwnerScreen()));
                     },
                   ),
-                  _buildSidebarItem(
-                    icon: Icons.badge_outlined,
-                    title: 'Kelola Kasir',
-                    settings: settings,
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const KasirScreen()));
-                    },
-                  ),
-                  _buildSidebarItem(
-                    icon: Icons.local_laundry_service_outlined,
-                    title: 'Daftar Layanan',
-                    settings: settings,
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const EditLayananScreen()));
-                    },
-                  ),
-                  _buildSidebarItem(
-                    icon: Icons.groups_outlined,
-                    title: 'Daftar Pelanggan',
-                    settings: settings,
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const CariPelangganScreen()));
-                    },
-                  ),
-                  _buildSidebarItem(
-                    icon: Icons.opacity_outlined,
-                    title: 'Daftar Parfum',
-                    settings: settings,
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const ParfumScreen()));
-                    },
-                  ),
-                  _buildSidebarItem(
-                    icon: Icons.confirmation_number_outlined,
-                    title: 'Pengaturan Diskon',
-                    settings: settings,
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const DiscountScreen()),
-                      );
-                    },
-                  ),
+
+                  // MENU KHUSUS OWNER
+                  if (settings.userRole == 'owner') ...[
+                    _buildSidebarItem(
+                      icon: Icons.badge_outlined,
+                      title: 'Kelola Pegawai',
+                      settings: settings,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const KasirScreen()));
+                      },
+                    ),
+                    _buildSidebarItem(
+                      icon: Icons.local_laundry_service_outlined,
+                      title: 'Daftar Layanan',
+                      settings: settings,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const EditLayananScreen()));
+                      },
+                    ),
+                    _buildSidebarItem(
+                      icon: Icons.groups_outlined,
+                      title: 'Daftar Pelanggan',
+                      settings: settings,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const CariPelangganScreen()));
+                      },
+                    ),
+                    _buildSidebarItem(
+                      icon: Icons.opacity_outlined,
+                      title: 'Daftar Parfum',
+                      settings: settings,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const ParfumScreen()));
+                      },
+                    ),
+                    _buildSidebarItem(
+                      icon: Icons.confirmation_number_outlined,
+                      title: 'Pengaturan Diskon',
+                      settings: settings,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const DiscountScreen()));
+                      },
+                    ),
+                  ],
+
                   _buildSectionDivider(settings),
+
                   _buildSidebarItem(
                     icon: Icons.print_outlined,
                     title: 'Printer & Nota',
@@ -525,37 +552,33 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                       Navigator.push(context, MaterialPageRoute(builder: (_) => const PrinterScreen()));
                     },
                   ),
-                  _buildSectionDivider(settings),
-                  _buildSidebarItem(
-                    icon: Icons.bar_chart_rounded,
-                    title: 'Laporan Keuangan',
-                    settings: settings,
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const ReportScreen()),
-                      );
-                    },
-                  ),
-                  _buildSidebarItem(
-                    icon: Icons.analytics_outlined,
-                    title: 'Analisis Pelanggan',
-                    settings: settings,
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const CustomerInsightScreen(),
-                        ),
-                      );
-                    },
-                  ),
+
+                  // LAPORAN KEUANGAN KHUSUS OWNER
+                  if (settings.userRole == 'owner') ...[
+                    _buildSectionDivider(settings),
+                    _buildSidebarItem(
+                      icon: Icons.bar_chart_rounded,
+                      title: 'Laporan Keuangan',
+                      settings: settings,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => const ReportScreen()));
+                      },
+                    ),
+                    _buildSidebarItem(
+                      icon: Icons.analytics_outlined,
+                      title: 'Analisis Pelanggan',
+                      settings: settings,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => const CustomerInsightScreen()));
+                      },
+                    ),
+                  ],
 
                   _buildSectionDivider(settings),
 
-                  // 🟢 SEKSI PEMILIH TEMA (POSITIONED BELOW ANALISIS PELANGGAN)
+                  // PEMILIH TEMA
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                     child: Column(
@@ -572,11 +595,8 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                         const SizedBox(height: 6),
                         Row(
                           children: [
-                            // Option 1: Pink
                             InkWell(
-                              onTap: () {
-                                context.read<SettingsProvider>().setTheme('default');
-                              },
+                              onTap: () => context.read<SettingsProvider>().setTheme('default'),
                               borderRadius: BorderRadius.circular(8),
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -605,12 +625,8 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                               ),
                             ),
                             const SizedBox(width: 16),
-
-                            // Option 2: Black / Gold
                             InkWell(
-                              onTap: () {
-                                context.read<SettingsProvider>().setTheme('gold');
-                              },
+                              onTap: () => context.read<SettingsProvider>().setTheme('gold'),
                               borderRadius: BorderRadius.circular(8),
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -664,6 +680,8 @@ class _KasirPageManagerState extends State<KasirPageManager> {
               ),
             ),
             Divider(height: 1, color: settings.textColor.withOpacity(0.1)),
+            
+            // TOMBOL LOGOUT DI BAWAH
             Padding(
               padding: const EdgeInsets.all(12),
               child: _buildSidebarItem(
@@ -673,56 +691,48 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                 textColor: Colors.redAccent,
                 iconColor: Colors.redAccent,
                 onTap: () async {
-                    // 🟢 1. Simpan rujukan Navigator sebelum proses async dimulai
-                    final navigator = Navigator.of(context);
-  
-                    // 🟢 2. Tutup sidebar drawer
-                    navigator.pop();
-  
-                    // 🟢 3. Tampilkan dialog loading
-                    showDialog(
-                      context: context,
-                      barrierDismissible: false,
-                      builder: (_) => PopScope(
-                        canPop: false,
-                        child: Center(
-                          child: CircularProgressIndicator(
-                            color: settings.accentColor,
-                          ),
+                  final navigator = Navigator.of(context);
+                  navigator.pop();
+
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (_) => PopScope(
+                      canPop: false,
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          color: settings.accentColor,
                         ),
                       ),
-                    );
-  
-                    // 🟢 4. Reset State Provider (Aman dengan try-catch)
-                    try {
-                      if (context.mounted) {
-                        context.read<SettingsProvider>().clearSettings();
-                        context.read<OrderProvider>().clearState();
-                      }
-                    } catch (e) {
-                      debugPrint('Error clear provider: $e');
+                    ),
+                  );
+
+                  try {
+                    if (context.mounted) {
+                      context.read<SettingsProvider>().clearSettings();
+                      context.read<OrderProvider>().clearState();
                     }
-  
-                    // 🟢 5. Hapus DB Lokal (Dibungkus try-catch agar jika gagal di Web/HP tidak nge-hang)
-                    try {
-                      await DatabaseHelper.instance.clearLocalOrders();
-                    } catch (e) {
-                      debugPrint('Error clear local DB: $e');
-                    }
-  
-                    // 🟢 6. Sign Out Supabase
-                    try {
-                      await Supabase.instance.client.auth.signOut();
-                    } catch (e) {
-                      debugPrint('Error sign out: $e');
-                    }
-  
-                    // 🟢 7. DIJAMIN PASTI DILEMPAR KE LOGIN SCREEN
-                    navigator.pushAndRemoveUntil(
-                      MaterialPageRoute(builder: (_) => const LoginScreen()),
-                      (route) => false,
-                    );
-                  },                             
+                  } catch (e) {
+                    debugPrint('Error clear provider: $e');
+                  }
+
+                  try {
+                    await DatabaseHelper.instance.clearLocalOrders();
+                  } catch (e) {
+                    debugPrint('Error clear local DB: $e');
+                  }
+
+                  try {
+                    await Supabase.instance.client.auth.signOut();
+                  } catch (e) {
+                    debugPrint('Error sign out: $e');
+                  }
+
+                  navigator.pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    (route) => false,
+                  );
+                },                             
               ),
             ),
           ],

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/settings_provider.dart';
@@ -19,14 +20,41 @@ class _KasirScreenState extends State<KasirScreen> {
 
   List<Map<String, dynamic>> _cashiers = [];
   bool _isLoading = true;
+  String _storeCode = '------';
+  bool _isLoadingCode = true;
 
   @override
   void initState() {
     super.initState();
+    _fetchStoreCode();
     _fetchCashiers();
   }
 
-  // 1. FETCH KASIR KHUSUS TOKO INI (RLS SECURE)
+  // 1. AMBIL KODE 6 DIGIT TOKO MILIK OWNER
+  Future<void> _fetchStoreCode() async {
+    try {
+      final storeId = context.read<SettingsProvider>().storeId;
+      if (storeId == null) return;
+
+      final data = await supabase
+          .from('stores')
+          .select('store_code')
+          .eq('id', storeId)
+          .maybeSingle();
+
+      if (data != null && data['store_code'] != null && mounted) {
+        setState(() {
+          _storeCode = data['store_code'].toString();
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetch store code: $e');
+    } finally {
+      if (mounted) setState(() => _isLoadingCode = false);
+    }
+  }
+
+  // 2. FETCH KASIR KHUSUS TOKO INI (RLS SECURE)
   Future<void> _fetchCashiers() async {
     setState(() => _isLoading = true);
     try {
@@ -36,7 +64,7 @@ class _KasirScreenState extends State<KasirScreen> {
         return;
       }
 
-      // 🟢 Wajib filter store_id agar data kasir antar-toko tidak bocor
+      // Wajib filter store_id agar data kasir antar-toko tidak bocor
       final data = await supabase
           .from('profiles')
           .select()
@@ -54,177 +82,6 @@ class _KasirScreenState extends State<KasirScreen> {
       debugPrint('Error fetch cashiers: $e');
       if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  // 2. DIALOG TAMBAH AKUN KASIR BARU
-  Future<void> _showAddCashierDialog() async {
-    final nameController = TextEditingController();
-    final emailController = TextEditingController();
-    final phoneController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-    bool isSaving = false;
-
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              backgroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              title: const Row(
-                children: [
-                  Icon(Icons.badge_rounded, color: _blueAccent, size: 22),
-                  SizedBox(width: 8),
-                  Text(
-                    'Tambah Akun Kasir',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: _textBlack,
-                    ),
-                  ),
-                ],
-              ),
-              content: SingleChildScrollView(
-                child: Form(
-                  key: formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        'Daftarkan staf/pegawai kasir baru untuk mengelola operasional toko.',
-                        style: TextStyle(fontSize: 11, color: Colors.black54),
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: nameController,
-                        style: const TextStyle(fontSize: 12),
-                        validator: (v) =>
-                            v == null || v.trim().isEmpty ? 'Nama wajib diisi' : null,
-                        decoration: _buildInputDecoration(
-                          'Nama Lengkap Kasir',
-                          Icons.person_outline_rounded,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      TextFormField(
-                        controller: emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        style: const TextStyle(fontSize: 12),
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) return 'Email wajib diisi';
-                          if (!v.contains('@')) return 'Format email tidak valid';
-                          return null;
-                        },
-                        decoration: _buildInputDecoration(
-                          'Email Login Kasir',
-                          Icons.email_outlined,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      TextFormField(
-                        controller: phoneController,
-                        keyboardType: TextInputType.phone,
-                        style: const TextStyle(fontSize: 12),
-                        decoration: _buildInputDecoration(
-                          'No. WhatsApp / HP (Opsional)',
-                          Icons.phone_android_rounded,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: isSaving ? null : () => Navigator.pop(dialogContext),
-                  child: const Text('Batal', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _blueAccent,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  onPressed: isSaving
-                      ? null
-                      : () async {
-                          if (!formKey.currentState!.validate()) return;
-                          setDialogState(() => isSaving = true);
-
-                          try {
-                            final storeId = context.read<SettingsProvider>().storeId;
-                            final currentUserId = supabase.auth.currentUser?.id;
-
-                            if (storeId == null || currentUserId == null) {
-                              throw Exception("Session toko tidak valid");
-                            }
-
-                            // Simpan profil kasir baru dengan role 'kasir'
-                            await supabase.from('profiles').insert({
-                              'store_id': storeId,
-                              'name': nameController.text.trim(),
-                              'email': emailController.text.trim(),
-                              'phone': phoneController.text.trim().isEmpty
-                                  ? '-'
-                                  : phoneController.text.trim(),
-                              'role': 'kasir',
-                            });
-
-                            if (dialogContext.mounted) {
-                              Navigator.pop(dialogContext);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Akun Kasir berhasil ditambahkan!'),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
-                            }
-                            _fetchCashiers();
-                          } catch (e) {
-                            debugPrint('Error add cashier: $e');
-                            if (dialogContext.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Gagal menambah kasir: $e'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            }
-                          } finally {
-                            setDialogState(() => isSaving = false);
-                          }
-                        },
-                  child: isSaving
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Text(
-                          'SIMPAN AKUN',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
   }
 
   // 3. HAPUS / CABUT AKSES KASIR
@@ -270,29 +127,6 @@ class _KasirScreenState extends State<KasirScreen> {
     }
   }
 
-  InputDecoration _buildInputDecoration(String hint, IconData icon) {
-    return InputDecoration(
-      hintText: hint,
-      prefixIcon: Icon(icon, size: 18, color: Colors.grey.shade500),
-      isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      filled: true,
-      fillColor: Colors.grey.shade50,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: Colors.grey.shade300),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: Colors.grey.shade300),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: _blueAccent, width: 1.5),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -313,22 +147,92 @@ class _KasirScreenState extends State<KasirScreen> {
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddCashierDialog,
-        backgroundColor: _blueAccent,
-        icon: const Icon(Icons.person_add_alt_1_rounded, color: Colors.white, size: 18),
-        label: const Text(
-          'Tambah Kasir',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-        ),
-      ),
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: _fetchCashiers,
+          onRefresh: () async {
+            await _fetchStoreCode();
+            await _fetchCashiers();
+          },
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              // BANNER INFORMASI RINGKAS
+              // 🟢 KARTU KODE TOKO 6 DIGIT UNTUK KASIR
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.green.shade200),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.02),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Kode Pendaftaran Kasir',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF16A34A),
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Bagikan 6 digit kode ini ke pegawai agar bisa mendaftar mandiri.',
+                            style: TextStyle(fontSize: 10, color: Colors.black54),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    InkWell(
+                      onTap: () {
+                        Clipboard.setData(ClipboardData(text: _storeCode));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Kode toko berhasil disalin!')),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.green.shade300),
+                        ),
+                        child: Row(
+                          children: [
+                            Text(
+                              _isLoadingCode ? '...' : _storeCode,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 2.0,
+                                color: Color(0xFF16A34A),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            const Icon(Icons.copy_rounded, size: 14, color: Color(0xFF16A34A)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // BANNER INFORMASI RINGKAS TOTAL KASIR
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
@@ -383,7 +287,7 @@ class _KasirScreenState extends State<KasirScreen> {
               ),
               const SizedBox(height: 8),
 
-              // LIST KASIR / EMPTY STATE
+              // LIST KASIR / EMPTY STATE[cite: 3]
               _isLoading
                   ? const Padding(
                       padding: EdgeInsets.only(top: 40),
@@ -410,7 +314,7 @@ class _KasirScreenState extends State<KasirScreen> {
                               ),
                               SizedBox(height: 4),
                               Text(
-                                'Tekan "+ Tambah Kasir" untuk mendaftarkan akun staf.',
+                                'Bagikan kode toko di atas agar pegawai dapat mendaftar mandiri.',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(fontSize: 11, color: Colors.grey),
                               ),
@@ -423,7 +327,8 @@ class _KasirScreenState extends State<KasirScreen> {
                           itemCount: _cashiers.length,
                           itemBuilder: (context, index) {
                             final item = _cashiers[index];
-                            final name = item['name'] ?? 'Kasir';
+                            // 🟢 Membaca kolom nama_pegawai sesuai database baru
+                            final name = item['nama_pegawai'] ?? 'Kasir';
                             final email = item['email'] ?? '-';
                             final phone = item['phone'] ?? '-';
 

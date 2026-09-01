@@ -34,8 +34,11 @@ class _CustomDateScreenState extends State<CustomDateScreen> {
     return Scaffold(
       backgroundColor: Colors.black26,
       body: Center(
-        child: SizedBox(
-          width: 385, // 🔒 Terkunci Presisi 385px
+        child: ConstrainedBox(
+		constraints: const BoxConstraints(
+           maxWidth: 385, 
+           maxHeight: 520,
+          ),
           child: Scaffold(
             backgroundColor: _bgSoft,
             appBar: AppBar(

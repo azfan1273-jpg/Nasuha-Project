@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/settings_provider.dart';
+import '../widgets/change_password_dialog.dart';
 
 class OwnerScreen extends StatefulWidget {
   const OwnerScreen({super.key});
@@ -89,7 +90,7 @@ class _OwnerScreenState extends State<OwnerScreen> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -108,75 +109,115 @@ class _OwnerScreenState extends State<OwnerScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: _greenAccent))
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight - 32, // Memaksa tinggi minimal selayar penuh
                     ),
                     child: Column(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween, // Mendorong elemen atas dan bawah berjarak maksimal
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Nama Toko', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 4),
-                        TextField(
-                          controller: _nameController,
-                          decoration: InputDecoration(
-                            filled: true,
-                            fillColor: _bgDark,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                          ),
+                        // --- BAGIAN ATAS (Form & Tombol Ganti Password) ---
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('Nama Toko', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                  const SizedBox(height: 4),
+                                  TextField(
+                                    controller: _nameController,
+                                    decoration: InputDecoration(
+                                      filled: true,
+                                      fillColor: _bgDark,
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  const Text('Nomor WhatsApp', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                  const SizedBox(height: 4),
+                                  TextField(
+                                    controller: _phoneController,
+                                    keyboardType: TextInputType.phone,
+                                    decoration: InputDecoration(
+                                      filled: true,
+                                      fillColor: _bgDark,
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  const Text('Alamat Toko', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                  const SizedBox(height: 4),
+                                  TextField(
+                                    controller: _addressController,
+                                    maxLines: 3,
+                                    decoration: InputDecoration(
+                                      filled: true,
+                                      fillColor: _bgDark,
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            // Tombol Ganti Password (posisi di bawah form)
+                            SizedBox(
+                              width: double.infinity,
+                              height: 44,
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF16A34A),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                                onPressed: () => showChangePasswordDialog(context),
+                                child: const Text(
+                                  'GANTI PASSWORD AKUN',
+                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 12),
-                        const Text('Nomor WhatsApp', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 4),
-                        TextField(
-                          controller: _phoneController,
-                          keyboardType: TextInputType.phone,
-                          decoration: InputDecoration(
-                            filled: true,
-                            fillColor: _bgDark,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        const Text('Alamat Toko', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 4),
-                        TextField(
-                          controller: _addressController,
-                          maxLines: 3,
-                          decoration: InputDecoration(
-                            filled: true,
-                            fillColor: _bgDark,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+      
+                        // --- BAGIAN BAWAH (Tombol Simpan Profil Mentok Kanan/Bawah) ---
+                        Padding(
+                          padding: const EdgeInsets.only(top: 24),
+                          child: Align(
+                            alignment: Alignment.centerRight, // Posisi di kanan
+                            child: SizedBox(
+                              width: 180, // Atur lebar tombol sesuai selera
+                              height: 44,
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _greenAccent,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                                onPressed: _isLoading ? null : _saveProfile,
+                                child: const Text(
+                                  'SIMPAN PROFIL',
+                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 44,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _greenAccent,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      onPressed: _isLoading ? null : _saveProfile,
-                      child: const Text(
-                        'SIMPAN PROFIL',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                );
+              },
             ),
     );
   }

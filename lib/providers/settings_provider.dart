@@ -79,40 +79,41 @@ class SettingsProvider with ChangeNotifier {
     }
   }
 
-  // 3. FUNGSI FETCH STORE ID & PROFILE (DIPERBAIKI)
-  Future<void> fetchStoreId() async {
-    try {
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user == null) {
-        debugPrint('Log: User belum login / null');
-        return;
-      }
-
-      final response = await Supabase.instance.client
-          .from('profiles')
-          .select('store_id, nama_toko')
-          .eq('id', user.id)
-          .maybeSingle();
-
-      if (response != null) {
-        final Map<String, dynamic> data = Map<String, dynamic>.from(response);
-        
-        _storeId = data['store_id']?.toString();
-        _namaToko = data['nama_toko']?.toString() ?? '';
-
-        // JANGAN notifyListeners() di sini agar UI tidak melakukan query saat store_settings belum selesai
-        if (_storeId != null && _storeId!.isNotEmpty) {
-          await fetchStoreSettings();
-        } else {
-          notifyListeners();
+  // 3. FUNGSI FETCH STORE ID, ROLE & PROFILE
+    Future<void> fetchStoreId() async {
+      try {
+        final user = Supabase.instance.client.auth.currentUser;
+        if (user == null) {
+          debugPrint('Log: User belum login / null');
+          return;
         }
-      } else {
-        debugPrint('Log: Profile user tidak ditemukan di database');
+  
+        // 🟢 Tambahkan 'role' ke dalam select query
+        final response = await Supabase.instance.client
+            .from('profiles')
+            .select('store_id, nama_toko, role')
+            .eq('id', user.id)
+            .maybeSingle();
+  
+        if (response != null) {
+          final Map<String, dynamic> data = Map<String, dynamic>.from(response);
+          
+          _storeId = data['store_id']?.toString();
+          _namaToko = data['nama_toko']?.toString() ?? '';
+          _userRole = data['role']?.toString().toLowerCase() ?? 'kasir'; // 🟢 Simpan rolenya di sini
+  
+          if (_storeId != null && _storeId!.isNotEmpty) {
+            await fetchStoreSettings();
+          } else {
+            notifyListeners();
+          }
+        } else {
+          debugPrint('Log: Profile user tidak ditemukan di database');
+        }
+      } catch (e) {
+        debugPrint('Error fetching store_id: $e');
       }
-    } catch (e) {
-      debugPrint('Error fetching store_id: $e');
     }
-  }
 
   // 4. FUNGSI FETCH DATA PENGATURAN TOKO
   Future<void> fetchStoreSettings() async {

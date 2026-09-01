@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'splash_screen.dart';
+import 'kasir_screen.dart';
+import 'register_cashier_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -27,47 +29,66 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // 1. FUNGSI LOGIN DENGAN EMAIL & PASSWORD
-  Future<void> _loginWithEmail() async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
-
-    if (email.isEmpty || password.isEmpty) {
-      _showSnackBar('Email dan Password wajib diisi!', isError: true);
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      final response = await Supabase.instance.client.auth.signInWithPassword(
-        email: email,
-        password: password,
-      );
-
-      if (response.user != null && mounted) {
-        _showSnackBar('Login berhasil! Selamat datang.');
-
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const SplashScreen()),
-          (route) => false,
+  // 1. FUNGSI LOGIN DENGAN EMAIL & PASSWORD + CEK ROLE
+    Future<void> _loginWithEmail() async {
+      final email = _emailController.text.trim();
+      final password = _passwordController.text.trim();
+  
+      if (email.isEmpty || password.isEmpty) {
+        _showSnackBar('Email dan Password wajib diisi!', isError: true);
+        return;
+      }
+  
+      setState(() => _isLoading = true);
+  
+      try {
+        final response = await Supabase.instance.client.auth.signInWithPassword(
+          email: email,
+          password: password,
         );
-      }
-    } on AuthException catch (e) {
-      if (mounted) {
-        // Menangani pesan khusus jika email belum dikonfirmasi
-        if (e.message.toLowerCase().contains('email not confirmed')) {
-          _showSnackBar('Email belum dikonfirmasi! Periksa inbox/spam email Anda.', isError: true);
-        } else {
-          _showSnackBar(e.message, isError: true);
+  
+        final user = response.user;
+        if (user != null && mounted) {
+          // 🟢 AMBIL ROLE DARI TABEL PROFILES BERDASARKAN ID USER
+          final profileData = await Supabase.instance.client
+              .from('profiles')
+              .select('role')
+              .eq('id', user.id)
+              .maybeSingle();
+  
+          final role = profileData?['role']?.toString().toLowerCase() ?? 'kasir';
+  
+          _showSnackBar('Login berhasil! Selamat datang.');
+  
+          // 🟢 NAVIGASI BERDASARKAN ROLE
+          if (role == 'owner') {
+            // Jika Owner, arahkan ke SplashScreen / Dashboard Owner Utama
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const SplashScreen()),
+              (route) => false,
+            );
+          } else {
+            // Jika Kasir, arahkan langsung ke Halaman Kasir / Transaksi
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const KasirScreen()), // Pastikan import KasirScreen
+              (route) => false,
+            );
+          }
         }
+      } on AuthException catch (e) {
+        if (mounted) {
+          if (e.message.toLowerCase().contains('email not confirmed')) {
+            _showSnackBar('Email belum dikonfirmasi! Periksa inbox/spam email Anda.', isError: true);
+          } else {
+            _showSnackBar(e.message, isError: true);
+          }
+        }
+      } catch (e) {
+        if (mounted) _showSnackBar('Terjadi kesalahan: $e', isError: true);
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
       }
-    } catch (e) {
-      if (mounted) _showSnackBar('Terjadi kesalahan: $e', isError: true);
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
-  }
 
   // 2. FUNGSI LOGIN DENGAN GOOGLE (SUPABASE OAUTH)
   Future<void> _loginWithGoogle() async {
@@ -486,19 +507,57 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),                                         
+                      
+	                     // 🟢 TOMBOL DAFTAR AKUN KASIR (GAYA SEPERTI TOMBOL GOOGLE)
+	                     SizedBox(
+	                       width: double.infinity,
+	                       height: 44,
+	                       child: OutlinedButton.icon(
+	                         style: OutlinedButton.styleFrom(
+	                           backgroundColor: Colors.white,
+	                           foregroundColor: const Color(0xFF0284C7),
+	                           side: const BorderSide(color: Color(0xFFBAE6FD)),
+	                           shape: RoundedRectangleBorder(
+	                             borderRadius: BorderRadius.circular(12),
+	                           ),
+	                         ),
+	                         onPressed: _isLoading
+	                             ? null
+	                             : () {
+	                                 Navigator.push(
+	                                   context,
+	                                   MaterialPageRoute(builder: (_) => const RegisterCashierScreen()),
+	                                 );
+	                               },
+	                         icon: const Icon(Icons.badge_rounded, size: 18, color: Color(0xFF0284C7)),
+	                         label: const Text(
+	                           'Daftar Akun Pegawai',
+	                           style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+	                         ),
+	                       ),
+	                     ),
+	                     const SizedBox(height: 16),
 
-                      GestureDetector(
-                        onTap: _showDaftarTokoDialog,
-                        child: const Text(
-                          'Belum punya akun? Daftar Toko Baru (Owner)',
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.bold,
-                            color: _pinkAccent,
-                          ),
-                        ),
-                      ),
+	                     // 🟢 TEKS DI BAWAHNYA: "Belum punya akun, DAFTAR akun" (Untuk Owner Baru)
+	                     GestureDetector(
+	                       onTap: _showDaftarTokoDialog,
+	                       child: RichText(
+	                         text: const TextSpan(
+	                           text: 'Belum punya akun? ',
+	                           style: TextStyle(fontSize: 10.5, color: Colors.black54),
+	                           children: [
+	                             TextSpan(
+	                               text: 'DAFTAR akun OWNER',
+	                               style: TextStyle(
+	                                 fontWeight: FontWeight.bold,
+	                                 color: _pinkAccent,
+	                               ),
+	                             ),
+	                           ],
+	                         ),
+	                       ),
+	                     ),
                     ],
                   ),
                 ),
