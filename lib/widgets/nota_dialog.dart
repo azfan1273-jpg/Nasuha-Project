@@ -111,8 +111,9 @@ class _NotaDialogState extends State<NotaDialog> {
     sb.writeln("\n\n");
 
     if (isCustomerMode) {
+      // 🟢 HEADER BESAR: Lebar 16 agar tidak terpotong (karena ukuran teks 2x lipat)
       sb.write("\x1D\x21\x11");
-      sb.writeln(_centerText(namaToko, width: printWidth));
+      sb.writeln(_centerText(namaToko, width: 16));
       sb.write("\x1D\x21\x00");
       
       if (subHeader.isNotEmpty) {
@@ -172,8 +173,9 @@ class _NotaDialogState extends State<NotaDialog> {
       sb.writeln(_centerText("[ NOTA PRODUKSI / WORKSHOP ]", width: printWidth));
       sb.writeln();
       
+      // 🟢 HEADER BESAR NOTA PRODUKSI: Lebar 16
       sb.write("\x1D\x21\x11");
-      sb.writeln(_centerText(namaToko, width: printWidth));
+      sb.writeln(_centerText(namaToko, width: 16));
       sb.write("\x1D\x21\x00");
       
       sb.write("\x1D\x21\x01");
