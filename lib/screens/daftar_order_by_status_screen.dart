@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../main.dart';
 import '../providers/settings_provider.dart';
+import '../widgets/order_detail_dialog.dart'; // Sesuaikan path foldernya jika berada di folder widgets/screens yang sama
 
 class DaftarOrderByStatusScreen extends StatefulWidget {
   final String title;
@@ -170,6 +171,19 @@ class _DaftarOrderByStatusScreenState extends State<DaftarOrderByStatusScreen> {
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
                   child: ListTile(
+                  	onTap: () {
+                    // 🟢 KUNCI UTAMA: Buka Detail Order saat card diketuk
+       	        	 showDialog(
+                  	  context: context,
+                      builder: (context) => OrderDetailDialog(
+                  	  order: order,
+                  	  onOrderUpdated: () {
+     	              // Refresh data jika ada perubahan status/pembayaran
+               	          setState(() {});
+          	             },
+         	           ),
+          	     	 );
+            	   },
                     title: Text(
                       order['customer'] ?? '-',
                       style: const TextStyle(fontWeight: FontWeight.bold),

@@ -62,41 +62,52 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
   }
 
   Future<void> _loadOrdersFromSupabase() async {
-    if (!mounted) return;
-    setState(() => _isLoading = true);
-
-    try {
-      final currentStoreId = context.read<SettingsProvider>().storeId;
-      if (currentStoreId == null) return;
-
-      final List<dynamic> data = await supabase
-          .from('orders')
-          .select('*')
-          .eq('store_id', currentStoreId)
-          .order('created_at', ascending: false);
-
-      if (mounted) {
-        setState(() {
-          _ordersHariIni.clear();
-          _ordersHariIni.addAll(data.map((record) {
-            return {
-              'id': record['id'].toString(),
-              'customer': record['customer_name'] ?? 'Pelanggan',
-              'services': record['service_name'] ?? record['services_summary'] ?? 'Layanan',
-              'created_at': record['created_at'],
-              'estimated_at': record['estimated_at'],
-              'status': record['status'],
-              'total_price': record['total_price'] ?? record['total'] ?? 0,
-            };
-          }));
-        });
+      if (!mounted) return;
+      setState(() => _isLoading = true);
+  
+      try {
+        final currentStoreId = context.read<SettingsProvider>().storeId;
+        if (currentStoreId == null) return;
+  
+        // 🟢 1. Sertakan order_items(*) pada query Supabase
+        final List<dynamic> data = await supabase
+            .from('orders')
+            .select('*, order_items(*)')
+            .eq('store_id', currentStoreId)
+            .order('created_at', ascending: false);
+  
+        if (mounted) {
+          setState(() {
+            _ordersHariIni.clear();
+            _ordersHariIni.addAll(data.map((record) {
+              return {
+                'id': record['id'].toString(),
+                'customer': record['customer_name'] ?? 'Pelanggan',
+                'services': record['service_name'] ?? record['services_summary'] ?? 'Layanan',
+                'created_st': record['created_at'],
+                'created_at': record['created_at'],
+                'estimated_at': record['estimated_at'],
+                'status': record['status'],
+                'total_price': record['total_price'] ?? record['total'] ?? 0,
+                'store_id': record['store_id'],
+                'customer_phone': record['customer_phone'],
+                'nota_number': record['nota_number'],
+                'parfum': record['parfum'],
+                'status_pembayaran': record['status_pembayaran'],
+                'catatan': record['catatan'],
+                'discount': record['discount'],
+                // 🟢 2. Wajib lempar order_items agar terbawa sampai ke halaman detail & nota
+                'order_items': record['order_items'],
+              };
+            }));
+          });
+        }
+      } catch (e) {
+        debugPrint('Error load orders home: $e');
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
       }
-    } catch (e) {
-      debugPrint('Error load orders home: $e');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
-  }
 
   // 🟢 AMBIL DATA KEUANGAN HARI INI PRESISI DARI ENGINE RPC SUPABASE
   Future<void> _fetchKeuanganHariIniViaRPC() async {

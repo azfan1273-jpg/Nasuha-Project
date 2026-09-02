@@ -4,7 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'payment_method_dialog.dart';
 import 'nota_dialog.dart';
 
-class OrderDetailDialog extends StatelessWidget {
+class OrderDetailDialog extends StatefulWidget {
   final Map<String, dynamic> order;
   final VoidCallback? onOrderUpdated;
 
@@ -14,11 +14,54 @@ class OrderDetailDialog extends StatelessWidget {
     this.onOrderUpdated,
   });
 
+  @override
+  State<OrderDetailDialog> createState() => _OrderDetailDialogState();
+}
+
+class _OrderDetailDialogState extends State<OrderDetailDialog> {
+  late Map<String, dynamic> _currentOrder;
+  bool _isLoadingItems = false;
+  List<dynamic> _fetchedItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _currentOrder = widget.order;
+    _fetchOrderItemsIfNeeded();
+  }
+
+  Future<void> _fetchOrderItemsIfNeeded() async {
+    final existingItems = _currentOrder['order_items'] ?? _currentOrder['items'];
+    if (existingItems is List && existingItems.isNotEmpty) {
+      setState(() => _fetchedItems = existingItems);
+      return;
+    }
+
+    setState(() => _isLoadingItems = true);
+    try {
+      final orderId = _currentOrder['id'];
+      final response = await Supabase.instance.client
+          .from('order_items')
+          .select('*')
+          .eq('order_id', orderId);
+
+      if (mounted && response != null) {
+        setState(() {
+          _fetchedItems = response;
+          _currentOrder['order_items'] = response;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetch order items mandiri: $e');
+    } finally {
+      if (mounted) setState(() => _isLoadingItems = false);
+    }
+  }
+
   String _formatRupiah(num number) {
     final String str = number.toInt().toString();
     final RegExp reg = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
-    final String result = str.replaceAllMapped(reg, (Match m) => '${m[1]}.');
-    return 'Rp $result';
+    return 'Rp ${str.replaceAllMapped(reg, (Match m) => '${m[1]}.')}';
   }
 
   String _formatTanggal(dynamic rawDate) {
@@ -38,10 +81,10 @@ class OrderDetailDialog extends StatelessWidget {
       await Supabase.instance.client
           .from('orders')
           .update({'status': newStatus})
-          .eq('id', order['id']);
+          .eq('id', _currentOrder['id']);
 
       if (context.mounted) {
-        onOrderUpdated?.call();
+        widget.onOrderUpdated?.call();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Status order diperbarui ke $newStatus')),
         );
@@ -53,63 +96,45 @@ class OrderDetailDialog extends StatelessWidget {
   }
 
   Future<void> _updatePayment(BuildContext context, String method) async {
-      try {
-        final orderId = int.tryParse(order['id'].toString());
-        if (orderId == null) return;
-  
-        // 🟢 PAKSA PANGGIL RPC SUAPBASE UNTUK PELUNASAN
-        await Supabase.instance.client.rpc('update_order_status_by_store', params: {
-          'p_order_id': orderId,
-          'p_store_id': order['store_id']?.toString() ?? '',
-          'p_new_status': order['status'] ?? 'Selesai',
-          'p_metode_pembayaran': method,
-        });
-  
-        if (context.mounted) {
-          onOrderUpdated?.call();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Pembayaran ($method) berhasil dicatat LUNAS!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-          Navigator.pop(context);
-        }
-      } catch (e) {
-        debugPrint('Error update pembayaran: $e');
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Gagal memperbarui pembayaran: $e'),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 4),
-            ),
-          );
-        }
+    try {
+      final orderId = int.tryParse(_currentOrder['id'].toString());
+      if (orderId == null) return;
+
+      await Supabase.instance.client.rpc('update_order_status_by_store', params: {
+        'p_order_id': orderId,
+        'p_store_id': _currentOrder['store_id']?.toString() ?? '',
+        'p_new_status': _currentOrder['status'] ?? 'Selesai',
+        'p_metode_pembayaran': method,
+      });
+
+      if (context.mounted) {
+        widget.onOrderUpdated?.call();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Pembayaran ($method) berhasil dicatat LUNAS!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context);
       }
+    } catch (e) {
+      debugPrint('Error update pembayaran: $e');
     }
+  }
 
   Future<void> _sendWaNotification(BuildContext context) async {
-    String rawPhone = (order['customer_phone'] ?? '').toString().trim();
+    String rawPhone = (_currentOrder['customer_phone'] ?? '').toString().trim();
     if (rawPhone.startsWith('0')) {
       rawPhone = '62${rawPhone.substring(1)}';
     }
-
-    final String name = (order['customer_name'] ?? 'Pelanggan').toString();
-    final String nota = (order['nota_number'] ?? order['id'] ?? '').toString();
+    final String name = (_currentOrder['customer_name'] ?? 'Pelanggan').toString();
+    final String nota = (_currentOrder['nota_number'] ?? _currentOrder['id'] ?? '').toString();
     final String message = 'Halo $name, order laundry Anda dengan nota *$nota* sudah *SELESAI* dan siap diambil. Terima kasih!';
-
     final Uri url = Uri.parse('https://wa.me/$rawPhone?text=${Uri.encodeComponent(message)}');
 
     try {
       if (await canLaunchUrl(url)) {
         await launchUrl(url, mode: LaunchMode.externalApplication);
-      } else {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Gagal membuka WhatsApp')),
-          );
-        }
       }
     } catch (e) {
       debugPrint('Error launch WA: $e');
@@ -130,46 +155,70 @@ class OrderDetailDialog extends StatelessWidget {
   void _showPrintDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (ctx) => NotaDialog(order: order),
+      builder: (ctx) => NotaDialog(order: _currentOrder),
+    );
+  }
+
+  void _showKonfirmasiBatalDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Batalkan Transaksi?', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+        content: const Text(
+          'Apakah Anda yakin ingin membatalkan orderan ini? Status akan diubah menjadi "BATAL".',
+          style: TextStyle(fontSize: 12),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Batal', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              Navigator.pop(dialogCtx);
+              _updateStatus(context, 'BATAL');
+            },
+            child: const Text('Ya, Batalkan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final String nota = (order['nota_number'] ?? 'LNDR-${(order['id'] ?? 0).toString().padLeft(5, '0')}').toString();
-    final String customerName = (order['customer_name'] ?? 'Pelanggan').toString();
-    final String customerPhone = (order['customer_phone'] ?? '-').toString();
-    final String parfum = (order['parfum'] ?? 'Standard').toString();
+    final String nota = (_currentOrder['nota_number'] ?? 'LNDR-${(_currentOrder['id'] ?? 0).toString().padLeft(5, '0')}').toString();
+    final String customerName = (_currentOrder['customer_name'] ?? _currentOrder['customer'] ?? 'Pelanggan').toString();
+    final String customerPhone = (_currentOrder['customer_phone'] ?? '-').toString();
+    final String parfum = (_currentOrder['parfum'] ?? 'Standard').toString();
     
-    // 🟢 Deklarasi variabel pembayaran
-    final String paymentStatus = (order['status_pembayaran'] ?? order['payment_status'] ?? 'Belum Lunas').toString().trim();
+    final String paymentStatus = (_currentOrder['status_pembayaran'] ?? _currentOrder['payment_status'] ?? 'Belum Lunas').toString().trim();
     final bool isLunas = paymentStatus.toUpperCase() == 'LUNAS';
 
-    final String createdDate = _formatTanggal(order['created_at']);
-    final String estDate = _formatTanggal(order['estimated_at']);
-    final String notes = (order['catatan'] ?? order['notes'] ?? 'Tidak ada catatan').toString();
-    final num totalPrice = num.tryParse(order['total_price']?.toString() ?? '0') ?? 0;
+    final String createdDate = _formatTanggal(_currentOrder['created_at']);
+    final String estDate = _formatTanggal(_currentOrder['estimated_at']);
+    final String notes = (_currentOrder['catatan'] ?? _currentOrder['notes'] ?? 'Tidak ada catatan').toString();
+    final num totalPrice = num.tryParse((_currentOrder['total_price'] ?? _currentOrder['total'] ?? '0').toString()) ?? 0;
 
-    final List<dynamic> itemsFromDb = order['order_items'] is List ? order['order_items'] : [];
     final List<Map<String, dynamic>> itemsList = [];
-
-    if (itemsFromDb.isNotEmpty) {
-      for (var item in itemsFromDb) {
+    if (_fetchedItems.isNotEmpty) {
+      for (var item in _fetchedItems) {
         if (item is Map) {
           itemsList.add(Map<String, dynamic>.from(item));
         }
       }
     } else {
-      final String rawServices = (order['service_name'] ?? '').toString();
+      final String rawServices = (_currentOrder['services'] ?? _currentOrder['service_name'] ?? '').toString();
       for (var s in rawServices.split(',')) {
         final trimmed = s.trim();
         if (trimmed.isNotEmpty) {
-          itemsList.add({'service_name': trimmed, 'qty': 1});
+          itemsList.add({'service_name': trimmed, 'qty': 1, 'unit': 'Kg'});
         }
       }
     }
 
-    final String status = (order['status'] ?? 'ANTRIAN').toString().toUpperCase();
+    final String status = (_currentOrder['status'] ?? 'ANTRIAN').toString().toUpperCase();
     String actionLabel = 'Proses Order';
     Color actionColor = Colors.orange;
     IconData actionIcon = Icons.play_arrow_rounded;
@@ -182,7 +231,7 @@ class OrderDetailDialog extends StatelessWidget {
       actionLabel = 'Order Sudah Selesai';
       actionColor = Colors.green;
       actionIcon = Icons.verified;
-    } else if (status == 'BATAL' || status == 'CANCEL') {
+    } else if (status == 'BATAL') {
       actionLabel = 'Order Dibatalkan';
       actionColor = Colors.grey;
       actionIcon = Icons.cancel;
@@ -254,60 +303,49 @@ class OrderDetailDialog extends StatelessWidget {
             const SizedBox(height: 16),
             _buildDetailTile(
               title: 'DAFTAR LAYANAN / ITEM',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: itemsList.isEmpty
-                    ? [const Text('-', style: TextStyle(fontSize: 12))]
-                    : itemsList.map((item) {
-                        String rawName = (item['service_name'] ?? 'Layanan').toString();
-                        String displayQty = '';
+              child: _isLoadingItems
+                  ? const Center(child: Padding(padding: EdgeInsets.all(8.0), child: CircularProgressIndicator(strokeWidth: 2)))
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: itemsList.isEmpty
+                          ? [const Text('-', style: TextStyle(fontSize: 12))]
+                          : itemsList.map((item) {
+                              final String rawName = (item['service_name'] ?? item['name'] ?? 'Layanan').toString();
+                              final String itemUnit = (item['unit'] != null && item['unit'].toString().isNotEmpty)
+                                  ? item['unit'].toString()
+                                  : 'Kg';
 
-                        final String itemUnit = (item['unit'] != null && item['unit'].toString().isNotEmpty)
-                            ? item['unit'].toString()
-                            : 'Pcs';
+                              final num rawQty = num.tryParse((item['qty'] ?? item['quantity'] ?? 1).toString()) ?? 1;
+                              final String formattedQty = (rawQty % 1 == 0) ? rawQty.toInt().toString() : rawQty.toStringAsFixed(2);
+                              final String displayQty = '$formattedQty $itemUnit';
 
-                        if (item.containsKey('qty') && item['qty'] != null) {
-                          final num qty = num.tryParse(item['qty'].toString()) ?? 1;
-                          final String formattedQty = (qty % 1 == 0) ? qty.toInt().toString() : qty.toString();
-                          displayQty = '$formattedQty $itemUnit';
-                        }
-
-                        if (rawName.contains('(') && rawName.contains(')')) {
-                          final parts = rawName.split('(');
-                          rawName = parts[0].trim();
-                          final insideParen = parts[1].replaceAll(')', '').trim();
-                          if (displayQty.isEmpty) displayQty = insideParen;
-                        }
-
-                        if (displayQty.isEmpty) displayQty = '1 Pcs';
-
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  rawName,
-                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        rawName,
+                                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade200,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        displayQty,
+                                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black87),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey.shade200,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  displayQty,
-                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black87),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-              ),
+                              );
+                            }).toList(),
+                    ),
             ),
             const SizedBox(height: 10),
             Row(
@@ -358,6 +396,8 @@ class OrderDetailDialog extends StatelessWidget {
               child: Text(notes, style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
             ),
             const SizedBox(height: 20),
+            
+            // 1. Tombol Utama Status Order
             SizedBox(
               width: double.infinity,
               height: 44,
@@ -366,17 +406,22 @@ class OrderDetailDialog extends StatelessWidget {
                   backgroundColor: actionColor,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
-                onPressed: (status == 'SELESAI' || status == 'BATAL' || status == 'CANCEL')
+                onPressed: (status == 'SELESAI' || status == 'BATAL')
                     ? null
                     : () {
                         final nextStatus = status == 'PROSES' ? 'SELESAI' : 'PROSES';
                         _updateStatus(context, nextStatus);
                       },
                 icon: Icon(actionIcon, size: 18, color: Colors.white),
-                label: Text(actionLabel, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                label: Text(
+                  actionLabel,
+                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                ),
               ),
             ),
             const SizedBox(height: 10),
+
+            // 2. Tombol WhatsApp
             SizedBox(
               width: double.infinity,
               height: 44,
@@ -390,54 +435,71 @@ class OrderDetailDialog extends StatelessWidget {
                 label: const Text('Kirim WA Notifikasi Selesai', style: TextStyle(color: Colors.white, fontSize: 13)),
               ),
             ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              height: 44,
-              child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.red),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+
+            // 3. Tombol Batalkan Order
+            if (status != 'BATAL' && status != 'SELESAI') ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                height: 44,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFFF1F2),
+                    side: const BorderSide(color: Color(0xFFFECDD3)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () => _showKonfirmasiBatalDialog(context),
+                  icon: const Icon(Icons.close, size: 18, color: Colors.red),
+                  label: const Text(
+                    'Batalkan Order',
+                    style: TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.w500),
+                  ),
                 ),
-                onPressed: (status == 'BATAL' || status == 'CANCEL') ? null : () => _updateStatus(context, 'BATAL'),
-                icon: const Icon(Icons.close, size: 16, color: Colors.red),
-                label: const Text('Batalkan Order', style: TextStyle(color: Colors.red, fontSize: 12)),
               ),
-            ),
+            ],
             const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
+          ],
+        ),
+      ),
+      // 🟢 TOTAL PRICE & BAYAR DIBIKIN FIXED DI PALING BAWAH
+      bottomNavigationBar: SafeArea(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 6,
+                offset: const Offset(0, -2),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('TOTAL PRICE', style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
-                      Text(_formatRupiah(totalPrice), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue)),
-                    ],
-                  ),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isLunas ? Colors.grey : const Color(0xFF22C55E),
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    onPressed: isLunas ? null : () => _handlePaymentProcess(context),
-                    child: Text(
-                      isLunas ? 'LUNAS' : 'BAYAR',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                    ),
-                  ),
+                  const Text('TOTAL PRICE', style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
+                  Text(_formatRupiah(totalPrice), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue)),
                 ],
               ),
-            ),
-          ],
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isLunas ? Colors.grey : const Color(0xFF22C55E),
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: isLunas ? null : () => _handlePaymentProcess(context),
+                child: Text(
+                  isLunas ? 'LUNAS' : 'BAYAR',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

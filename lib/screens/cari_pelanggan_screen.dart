@@ -214,6 +214,107 @@ class _CariPelangganScreenState extends State<CariPelangganScreen> {
     }
   }
 
+  // 🟢 FITUR EDIT PELANGGAN BARU
+  Future<void> _showEditPelangganDialog(Map<String, dynamic> cust) async {
+    final nameController = TextEditingController(text: cust['name'] ?? '');
+    final phoneController = TextEditingController(text: (cust['phone'] == '-') ? '' : cust['phone'] ?? '');
+    final addressController = TextEditingController(text: (cust['address'] == '-') ? '' : cust['address'] ?? '');
+
+    final isUpdated = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: _bgDark,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Edit Data Pelanggan',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: _textBlack),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              style: const TextStyle(fontSize: 12),
+              decoration: InputDecoration(
+                labelText: 'Nama Lengkap',
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: phoneController,
+              keyboardType: TextInputType.phone,
+              style: const TextStyle(fontSize: 12),
+              decoration: InputDecoration(
+                labelText: 'No. WhatsApp / HP',
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: addressController,
+              style: const TextStyle(fontSize: 12),
+              decoration: InputDecoration(
+                labelText: 'Alamat',
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Batal', style: TextStyle(color: Colors.grey, fontSize: 12)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _goldAccent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () async {
+              if (nameController.text.trim().isEmpty) return;
+
+              try {
+                await supabase.from('customers').update({
+                  'name': nameController.text.trim(),
+                  'phone': phoneController.text.trim().isEmpty ? '-' : phoneController.text.trim(),
+                  'address': addressController.text.trim().isEmpty ? '-' : addressController.text.trim(),
+                }).eq('id', cust['id']);
+
+                if (dialogContext.mounted) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(
+                      content: Text('Data pelanggan berhasil diperbarui!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                  Navigator.pop(dialogContext, true);
+                }
+              } catch (e) {
+                if (dialogContext.mounted) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    SnackBar(content: Text('Gagal memperbarui data: $e'), backgroundColor: Colors.red),
+                  );
+                }
+              }
+            },
+            child: const Text('SIMPAN PERUBAHAN', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (isUpdated == true && mounted) {
+      _loadCustomers(_searchController.text.trim());
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final displayItems = _displayList;
@@ -319,6 +420,11 @@ class _CariPelangganScreenState extends State<CariPelangganScreen> {
                                   subtitle: Text(
                                     '${cust['phone'] ?? '-'} • ${cust['address'] ?? '-'}',
                                     style: const TextStyle(fontSize: 10, color: Colors.black54),
+                                  ),
+                                  trailing: IconButton(
+                                    icon: const Icon(Icons.edit_outlined, color: Colors.grey, size: 20),
+                                    tooltip: 'Edit Pelanggan',
+                                    onPressed: () => _showEditPelangganDialog(cust),
                                   ),
                                   onTap: () {
                                     if (widget.isSelectionMode) {

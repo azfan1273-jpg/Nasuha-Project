@@ -35,18 +35,47 @@ class _NotaDialogState extends State<NotaDialog> {
     }
   }
 
-  // FUNGSI RATA TENGAH UNTUK HEADER & FOOTER
-  String _centerText(String text, {int width = 32}) {
-    if (text.length >= width) return text;
-    int leftPadding = (width - text.length) ~/ 2;
-    return '${' ' * leftPadding}$text';
-  }
-
   // FUNGSI RATA KIRI-KANAN UNTUK ITEM & HARGA
   String _formatTwoColumns(String left, String right, {int width = 32}) {
     int spaceCount = width - left.length - right.length;
     if (spaceCount < 1) spaceCount = 1;
     return '$left${' ' * spaceCount}$right';
+  }
+
+  // 🟢 FUNGSI AMBIL LIST ITEM YANG AMAN & DINAMIS
+  List<Map<String, dynamic>> _getItemsList() {
+    final List<Map<String, dynamic>> itemsList = [];
+    
+    // 1. Cek dari order_items (relasi supabase)
+    final dynamic rawItems = widget.order['order_items'] ?? widget.order['items'];
+    if (rawItems is List && rawItems.isNotEmpty) {
+      for (var item in rawItems) {
+        if (item is Map) {
+          itemsList.add(Map<String, dynamic>.from(item));
+        }
+      }
+    } 
+    
+    // 2. Jika kosong, buat item tunggal berdasarkan data utama order (jika ada qty di level order)
+    if (itemsList.isEmpty) {
+      final String serviceName = (widget.order['service_name'] ?? 'Layanan Laundry').toString();
+      // Coba ambil qty dari level order jika tersimpan di sana, jika tidak default ke 1 atau ambil dari string
+      final num qty = num.tryParse((widget.order['qty'] ?? widget.order['quantity'] ?? 1).toString()) ?? 1;
+      final String unit = (widget.order['unit'] ?? 'Kg').toString();
+      
+      for (var s in serviceName.split(',')) {
+        final trimmed = s.trim();
+        if (trimmed.isNotEmpty) {
+          itemsList.add({
+            'service_name': trimmed,
+            'qty': qty,
+            'unit': unit,
+          });
+        }
+      }
+    }
+    
+    return itemsList;
   }
 
   // FUNGSI EKSEKUSI CETAK THERMAL PRESISI 58MM & QTY DESIMAL
@@ -87,49 +116,39 @@ class _NotaDialogState extends State<NotaDialog> {
     final num discount = num.tryParse(widget.order['discount']?.toString() ?? '0') ?? 0;
     final num subTotal = totalPrice + discount;
 
-    final List<dynamic> itemsFromDb = widget.order['order_items'] is List ? widget.order['order_items'] : [];
-    final List<Map<String, dynamic>> itemsList = [];
-
-    if (itemsFromDb.isNotEmpty) {
-      for (var item in itemsFromDb) {
-        if (item is Map) itemsList.add(Map<String, dynamic>.from(item));
-      }
-    } else {
-      final String rawServices = (widget.order['service_name'] ?? '').toString();
-      for (var s in rawServices.split(',')) {
-        final trimmed = s.trim();
-        if (trimmed.isNotEmpty) itemsList.add({'service_name': trimmed, 'qty': 1});
-      }
-    }
+    final List<Map<String, dynamic>> itemsList = _getItemsList();
 
     final String lineDivider = '-' * printWidth;
     final String doubleDivider = '=' * printWidth;
 
     StringBuffer sb = StringBuffer();
 
-    // SPASI ATAS DIKURANGI AGAR TIDAK TERLALU JAUH
+    // SPASI ATAS AWAL
     sb.writeln("\n\n");
 
     if (isCustomerMode) {
-      // 🟢 HEADER BESAR: Lebar 16 agar tidak terpotong (karena ukuran teks 2x lipat)
-      sb.write("\x1D\x21\x11");
-      sb.writeln(_centerText(namaToko, width: 16));
-      sb.write("\x1D\x21\x00");
+      // 🟢 HEADER TOKO: Menggunakan ESC/POS Align Center Hardware (\x1B\x61\x01)
+      sb.write("\x1B\x61\x01"); 
+      sb.write("\x1D\x21\x11"); // Double size text
+      sb.writeln(namaToko);
+      sb.write("\x1D\x21\x00"); // Reset size
       
       if (subHeader.isNotEmpty) {
-        for (var line in _wrapText(subHeader, printWidth)) {
-          sb.writeln(_centerText(line, width: printWidth));
-        }
+        sb.writeln(subHeader);
       }
       if (headerHp.isNotEmpty && headerHp != '{{HP :}}') {
-        sb.writeln(_centerText("NO. HP: $headerHp", width: printWidth));
+        sb.writeln("NO. HP: $headerHp");
       }
+      sb.write("\x1B\x61\x00"); // Reset ke Align Left
       sb.writeln(lineDivider);
       
-      sb.write("\x1D\x21\x01");
-      sb.writeln(_centerText(customerName.toUpperCase(), width: printWidth));
+      sb.write("\x1B\x61\x01");
+      sb.write("\x1D\x21\x01"); // Medium size text
+      sb.writeln(customerName.toUpperCase());
       sb.write("\x1D\x21\x00");
-      sb.writeln(_centerText(nota, width: printWidth));
+      sb.writeln(nota);
+      sb.write("\x1B\x61\x00"); // Reset ke Align Left
+      
       if (showNamaKasir) {
         sb.writeln(_formatTwoColumns("Kasir:", kasirName, width: printWidth));
       }
@@ -140,9 +159,10 @@ class _NotaDialogState extends State<NotaDialog> {
       sb.writeln(lineDivider);
       
       for (var item in itemsList) {
-        final name = (item['service_name'] ?? 'Layanan').toString();
-        final unit = (item['unit'] ?? 'kg').toString();
-        final rawQty = num.tryParse((item['qty'] ?? 1).toString()) ?? 1;
+        final name = (item['service_name'] ?? item['name'] ?? 'Layanan').toString();
+        final unit = (item['unit'] ?? 'Kg').toString();
+        // Membaca qty secara aman dari database (mendukung float/desimal)
+        final rawQty = num.tryParse((item['qty'] ?? item['quantity'] ?? 1).toString()) ?? 1;
         final formattedQty = (rawQty % 1 == 0) ? rawQty.toInt().toString() : rawQty.toStringAsFixed(2);
 
         sb.writeln(_formatTwoColumns(name, "$formattedQty $unit", width: printWidth));
@@ -161,34 +181,35 @@ class _NotaDialogState extends State<NotaDialog> {
       sb.writeln(_formatTwoColumns("TOTAL", _formatRupiah(totalPrice), width: printWidth));
       sb.writeln(lineDivider);
       
+      sb.write("\x1B\x61\x01"); // Align Center untuk Footer
       if (showFooter && footerNota.isNotEmpty) {
-        for (var line in _wrapText(footerNota, printWidth)) {
-          sb.writeln(_centerText(line, width: printWidth));
-        }
+        sb.writeln(footerNota);
         sb.writeln();
       }
-      sb.writeln(_centerText("**** TERIMA KASIH ****", width: printWidth));
+      sb.writeln("**** TERIMA KASIH ****");
+      sb.write("\x1B\x61\x00"); // Reset Align
       sb.writeln("\n\n");
     } else {
-      sb.writeln(_centerText("[ NOTA PRODUKSI / WORKSHOP ]", width: printWidth));
+      sb.write("\x1B\x61\x01");
+      sb.writeln("[ NOTA PRODUKSI / WORKSHOP ]");
       sb.writeln();
       
-      // 🟢 HEADER BESAR NOTA PRODUKSI: Lebar 16
       sb.write("\x1D\x21\x11");
-      sb.writeln(_centerText(namaToko, width: 16));
+      sb.writeln(namaToko);
       sb.write("\x1D\x21\x00");
       
       sb.write("\x1D\x21\x01");
-      sb.writeln(_centerText(nota, width: printWidth));
+      sb.writeln(nota);
       sb.write("\x1D\x21\x00");
       
-      sb.writeln(_centerText("Pelanggan: ${customerName.toUpperCase()}", width: printWidth));
+      sb.writeln("Pelanggan: ${customerName.toUpperCase()}");
+      sb.write("\x1B\x61\x00"); // Reset Align
       sb.writeln(doubleDivider);
       
       for (var item in itemsList) {
-        final name = (item['service_name'] ?? 'Layanan').toString();
+        final name = (item['service_name'] ?? item['name'] ?? 'Layanan').toString();
         final unit = (item['unit'] ?? 'Pcs').toString();
-        final rawQty = num.tryParse((item['qty'] ?? 1).toString()) ?? 1;
+        final rawQty = num.tryParse((item['qty'] ?? item['quantity'] ?? 1).toString()) ?? 1;
         final formattedQty = (rawQty % 1 == 0) ? rawQty.toInt().toString() : rawQty.toStringAsFixed(2);
 
         sb.writeln(_formatTwoColumns(name, "[$formattedQty $unit]", width: printWidth));
@@ -213,23 +234,6 @@ class _NotaDialogState extends State<NotaDialog> {
     }
   }
 
-  List<String> _wrapText(String text, int maxLength) {
-    final words = text.split(' ');
-    final List<String> lines = [];
-    String currentLine = '';
-
-    for (var word in words) {
-      if ((currentLine + word).length + 1 <= maxLength) {
-        currentLine += (currentLine.isEmpty ? '' : ' ') + word;
-      } else {
-        lines.add(currentLine);
-        currentLine = word;
-      }
-    }
-    if (currentLine.isNotEmpty) lines.add(currentLine);
-    return lines;
-  }
-
   @override
   Widget build(BuildContext context) {
     final settingsProv = context.watch<SettingsProvider>();
@@ -252,20 +256,7 @@ class _NotaDialogState extends State<NotaDialog> {
     final String notes = (widget.order['catatan'] ?? widget.order['notes'] ?? '-').toString();
     final num totalPrice = num.tryParse(widget.order['total_price']?.toString() ?? '0') ?? 0;
 
-    final List<dynamic> itemsFromDb = widget.order['order_items'] is List ? widget.order['order_items'] : [];
-    final List<Map<String, dynamic>> itemsList = [];
-
-    if (itemsFromDb.isNotEmpty) {
-      for (var item in itemsFromDb) {
-        if (item is Map) itemsList.add(Map<String, dynamic>.from(item));
-      }
-    } else {
-      final String rawServices = (widget.order['service_name'] ?? '').toString();
-      for (var s in rawServices.split(',')) {
-        final trimmed = s.trim();
-        if (trimmed.isNotEmpty) itemsList.add({'service_name': trimmed, 'qty': 1});
-      }
-    }
+    final List<Map<String, dynamic>> itemsList = _getItemsList();
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -485,9 +476,9 @@ class _NotaDialogState extends State<NotaDialog> {
         Text('---------------------------------------------------', style: TextStyle(fontSize: 10, color: Colors.grey.shade400)),
 
         ...itemsList.map((item) {
-          final String name = (item['service_name'] ?? 'Layanan').toString();
-          final String unit = (item['unit'] ?? 'kg').toString();
-          final rawQty = num.tryParse((item['qty'] ?? 1).toString()) ?? 1;
+          final String name = (item['service_name'] ?? item['name'] ?? 'Layanan').toString();
+          final String unit = (item['unit'] ?? 'Kg').toString();
+          final rawQty = num.tryParse((item['qty'] ?? item['quantity'] ?? 1).toString()) ?? 1;
           final formattedQty = (rawQty % 1 == 0) ? rawQty.toInt().toString() : rawQty.toStringAsFixed(2);
 
           return Padding(
@@ -605,9 +596,9 @@ class _NotaDialogState extends State<NotaDialog> {
         const Text('========================================', style: TextStyle(fontSize: 10, color: Colors.grey)),
 
         ...itemsList.map((item) {
-          final String name = (item['service_name'] ?? 'Layanan').toString();
+          final String name = (item['service_name'] ?? item['name'] ?? 'Layanan').toString();
           final String unit = (item['unit'] ?? 'Pcs').toString();
-          final rawQty = num.tryParse((item['qty'] ?? 1).toString()) ?? 1;
+          final rawQty = num.tryParse((item['qty'] ?? item['quantity'] ?? 1).toString()) ?? 1;
           final formattedQty = (rawQty % 1 == 0) ? rawQty.toInt().toString() : rawQty.toStringAsFixed(2);
 
           return Padding(

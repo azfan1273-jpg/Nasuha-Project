@@ -162,7 +162,7 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
             onPressed: () => Navigator.pop(dialogCtx),
             child: const Text('Batal', style: TextStyle(color: Colors.grey, fontSize: 12)),
           ),
-          ElevatedButton(
+         ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: _goldAccent,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -170,6 +170,7 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
             onPressed: () {
               final qty = double.tryParse(qtyController.text.replaceAll(',', '.'));
               if (qty != null && qty > 0) {
+                // 🟢 PERBAIKAN DI SINI: Tutup dialog input qty dulu dengan membawa nilai qty
                 Navigator.pop(dialogCtx, qty);
               }
             },
@@ -322,6 +323,7 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
                                 decoration: BoxDecoration(
                                   color: Colors.white,
                                   borderRadius: BorderRadius.circular(12),
+                                  
                                 ),
                                 child: ListTile(
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

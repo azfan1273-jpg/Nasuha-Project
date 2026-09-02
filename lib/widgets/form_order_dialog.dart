@@ -49,46 +49,45 @@ class FormOrderDialogState extends State<FormOrderDialog> {
   }
 
   Future<void> _selectOrderDate(BuildContext context) async {
-        final now = DateTime.now();
-        // 🟢 Longgarkan batas hingga 31 hari ke belakang untuk rekap data bulanan
-        final minDate = now.subtract(const Duration(days: 31));
-    
-        final DateTime? picked = await showDatePicker(
-          context: context,
-          initialDate: _selectedOrderDate.isBefore(minDate) ? minDate : _selectedOrderDate,
-          firstDate: minDate, // 🔒 Kunci: Maksimal 31 hari yang lalu
-          lastDate: now,      // 🔒 Kunci: Tetap cegah pilihan tanggal besok/masa depan
+    final now = DateTime.now();
+    final minDate = now.subtract(const Duration(days: 31));
+
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedOrderDate.isBefore(minDate) ? minDate : _selectedOrderDate,
+      firstDate: minDate,
+      lastDate: now,
+    );
+
+    if (picked != null) {
+      final isBackdate = picked.year != now.year ||
+          picked.month != now.month ||
+          picked.day != now.day;
+
+      if (isBackdate && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Perhatian: Transaksi dicatat pada tanggal mundur (${picked.day}/${picked.month}/${picked.year}).',
+            ),
+            backgroundColor: Colors.orange.shade800,
+            duration: const Duration(seconds: 2),
+          ),
         );
-    
-        if (picked != null) {
-          final isBackdate = picked.year != now.year ||
-              picked.month != now.month ||
-              picked.day != now.day;
-    
-          if (isBackdate && mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Perhatian: Transaksi dicatat pada tanggal mundur (${picked.day}/${picked.month}/${picked.year}).',
-                ),
-                backgroundColor: Colors.orange.shade800,
-                duration: const Duration(seconds: 2),
-              ),
-            );
-          }
-    
-          setState(() {
-            _selectedOrderDate = DateTime(
-              picked.year,
-              picked.month,
-              picked.day,
-              now.hour,
-              now.minute,
-              now.second,
-            );
-          });
-        }
       }
+
+      setState(() {
+        _selectedOrderDate = DateTime(
+          picked.year,
+          picked.month,
+          picked.day,
+          now.hour,
+          now.minute,
+          now.second,
+        );
+      });
+    }
+  }
 
   Future<void> _fetchDiscounts() async {
     try {
@@ -208,98 +207,145 @@ class FormOrderDialogState extends State<FormOrderDialog> {
 
     if (result != null) {
       setState(() {
-        final double qtyToAdd = (result['quantity'] as num).toDouble();
-        final idx = _selectedServices.indexWhere((element) => element['name'] == result['name']);
+        // Mengambil quantity yang dikirimkan dari DaftarLayananScreen (hasil dialog input user)
+        final double qtyToAdd = (result['quantity'] as num?)?.toDouble() ?? 1.0;
+        
+        // Buat salinan map agar data aman dan key quantity/unit terdefinisi dengan benar
+        final Map<String, dynamic> newItem = Map<String, dynamic>.from(result);
+        newItem['quantity'] = qtyToAdd;
+        newItem['unit'] = newItem['unit'] ?? 'Kg';
+
+        final idx = _selectedServices.indexWhere((element) => element['name'] == newItem['name']);
         if (idx >= 0) {
+          // Jika layanan sudah ada di keranjang, tambahkan quantity-nya
           _selectedServices[idx]['quantity'] = (_selectedServices[idx]['quantity'] as num).toDouble() + qtyToAdd;
         } else {
-          _selectedServices.add(result);
+          // Jika belum ada, masukkan item baru ke keranjang
+          _selectedServices.add(newItem);
         }
       });
     }
   }
 
-  // 🟢 METHOD SUBMIT ORDER MEMANGGIL ENGINE RPC BACKEND
-    Future<void> _submitOrder() async {
-      if (_selectedCustomer == null || _selectedServices.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Pilih pelanggan dan minimal 1 layanan!')),
-        );
-        return;
-      }
-  
-      setState(() => _isSubmitting = true);
-  
-      final String serviceNames = _selectedServices
-          .map((s) => (s['name'] ?? '').toString())
-          .join(', ');
-  
-      int maxDays = 1;
-      for (var s in _selectedServices) {
-        final String rawEst = (s['estimation'] ?? s['duration'] ?? '1').toString();
-        final String cleanEst = rawEst.replaceAll(RegExp(r'[^0-9]'), ''); 
-        final int days = int.tryParse(cleanEst) ?? 1;
-        
-        if (days > maxDays) maxDays = days;
-      }
-      
-      final DateTime estimatedDate = _selectedOrderDate.add(Duration(days: maxDays));
-  
-      try {
-        final String? currentStoreId = context.read<SettingsProvider>().storeId;
-        if (currentStoreId == null) throw Exception('ID Toko tidak ditemukan');
-  
-        final List<Map<String, dynamic>> itemsPayload = _selectedServices.map((s) {
-          final double price = (s['price'] as num).toDouble();
-          final double qty = (s['quantity'] as num).toDouble();
-          return {
-            'service_name': s['name'] ?? '',
-            'price': price,
-            'qty': qty,
-            'subtotal': price * qty,
-          };
-        }).toList();
-  
-        // Panggil Stored Procedure create_order_with_items di Supabase
-        await supabase.rpc('create_order_with_items', params: {
-          'p_store_id': currentStoreId,
-          'p_customer_name': _selectedCustomer!['name'],
-          'p_customer_phone': _selectedCustomer!['phone'] ?? '-',
-          'p_service_summary': serviceNames,
-          'p_total_price': _totalPrice,
-          'p_estimated_at': estimatedDate.toIso8601String(),
-          'p_status': 'Pending',
-          'p_metode_pembayaran': null, // 🟢 Jangan isi metode pembayaran saat buat transaksi baru
-          'p_items': itemsPayload,
-          'p_created_at': _selectedOrderDate.toIso8601String(),
-          'p_parfum': _selectedParfum,
-          'p_catatan': _catatanController.text,
-        });
-  
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Transaksi Berhasil Disimpan!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-          widget.onOrderSuccess();
-          Navigator.pop(context);
-        }
-      } catch (e) {
-        debugPrint('Error submit order via RPC: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Gagal menyimpan transaksi: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      } finally {
-        if (mounted) setState(() => _isSubmitting = false);
-      }
+  // DIALOG UBAH QTY/BERAT LANGSUNG DI KERANJANG
+  Future<void> _editQuantity(int index) async {
+    final item = _selectedServices[index];
+    final TextEditingController qtyController = TextEditingController(
+      text: item['quantity'].toString(),
+    );
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Ubah Qty ${item['name']}'),
+        content: TextField(
+          controller: qtyController,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'Jumlah / Berat (misal: 1.5)',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final newQty = double.tryParse(qtyController.text) ?? item['quantity'];
+              setState(() {
+                _selectedServices[index]['quantity'] = newQty;
+              });
+              Navigator.pop(context);
+            },
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _submitOrder() async {
+    if (_selectedCustomer == null || _selectedServices.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pilih pelanggan dan minimal 1 layanan!')),
+      );
+      return;
     }
+
+    setState(() => _isSubmitting = true);
+
+    final String serviceNames = _selectedServices
+        .map((s) => (s['name'] ?? '').toString())
+        .join(', ');
+
+    int maxDays = 1;
+    for (var s in _selectedServices) {
+      final String rawEst = (s['estimation'] ?? s['duration'] ?? '1').toString();
+      final String cleanEst = rawEst.replaceAll(RegExp(r'[^0-9]'), ''); 
+      final int days = int.tryParse(cleanEst) ?? 1;
+      
+      if (days > maxDays) maxDays = days;
+    }
+    
+    final DateTime estimatedDate = _selectedOrderDate.add(Duration(days: maxDays));
+
+    try {
+      final String? currentStoreId = context.read<SettingsProvider>().storeId;
+      if (currentStoreId == null) throw Exception('ID Toko tidak ditemukan');
+
+      final List<Map<String, dynamic>> itemsPayload = _selectedServices.map((s) {
+        final double price = (s['price'] as num).toDouble();
+        final double qty = (s['quantity'] as num).toDouble();
+        return {
+          'service_name': s['name'] ?? '',
+          'price': price,
+          'qty': qty, 
+          'subtotal': price * qty,
+          'unit': s['unit'] ?? 'Kg',
+        };
+      }).toList();
+
+      await supabase.rpc('create_order_with_items', params: {
+        'p_store_id': currentStoreId,
+        'p_customer_name': _selectedCustomer!['name'],
+        'p_customer_phone': _selectedCustomer!['phone'] ?? '-',
+        'p_service_summary': serviceNames,
+        'p_total_price': _totalPrice,
+        'p_estimated_at': estimatedDate.toIso8601String(),
+        'p_status': 'Pending',
+        'p_metode_pembayaran': null,
+        'p_items': itemsPayload,
+        'p_created_at': _selectedOrderDate.toIso8601String(),
+        'p_parfum': _selectedParfum,
+        'p_catatan': _catatanController.text,
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Transaksi Berhasil Disimpan!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        widget.onOrderSuccess();
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      debugPrint('Error submit order via RPC: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal menyimpan transaksi: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -311,7 +357,6 @@ class FormOrderDialogState extends State<FormOrderDialog> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // FIELD TANGGAL TRANSAKSI
               const Text(
                 'Tanggal Transaksi',
                 style: TextStyle(fontSize: 11, color: Colors.black45, fontWeight: FontWeight.w500),
@@ -351,7 +396,6 @@ class FormOrderDialogState extends State<FormOrderDialog> {
               ),
               const SizedBox(height: 12),
 
-              // PELANGGAN
               const Text('Pelanggan', style: TextStyle(fontSize: 11, color: Colors.black45, fontWeight: FontWeight.w500)),
               const SizedBox(height: 5),
               Container(
@@ -468,52 +512,56 @@ class FormOrderDialogState extends State<FormOrderDialog> {
                           final itemTotal = price * qty;
                           final unit = item['unit'] ?? 'Kg';
 
-                          final String formattedQty = qty % 1 == 0 ? qty.toInt().toString() : qty.toString();
+                          final String formattedQty = qty % 1 == 0 ? qty.toInt().toString() : qty.toStringAsFixed(2);
 
-                          return Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFAFAFA),
-                              borderRadius: BorderRadius.circular(11),
-                              border: Border.all(color: Colors.black12),
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(item['name'] ?? '', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
-                                      const SizedBox(height: 2),
-                                      Text('${_formatRupiah(price)} / $unit', style: const TextStyle(fontSize: 9, color: Colors.black45)),
-                                    ],
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  margin: const EdgeInsets.symmetric(horizontal: 10),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.06),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    'Qty: $formattedQty $unit',
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black87,
+                          return InkWell(
+                            onTap: () => _editQuantity(index),
+                            borderRadius: BorderRadius.circular(11),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFAFAFA),
+                                borderRadius: BorderRadius.circular(11),
+                                border: Border.all(color: Colors.black12),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(item['name'] ?? '', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                                        const SizedBox(height: 2),
+                                        Text('${_formatRupiah(price)} / $unit (Ketuk ubah qty)', style: const TextStyle(fontSize: 9, color: Colors.black45)),
+                                      ],
                                     ),
                                   ),
-                                ),
-                                Text(_formatRupiah(itemTotal), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
-                                IconButton(
-                                  visualDensity: VisualDensity.compact,
-                                  padding: const EdgeInsets.only(left: 6),
-                                  constraints: const BoxConstraints(),
-                                  icon: const Icon(Icons.close_rounded, size: 17, color: Colors.black38),
-                                  onPressed: () => setState(() => _selectedServices.removeAt(index)),
-                                ),
-                              ],
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    margin: const EdgeInsets.symmetric(horizontal: 10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withOpacity(0.06),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      'Qty: $formattedQty $unit',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(_formatRupiah(itemTotal), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                                  IconButton(
+                                    visualDensity: VisualDensity.compact,
+                                    padding: const EdgeInsets.only(left: 6),
+                                    constraints: const BoxConstraints(),
+                                    icon: const Icon(Icons.close_rounded, size: 17, color: Colors.black38),
+                                    onPressed: () => setState(() => _selectedServices.removeAt(index)),
+                                  ),
+                                ],
+                              ),
                             ),
                           );
                         },
