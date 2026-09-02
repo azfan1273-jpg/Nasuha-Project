@@ -319,27 +319,36 @@ class _OrderDetailDialogState extends State<OrderDetailDialog> {
                               final String formattedQty = (rawQty % 1 == 0) ? rawQty.toInt().toString() : rawQty.toStringAsFixed(2);
                               final String displayQty = '$formattedQty $itemUnit';
 
+                              // 🟢 Ambil data harga satuan dan subtotal dari item
+                              final num itemPrice = num.tryParse((item['price'] ?? 0).toString()) ?? 0;
+                              final num itemSubtotal = num.tryParse((item['subtotal'] ?? (rawQty * itemPrice)).toString()) ?? (rawQty * itemPrice);
+
                               return Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 4),
+                                padding: const EdgeInsets.symmetric(vertical: 6),
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Expanded(
-                                      child: Text(
-                                        rawName,
-                                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            rawName,
+                                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            '$formattedQty $itemUnit  x  ${_formatRupiah(itemPrice)}',
+                                            style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey.shade200,
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Text(
-                                        displayQty,
-                                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black87),
-                                      ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _formatRupiah(itemSubtotal),
+                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87),
                                     ),
                                   ],
                                 ),

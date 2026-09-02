@@ -34,13 +34,12 @@ class _NotaDialogState extends State<NotaDialog> {
     }
   }
 
-  // 🟢 Diperbarui: Mencegah teks kepanjangan yang merusak baris (terpotong otomatis dengan rapi)
   String _formatTwoColumns(String left, String right, {int width = 32}) {
     int spaceCount = width - left.length - right.length;
     if (spaceCount < 1) {
       int maxLeft = width - right.length - 1;
       if (maxLeft > 0 && left.length > maxLeft) {
-        left = left.substring(0, maxLeft); // Potong teks kiri jika kepanjangan
+        left = left.substring(0, maxLeft);
       }
       spaceCount = 1;
     }
@@ -115,31 +114,30 @@ class _NotaDialogState extends State<NotaDialog> {
 
     StringBuffer sb = StringBuffer();
 
-    // 🟢 INIT PRINTER & FONT (Kunci Perbaikan Tampilan)
-    sb.write("\x1B\x40");       // Reset printer ke pengaturan awal
-    sb.write("\x1B\x21\x00");   // Normal print mode (matikan mode condensed/kecil)
-    sb.write("\x1B\x4D\x00");   // Pilih Font A (12x24) -> Lebih tebal, lebar, dan pas mengisi batas ujung 58mm
+    sb.write("\x1B\x40");
+    sb.write("\x1B\x21\x00");
+    sb.write("\x1B\x4D\x00");
     
     sb.writeln("\n");
 
     if (isCustomerMode) {
-      sb.write("\x1B\x61\x01"); // Align Center
-      sb.write("\x1D\x21\x11"); // Double size text
+      sb.write("\x1B\x61\x01");
+      sb.write("\x1D\x21\x11");
       sb.writeln(namaToko);
-      sb.write("\x1D\x21\x00"); // Reset size
+      sb.write("\x1D\x21\x00");
       
       if (subHeader.isNotEmpty) sb.writeln(subHeader);
       if (headerHp.isNotEmpty && headerHp != '{{HP :}}') sb.writeln("NO. HP: $headerHp");
       
-      sb.write("\x1B\x61\x00"); // Align Left
+      sb.write("\x1B\x61\x00");
       sb.writeln(lineDivider);
       
-      sb.write("\x1B\x61\x01"); // Align Center
-      sb.write("\x1B\x45\x01"); // Bold ON
+      sb.write("\x1B\x61\x01");
+      sb.write("\x1B\x45\x01");
       sb.writeln(customerName.toUpperCase());
-      sb.write("\x1B\x45\x00"); // Bold OFF
+      sb.write("\x1B\x45\x00");
       sb.writeln(nota);
-      sb.write("\x1B\x61\x00"); // Align Left
+      sb.write("\x1B\x61\x00");
       
       if (showNamaKasir) {
         sb.writeln(_formatTwoColumns("Kasir:", kasirName, width: printWidth));
@@ -148,20 +146,8 @@ class _NotaDialogState extends State<NotaDialog> {
       sb.writeln(_formatTwoColumns("Tgl Masuk", createdDate, width: printWidth));
       sb.writeln(_formatTwoColumns("Est. Selesai", estDate, width: printWidth));
       sb.writeln(lineDivider);
-      
-      for (var item in itemsList) {
-        final name = (item['service_name'] ?? item['name'] ?? 'Layanan').toString();
-        final unit = (item['unit'] ?? 'Kg').toString();
-        final rawQty = num.tryParse((item['qty'] ?? item['quantity'] ?? 1).toString()) ?? 1;
-        final formattedQty = (rawQty % 1 == 0) ? rawQty.toInt().toString() : rawQty.toStringAsFixed(2);
-        
-        // 🟢 Item layanan ditebalkan sedikit agar menonjol dari info lainnya
-        sb.write("\x1B\x45\x01"); // Bold ON
-        sb.writeln(_formatTwoColumns(name, "$formattedQty $unit", width: printWidth));
-        sb.write("\x1B\x45\x00"); // Bold OFF
-      }
-      sb.writeln(lineDivider);
-      
+
+      // 🟢 Parfum & Status di atas rincian item
       sb.writeln(_formatTwoColumns("Parfum:", parfum, width: printWidth));
       sb.writeln(_formatTwoColumns("STATUS:", paymentStatus.toUpperCase(), width: printWidth));
       if (notes != '-' && notes.isNotEmpty) {
@@ -169,21 +155,38 @@ class _NotaDialogState extends State<NotaDialog> {
       }
       sb.writeln(lineDivider);
       
+      // Rincian item layanan persis UI
+      for (var item in itemsList) {
+        final name = (item['service_name'] ?? item['name'] ?? 'Layanan').toString();
+        final unit = (item['unit'] ?? 'Kg').toString();
+        final rawQty = num.tryParse((item['qty'] ?? item['quantity'] ?? 1).toString()) ?? 1;
+        final formattedQty = (rawQty % 1 == 0) ? rawQty.toInt().toString() : rawQty.toStringAsFixed(2);
+        
+        final num itemPrice = num.tryParse((item['price'] ?? 0).toString()) ?? 0;
+        final num itemSubtotal = num.tryParse((item['subtotal'] ?? (rawQty * itemPrice)).toString()) ?? (rawQty * itemPrice);
+
+        sb.write("\x1B\x45\x01");
+        sb.writeln(name);
+        sb.write("\x1B\x45\x00");
+        sb.writeln(_formatTwoColumns("  $formattedQty $unit x ${_formatRupiah(itemPrice)}", _formatRupiah(itemSubtotal), width: printWidth));
+      }
+      sb.writeln(lineDivider);
+      
       sb.writeln(_formatTwoColumns("Sub Total", _formatRupiah(subTotal), width: printWidth));
       sb.writeln(_formatTwoColumns("Discount", _formatRupiah(discount), width: printWidth));
       
-      sb.write("\x1B\x45\x01"); // Bold ON untuk Total
+      sb.write("\x1B\x45\x01");
       sb.writeln(_formatTwoColumns("TOTAL", _formatRupiah(totalPrice), width: printWidth));
-      sb.write("\x1B\x45\x00"); // Bold OFF
+      sb.write("\x1B\x45\x00");
       sb.writeln(lineDivider);
       
-      sb.write("\x1B\x61\x01"); // Align Center
+      sb.write("\x1B\x61\x01");
       if (showFooter && footerNota.isNotEmpty) {
         sb.writeln(footerNota);
         sb.writeln();
       }
       sb.writeln("**** TERIMA KASIH ****");
-      sb.write("\x1B\x61\x00"); // Align Left
+      sb.write("\x1B\x61\x00");
       sb.writeln("\n\n");
     } else {
       sb.write("\x1B\x61\x01");
@@ -195,9 +198,9 @@ class _NotaDialogState extends State<NotaDialog> {
       sb.write("\x1D\x21\x00");
       sb.writeln(nota);
       
-      sb.write("\x1B\x45\x01"); // Bold ON
+      sb.write("\x1B\x45\x01");
       sb.writeln("Pelanggan: ${customerName.toUpperCase()}");
-      sb.write("\x1B\x45\x00"); // Bold OFF
+      sb.write("\x1B\x45\x00");
       
       sb.write("\x1B\x61\x00");
       sb.writeln(doubleDivider);
@@ -207,10 +210,14 @@ class _NotaDialogState extends State<NotaDialog> {
         final unit = (item['unit'] ?? 'Pcs').toString();
         final rawQty = num.tryParse((item['qty'] ?? item['quantity'] ?? 1).toString()) ?? 1;
         final formattedQty = (rawQty % 1 == 0) ? rawQty.toInt().toString() : rawQty.toStringAsFixed(2);
+        
+        final num itemPrice = num.tryParse((item['price'] ?? 0).toString()) ?? 0;
+        final num itemSubtotal = num.tryParse((item['subtotal'] ?? (rawQty * itemPrice)).toString()) ?? (rawQty * itemPrice);
 
-        sb.write("\x1B\x45\x01"); // Bold ON
-        sb.writeln(_formatTwoColumns(name, "[$formattedQty $unit]", width: printWidth));
-        sb.write("\x1B\x45\x00"); // Bold OFF
+        sb.write("\x1B\x45\x01");
+        sb.writeln(name);
+        sb.write("\x1B\x45\x00");
+        sb.writeln(_formatTwoColumns("  $formattedQty $unit x ${_formatRupiah(itemPrice)}", _formatRupiah(itemSubtotal), width: printWidth));
       }
       sb.writeln(doubleDivider);
       
@@ -234,7 +241,6 @@ class _NotaDialogState extends State<NotaDialog> {
 
   @override
   Widget build(BuildContext context) {
-    // Sisa widget UI Dialog tetap dipertahankan sama persis...
     final settingsProv = context.watch<SettingsProvider>();
     final storeSettings = settingsProv.storeSettings;
 
@@ -474,26 +480,7 @@ class _NotaDialogState extends State<NotaDialog> {
 
         Text('---------------------------------------------------', style: TextStyle(fontSize: 10, color: Colors.grey.shade400)),
 
-        ...itemsList.map((item) {
-          final String name = (item['service_name'] ?? item['name'] ?? 'Layanan').toString();
-          final String unit = (item['unit'] ?? 'Kg').toString();
-          final rawQty = num.tryParse((item['qty'] ?? item['quantity'] ?? 1).toString()) ?? 1;
-          final formattedQty = (rawQty % 1 == 0) ? rawQty.toInt().toString() : rawQty.toStringAsFixed(2);
-
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(child: Text(name, style: const TextStyle(fontSize: 10))),
-                Text('$formattedQty $unit', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          );
-        }),
-
-        Text('---------------------------------------------------', style: TextStyle(fontSize: 10, color: Colors.grey.shade400)),
-
+        // 1. Parfum & Status dipindah ke atas rincian layanan
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -522,6 +509,37 @@ class _NotaDialogState extends State<NotaDialog> {
             child: Text('(Ket: $notes)', style: const TextStyle(fontSize: 9, fontStyle: FontStyle.italic, color: Colors.black87)),
           ),
         ],
+
+        Text('---------------------------------------------------', style: TextStyle(fontSize: 10, color: Colors.grey.shade400)),
+
+        // 2. Rincian item layanan persis UI
+        ...itemsList.map((item) {
+          final String name = (item['service_name'] ?? item['name'] ?? 'Layanan').toString();
+          final String unit = (item['unit'] ?? 'Kg').toString();
+          final rawQty = num.tryParse((item['qty'] ?? item['quantity'] ?? 1).toString()) ?? 1;
+          final formattedQty = (rawQty % 1 == 0) ? rawQty.toInt().toString() : rawQty.toStringAsFixed(2);
+          
+          final num itemPrice = num.tryParse((item['price'] ?? 0).toString()) ?? 0;
+          final num itemSubtotal = num.tryParse((item['subtotal'] ?? (rawQty * itemPrice)).toString()) ?? (rawQty * itemPrice);
+
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 1),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('$formattedQty $unit x ${_formatRupiah(itemPrice)}', style: const TextStyle(fontSize: 9.5, color: Colors.black54)),
+                    Text(_formatRupiah(itemSubtotal), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ],
+            ),
+          );
+        }),
 
         Text('---------------------------------------------------', style: TextStyle(fontSize: 10, color: Colors.grey.shade400)),
 
@@ -599,17 +617,22 @@ class _NotaDialogState extends State<NotaDialog> {
           final String unit = (item['unit'] ?? 'Pcs').toString();
           final rawQty = num.tryParse((item['qty'] ?? item['quantity'] ?? 1).toString()) ?? 1;
           final formattedQty = (rawQty % 1 == 0) ? rawQty.toInt().toString() : rawQty.toStringAsFixed(2);
+          
+          final num itemPrice = num.tryParse((item['price'] ?? 0).toString()) ?? 0;
+          final num itemSubtotal = num.tryParse((item['subtotal'] ?? (rawQty * itemPrice)).toString()) ?? (rawQty * itemPrice);
 
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 3),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(child: Text(name, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                  decoration: BoxDecoration(border: Border.all(color: Colors.black), borderRadius: BorderRadius.circular(4)),
-                  child: Text('$formattedQty $unit', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                Text(name, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('$formattedQty $unit x ${_formatRupiah(itemPrice)}', style: const TextStyle(fontSize: 10, color: Colors.black54)),
+                    Text(_formatRupiah(itemSubtotal), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                  ],
                 ),
               ],
             ),
