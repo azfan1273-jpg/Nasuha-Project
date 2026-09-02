@@ -35,21 +35,21 @@ class _NotaDialogState extends State<NotaDialog> {
     }
   }
 
-  // 🟢 FUNGSI RATA TENGAH UNTUK HEADER & FOOTER
+  // FUNGSI RATA TENGAH UNTUK HEADER & FOOTER
   String _centerText(String text, {int width = 32}) {
     if (text.length >= width) return text;
     int leftPadding = (width - text.length) ~/ 2;
     return '${' ' * leftPadding}$text';
   }
 
-  // 🟢 FUNGSI RATA KIRI-KANAN UNTUK ITEM & HARGA
+  // FUNGSI RATA KIRI-KANAN UNTUK ITEM & HARGA
   String _formatTwoColumns(String left, String right, {int width = 32}) {
     int spaceCount = width - left.length - right.length;
     if (spaceCount < 1) spaceCount = 1;
     return '$left${' ' * spaceCount}$right';
   }
 
-  // 🟢 FUNGSI EKSEKUSI CETAK THERMAL PRESISI SINKRON PREVIEW
+  // FUNGSI EKSEKUSI CETAK THERMAL PRESISI 58MM & QTY DESIMAL
   Future<void> _printReceiptToBluetooth(BuildContext context, bool isCustomerMode) async {
     bool isConnected = await PrintBluetoothThermal.connectionStatus;
     if (!isConnected) {
@@ -107,14 +107,14 @@ class _NotaDialogState extends State<NotaDialog> {
 
     StringBuffer sb = StringBuffer();
 
-    // SPASI ENTER ATAS
-    sb.writeln("\n\n\n\n\n");
+    // SPASI ATAS DIKURANGI AGAR TIDAK TERLALU JAUH
+    sb.writeln("\n\n");
 
     if (isCustomerMode) {
-      // HEADER TOKO RATA TENGAH
       sb.write("\x1D\x21\x11");
-      sb.writeln(_centerText(namaToko, width: 16));
+      sb.writeln(_centerText(namaToko, width: printWidth));
       sb.write("\x1D\x21\x00");
+      
       if (subHeader.isNotEmpty) {
         for (var line in _wrapText(subHeader, printWidth)) {
           sb.writeln(_centerText(line, width: printWidth));
@@ -125,7 +125,6 @@ class _NotaDialogState extends State<NotaDialog> {
       }
       sb.writeln(lineDivider);
       
-      // PELANGGAN & NOTA
       sb.write("\x1D\x21\x01");
       sb.writeln(_centerText(customerName.toUpperCase(), width: printWidth));
       sb.write("\x1D\x21\x00");
@@ -135,21 +134,20 @@ class _NotaDialogState extends State<NotaDialog> {
       }
       sb.writeln();
       
-      // TANGGAL
       sb.writeln(_formatTwoColumns("Tgl Masuk", createdDate, width: printWidth));
       sb.writeln(_formatTwoColumns("Est. Selesai", estDate, width: printWidth));
       sb.writeln(lineDivider);
       
-      // ITEMS LAYANAN
       for (var item in itemsList) {
         final name = (item['service_name'] ?? 'Layanan').toString();
         final unit = (item['unit'] ?? 'kg').toString();
-        final qty = (item['qty'] ?? 1).toString();
-        sb.writeln(_formatTwoColumns(name, "$qty $unit", width: printWidth));
+        final rawQty = num.tryParse((item['qty'] ?? 1).toString()) ?? 1;
+        final formattedQty = (rawQty % 1 == 0) ? rawQty.toInt().toString() : rawQty.toStringAsFixed(2);
+
+        sb.writeln(_formatTwoColumns(name, "$formattedQty $unit", width: printWidth));
       }
       sb.writeln(lineDivider);
       
-      // PARFUM & STATUS
       sb.writeln(_formatTwoColumns("Parfum:", parfum, width: printWidth));
       sb.writeln(_formatTwoColumns("STATUS:", paymentStatus.toUpperCase(), width: printWidth));
       if (notes != '-' && notes.isNotEmpty) {
@@ -157,13 +155,11 @@ class _NotaDialogState extends State<NotaDialog> {
       }
       sb.writeln(lineDivider);
       
-      // HARGA
       sb.writeln(_formatTwoColumns("Sub Total", _formatRupiah(subTotal), width: printWidth));
       sb.writeln(_formatTwoColumns("Discount", _formatRupiah(discount), width: printWidth));
       sb.writeln(_formatTwoColumns("TOTAL", _formatRupiah(totalPrice), width: printWidth));
       sb.writeln(lineDivider);
       
-      // FOOTER
       if (showFooter && footerNota.isNotEmpty) {
         for (var line in _wrapText(footerNota, printWidth)) {
           sb.writeln(_centerText(line, width: printWidth));
@@ -171,14 +167,13 @@ class _NotaDialogState extends State<NotaDialog> {
         sb.writeln();
       }
       sb.writeln(_centerText("**** TERIMA KASIH ****", width: printWidth));
-      sb.writeln("\n\n\n");
+      sb.writeln("\n\n");
     } else {
-      // NOTA PRODUKSI / WORKSHOP
       sb.writeln(_centerText("[ NOTA PRODUKSI / WORKSHOP ]", width: printWidth));
       sb.writeln();
       
       sb.write("\x1D\x21\x11");
-      sb.writeln(_centerText(namaToko, width: 16));
+      sb.writeln(_centerText(namaToko, width: printWidth));
       sb.write("\x1D\x21\x00");
       
       sb.write("\x1D\x21\x01");
@@ -191,8 +186,10 @@ class _NotaDialogState extends State<NotaDialog> {
       for (var item in itemsList) {
         final name = (item['service_name'] ?? 'Layanan').toString();
         final unit = (item['unit'] ?? 'Pcs').toString();
-        final qty = (item['qty'] ?? 1).toString();
-        sb.writeln(_formatTwoColumns(name, "[$qty $unit]", width: printWidth));
+        final rawQty = num.tryParse((item['qty'] ?? 1).toString()) ?? 1;
+        final formattedQty = (rawQty % 1 == 0) ? rawQty.toInt().toString() : rawQty.toStringAsFixed(2);
+
+        sb.writeln(_formatTwoColumns(name, "[$formattedQty $unit]", width: printWidth));
       }
       sb.writeln(doubleDivider);
       
@@ -200,7 +197,7 @@ class _NotaDialogState extends State<NotaDialog> {
       sb.writeln(_formatTwoColumns("TGL MASUK:", createdDate, width: printWidth));
       sb.writeln(_formatTwoColumns("DEADLINE:", estDate, width: printWidth));
       sb.writeln("CATATAN PRODUKSI:\n$notes");
-      sb.writeln("$doubleDivider\n\n\n");
+      sb.writeln("$doubleDivider\n\n");
     }
 
     bool result = await PrintBluetoothThermal.writeString(
@@ -488,14 +485,16 @@ class _NotaDialogState extends State<NotaDialog> {
         ...itemsList.map((item) {
           final String name = (item['service_name'] ?? 'Layanan').toString();
           final String unit = (item['unit'] ?? 'kg').toString();
-          final String qty = (item['qty'] ?? 1).toString();
+          final rawQty = num.tryParse((item['qty'] ?? 1).toString()) ?? 1;
+          final formattedQty = (rawQty % 1 == 0) ? rawQty.toInt().toString() : rawQty.toStringAsFixed(2);
+
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 2),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(child: Text(name, style: const TextStyle(fontSize: 10))),
-                Text('$qty $unit', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                Text('$formattedQty $unit', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
               ],
             ),
           );
@@ -606,7 +605,9 @@ class _NotaDialogState extends State<NotaDialog> {
         ...itemsList.map((item) {
           final String name = (item['service_name'] ?? 'Layanan').toString();
           final String unit = (item['unit'] ?? 'Pcs').toString();
-          final String qty = (item['qty'] ?? 1).toString();
+          final rawQty = num.tryParse((item['qty'] ?? 1).toString()) ?? 1;
+          final formattedQty = (rawQty % 1 == 0) ? rawQty.toInt().toString() : rawQty.toStringAsFixed(2);
+
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 3),
             child: Row(
@@ -616,7 +617,7 @@ class _NotaDialogState extends State<NotaDialog> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                   decoration: BoxDecoration(border: Border.all(color: Colors.black), borderRadius: BorderRadius.circular(4)),
-                  child: Text('$qty $unit', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  child: Text('$formattedQty $unit', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
