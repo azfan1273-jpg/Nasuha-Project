@@ -13,7 +13,6 @@ class NotaDialog extends StatefulWidget {
 }
 
 class _NotaDialogState extends State<NotaDialog> {
-  // Mode nota: 'customer' atau 'produksi'
   String _selectedMode = 'customer';
 
   String _formatRupiah(num number) {
@@ -35,50 +34,44 @@ class _NotaDialogState extends State<NotaDialog> {
     }
   }
 
-  // FUNGSI RATA KIRI-KANAN UNTUK ITEM & HARGA
+  // 🟢 Diperbarui: Mencegah teks kepanjangan yang merusak baris (terpotong otomatis dengan rapi)
   String _formatTwoColumns(String left, String right, {int width = 32}) {
     int spaceCount = width - left.length - right.length;
-    if (spaceCount < 1) spaceCount = 1;
+    if (spaceCount < 1) {
+      int maxLeft = width - right.length - 1;
+      if (maxLeft > 0 && left.length > maxLeft) {
+        left = left.substring(0, maxLeft); // Potong teks kiri jika kepanjangan
+      }
+      spaceCount = 1;
+    }
     return '$left${' ' * spaceCount}$right';
   }
 
-  // 🟢 FUNGSI AMBIL LIST ITEM YANG AMAN & DINAMIS
   List<Map<String, dynamic>> _getItemsList() {
     final List<Map<String, dynamic>> itemsList = [];
-    
-    // 1. Cek dari order_items (relasi supabase)
     final dynamic rawItems = widget.order['order_items'] ?? widget.order['items'];
+    
     if (rawItems is List && rawItems.isNotEmpty) {
       for (var item in rawItems) {
-        if (item is Map) {
-          itemsList.add(Map<String, dynamic>.from(item));
-        }
+        if (item is Map) itemsList.add(Map<String, dynamic>.from(item));
       }
     } 
     
-    // 2. Jika kosong, buat item tunggal berdasarkan data utama order (jika ada qty di level order)
     if (itemsList.isEmpty) {
       final String serviceName = (widget.order['service_name'] ?? 'Layanan Laundry').toString();
-      // Coba ambil qty dari level order jika tersimpan di sana, jika tidak default ke 1 atau ambil dari string
       final num qty = num.tryParse((widget.order['qty'] ?? widget.order['quantity'] ?? 1).toString()) ?? 1;
       final String unit = (widget.order['unit'] ?? 'Kg').toString();
       
       for (var s in serviceName.split(',')) {
         final trimmed = s.trim();
         if (trimmed.isNotEmpty) {
-          itemsList.add({
-            'service_name': trimmed,
-            'qty': qty,
-            'unit': unit,
-          });
+          itemsList.add({'service_name': trimmed, 'qty': qty, 'unit': unit});
         }
       }
     }
-    
     return itemsList;
   }
 
-  // FUNGSI EKSEKUSI CETAK THERMAL PRESISI 58MM & QTY DESIMAL
   Future<void> _printReceiptToBluetooth(BuildContext context, bool isCustomerMode) async {
     bool isConnected = await PrintBluetoothThermal.connectionStatus;
     if (!isConnected) {
@@ -117,43 +110,41 @@ class _NotaDialogState extends State<NotaDialog> {
     final num subTotal = totalPrice + discount;
 
     final List<Map<String, dynamic>> itemsList = _getItemsList();
-
     final String lineDivider = '-' * printWidth;
     final String doubleDivider = '=' * printWidth;
 
     StringBuffer sb = StringBuffer();
 
-    // SPASI ATAS AWAL
-    sb.writeln("\n\n");
+    // 🟢 INIT PRINTER & FONT (Kunci Perbaikan Tampilan)
+    sb.write("\x1B\x40");       // Reset printer ke pengaturan awal
+    sb.write("\x1B\x21\x00");   // Normal print mode (matikan mode condensed/kecil)
+    sb.write("\x1B\x4D\x00");   // Pilih Font A (12x24) -> Lebih tebal, lebar, dan pas mengisi batas ujung 58mm
+    
+    sb.writeln("\n");
 
     if (isCustomerMode) {
-      // 🟢 HEADER TOKO: Menggunakan ESC/POS Align Center Hardware (\x1B\x61\x01)
-      sb.write("\x1B\x61\x01"); 
+      sb.write("\x1B\x61\x01"); // Align Center
       sb.write("\x1D\x21\x11"); // Double size text
       sb.writeln(namaToko);
       sb.write("\x1D\x21\x00"); // Reset size
       
-      if (subHeader.isNotEmpty) {
-        sb.writeln(subHeader);
-      }
-      if (headerHp.isNotEmpty && headerHp != '{{HP :}}') {
-        sb.writeln("NO. HP: $headerHp");
-      }
-      sb.write("\x1B\x61\x00"); // Reset ke Align Left
+      if (subHeader.isNotEmpty) sb.writeln(subHeader);
+      if (headerHp.isNotEmpty && headerHp != '{{HP :}}') sb.writeln("NO. HP: $headerHp");
+      
+      sb.write("\x1B\x61\x00"); // Align Left
       sb.writeln(lineDivider);
       
-      sb.write("\x1B\x61\x01");
-      sb.write("\x1D\x21\x01"); // Medium size text
+      sb.write("\x1B\x61\x01"); // Align Center
+      sb.write("\x1B\x45\x01"); // Bold ON
       sb.writeln(customerName.toUpperCase());
-      sb.write("\x1D\x21\x00");
+      sb.write("\x1B\x45\x00"); // Bold OFF
       sb.writeln(nota);
-      sb.write("\x1B\x61\x00"); // Reset ke Align Left
+      sb.write("\x1B\x61\x00"); // Align Left
       
       if (showNamaKasir) {
         sb.writeln(_formatTwoColumns("Kasir:", kasirName, width: printWidth));
       }
       sb.writeln();
-      
       sb.writeln(_formatTwoColumns("Tgl Masuk", createdDate, width: printWidth));
       sb.writeln(_formatTwoColumns("Est. Selesai", estDate, width: printWidth));
       sb.writeln(lineDivider);
@@ -161,11 +152,13 @@ class _NotaDialogState extends State<NotaDialog> {
       for (var item in itemsList) {
         final name = (item['service_name'] ?? item['name'] ?? 'Layanan').toString();
         final unit = (item['unit'] ?? 'Kg').toString();
-        // Membaca qty secara aman dari database (mendukung float/desimal)
         final rawQty = num.tryParse((item['qty'] ?? item['quantity'] ?? 1).toString()) ?? 1;
         final formattedQty = (rawQty % 1 == 0) ? rawQty.toInt().toString() : rawQty.toStringAsFixed(2);
-
+        
+        // 🟢 Item layanan ditebalkan sedikit agar menonjol dari info lainnya
+        sb.write("\x1B\x45\x01"); // Bold ON
         sb.writeln(_formatTwoColumns(name, "$formattedQty $unit", width: printWidth));
+        sb.write("\x1B\x45\x00"); // Bold OFF
       }
       sb.writeln(lineDivider);
       
@@ -178,16 +171,19 @@ class _NotaDialogState extends State<NotaDialog> {
       
       sb.writeln(_formatTwoColumns("Sub Total", _formatRupiah(subTotal), width: printWidth));
       sb.writeln(_formatTwoColumns("Discount", _formatRupiah(discount), width: printWidth));
+      
+      sb.write("\x1B\x45\x01"); // Bold ON untuk Total
       sb.writeln(_formatTwoColumns("TOTAL", _formatRupiah(totalPrice), width: printWidth));
+      sb.write("\x1B\x45\x00"); // Bold OFF
       sb.writeln(lineDivider);
       
-      sb.write("\x1B\x61\x01"); // Align Center untuk Footer
+      sb.write("\x1B\x61\x01"); // Align Center
       if (showFooter && footerNota.isNotEmpty) {
         sb.writeln(footerNota);
         sb.writeln();
       }
       sb.writeln("**** TERIMA KASIH ****");
-      sb.write("\x1B\x61\x00"); // Reset Align
+      sb.write("\x1B\x61\x00"); // Align Left
       sb.writeln("\n\n");
     } else {
       sb.write("\x1B\x61\x01");
@@ -197,13 +193,13 @@ class _NotaDialogState extends State<NotaDialog> {
       sb.write("\x1D\x21\x11");
       sb.writeln(namaToko);
       sb.write("\x1D\x21\x00");
-      
-      sb.write("\x1D\x21\x01");
       sb.writeln(nota);
-      sb.write("\x1D\x21\x00");
       
+      sb.write("\x1B\x45\x01"); // Bold ON
       sb.writeln("Pelanggan: ${customerName.toUpperCase()}");
-      sb.write("\x1B\x61\x00"); // Reset Align
+      sb.write("\x1B\x45\x00"); // Bold OFF
+      
+      sb.write("\x1B\x61\x00");
       sb.writeln(doubleDivider);
       
       for (var item in itemsList) {
@@ -212,7 +208,9 @@ class _NotaDialogState extends State<NotaDialog> {
         final rawQty = num.tryParse((item['qty'] ?? item['quantity'] ?? 1).toString()) ?? 1;
         final formattedQty = (rawQty % 1 == 0) ? rawQty.toInt().toString() : rawQty.toStringAsFixed(2);
 
+        sb.write("\x1B\x45\x01"); // Bold ON
         sb.writeln(_formatTwoColumns(name, "[$formattedQty $unit]", width: printWidth));
+        sb.write("\x1B\x45\x00"); // Bold OFF
       }
       sb.writeln(doubleDivider);
       
@@ -236,6 +234,7 @@ class _NotaDialogState extends State<NotaDialog> {
 
   @override
   Widget build(BuildContext context) {
+    // Sisa widget UI Dialog tetap dipertahankan sama persis...
     final settingsProv = context.watch<SettingsProvider>();
     final storeSettings = settingsProv.storeSettings;
 
