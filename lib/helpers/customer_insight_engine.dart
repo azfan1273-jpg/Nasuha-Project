@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import '../main.dart'; // pastikan mengimpor supabase client
+import '../main.dart';
 
 class CustomerInsightEngine {
   static Future<List<Map<String, dynamic>>> fetchTomorrowPredictions({required String? storeId}) async {
     if (storeId == null || storeId.isEmpty) return [];
 
     try {
-      // 🟢 PANGGIL RPC SUPABASE CLAY ENGINE SINKRON 100%
       final response = await supabase.rpc(
         'get_customer_predictions',
         params: {'p_store_id': storeId},
@@ -16,23 +15,20 @@ class CustomerInsightEngine {
 
       final List<dynamic> listData = response as List<dynamic>;
 
-      // Mapping data hasil RPC ke format yang dibutuhkan UI KasirHomeScreen
       return listData.map((item) {
-        final String name = item['customer_name'] ?? 'Pelanggan';
-        final String phone = item['customer_phone'] ?? '-';
-        final int avgCycle = item['avg_cycle_days'] ?? 7;
-
         return {
-          'name': name,
-          'score': 95, // Skor presisi Clay Engine
-          'reason': 'Siklus rutin per $avgCycle hari',
-          'est_spend': 25000,
-          'favorite_service': 'Cuci Komplit',
-          'total_tx': 2,
-          'contribution': 'Utama',
+          'name': item['customer_name'] ?? 'Pelanggan',
+          'phone': item['customer_phone'] ?? '-',
+          'score': item['score'] ?? 80,
+          'reason': item['reason'] ?? 'Siklus rutin',
+          'est_spend': item['est_spend'] ?? 0,
+          'favorite_service': item['favorite_service'] ?? 'Cuci Komplit',
+          'total_tx': item['total_tx'] ?? 1,
+          'tag': item['tag'] ?? 'Aktif',
+          'contribution': item['contribution'] ?? 'Reguler',
           'cust_data': {
-            'name': name,
-            'phone': phone,
+            'name': item['customer_name'] ?? 'Pelanggan',
+            'phone': item['customer_phone'] ?? '-',
           },
         };
       }).toList();

@@ -188,7 +188,9 @@ class FormOrderDialogState extends State<FormOrderDialog> {
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
-        builder: (context) => const CariPelangganScreen(),
+        builder: (context) => const CariPelangganScreen(
+        	isSelectionMode: true,
+        ),
       ),
     );
 
@@ -314,7 +316,7 @@ class FormOrderDialogState extends State<FormOrderDialog> {
         'p_service_summary': serviceNames,
         'p_total_price': _totalPrice,
         'p_estimated_at': estimatedDate.toIso8601String(),
-        'p_status': 'Pending',
+        'p_status': 'Antrian',
         'p_metode_pembayaran': null,
         'p_items': itemsPayload,
         'p_created_at': _selectedOrderDate.toIso8601String(),

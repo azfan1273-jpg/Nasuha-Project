@@ -76,7 +76,22 @@ class _OrderDetailDialogState extends State<OrderDetailDialog> {
     }
   }
 
+  // 🟢 1. UPDATE STATUS DENGAN VALIDASI PEMBAYARAN LUNAS
   Future<void> _updateStatus(BuildContext context, String newStatus) async {
+    if (newStatus.toLowerCase() == 'selesai') {
+      final String paymentStatus = (_currentOrder['status_pembayaran'] ?? 
+                                    _currentOrder['payment_status'] ?? 
+                                    '').toString().trim().toUpperCase();
+
+      final bool isLunas = paymentStatus == 'LUNAS';
+
+      // Jika belum lunas, otomatis picu dialog bayar
+      if (!isLunas) {
+        _handlePaymentProcess(context);
+        return; 
+      }
+    }
+
     try {
       await Supabase.instance.client
           .from('orders')
@@ -95,6 +110,7 @@ class _OrderDetailDialogState extends State<OrderDetailDialog> {
     }
   }
 
+  // 🟢 2. UPDATE PEMBAYARAN SEKALIAN MENGESET STATUS JADI SELESAI & LUNAS
   Future<void> _updatePayment(BuildContext context, String method) async {
     try {
       final orderId = int.tryParse(_currentOrder['id'].toString());
@@ -103,7 +119,7 @@ class _OrderDetailDialogState extends State<OrderDetailDialog> {
       await Supabase.instance.client.rpc('update_order_status_by_store', params: {
         'p_order_id': orderId,
         'p_store_id': _currentOrder['store_id']?.toString() ?? '',
-        'p_new_status': _currentOrder['status'] ?? 'Selesai',
+        'p_new_status': 'SELESAI',
         'p_metode_pembayaran': method,
       });
 
@@ -111,7 +127,7 @@ class _OrderDetailDialogState extends State<OrderDetailDialog> {
         widget.onOrderUpdated?.call();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Pembayaran ($method) berhasil dicatat LUNAS!'),
+            content: Text('Pembayaran ($method) berhasil! Status LUNAS & SELESAI'),
             backgroundColor: Colors.green,
           ),
         );
@@ -317,9 +333,7 @@ class _OrderDetailDialogState extends State<OrderDetailDialog> {
 
                               final num rawQty = num.tryParse((item['qty'] ?? item['quantity'] ?? 1).toString()) ?? 1;
                               final String formattedQty = (rawQty % 1 == 0) ? rawQty.toInt().toString() : rawQty.toStringAsFixed(2);
-                              final String displayQty = '$formattedQty $itemUnit';
 
-                              // 🟢 Ambil data harga satuan dan subtotal dari item
                               final num itemPrice = num.tryParse((item['price'] ?? 0).toString()) ?? 0;
                               final num itemSubtotal = num.tryParse((item['subtotal'] ?? (rawQty * itemPrice)).toString()) ?? (rawQty * itemPrice);
 
@@ -470,7 +484,6 @@ class _OrderDetailDialogState extends State<OrderDetailDialog> {
           ],
         ),
       ),
-      // 🟢 TOTAL PRICE & BAYAR DIBIKIN FIXED DI PALING BAWAH
       bottomNavigationBar: SafeArea(
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

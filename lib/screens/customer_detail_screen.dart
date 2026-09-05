@@ -18,7 +18,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   bool _isLoading = true;
   List<Map<String, dynamic>> _allOrders = [];
   List<Map<String, dynamic>> _filteredOrders = [];
-  
+  Map<String, dynamic> _currentCustomerProfile = {};
+
   // Stats
   int _totalTransaksi = 0;
   num _totalKontribusi = 0;
@@ -42,33 +43,64 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   }
 
   Future<void> _fetchCustomerOrders() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
+
     try {
       final storeId = context.read<SettingsProvider>().storeId;
-      if (storeId == null) {
-        setState(() => _isLoading = false);
+      if (storeId == null || storeId.isEmpty) {
+        if (mounted) setState(() => _isLoading = false);
         return;
       }
 
-      final customerPhone = widget.customer['phone'] ?? widget.customer['customer_phone'];
-      final customerName = widget.customer['name'] ?? widget.customer['customer_name'];
+      final custId = widget.customer['id'];
+      final custCode = widget.customer['customer_code'];
+      final custPhone = widget.customer['phone'] ?? widget.customer['customer_phone'];
+      final custName = widget.customer['name'] ?? widget.customer['customer_name'];
 
-      // 1. Fetch Transaksi Pelanggan Terisolasi store_id
-      var query = Supabase.instance.client
-          .from('orders')
-          .select()
+      // 🟢 1. TARIK PROFIL PELANGGAN TERSEBUT (Gunakan ID paling akurat)
+      var profileQuery = Supabase.instance.client
+          .from('customers')
+          .select('*')
           .eq('store_id', storeId);
 
-      if (customerPhone != null && customerPhone.toString().isNotEmpty) {
-        query = query.eq('customer_phone', customerPhone);
-      } else {
-        query = query.eq('customer_name', customerName);
+      if (custId != null) {
+        profileQuery = profileQuery.eq('id', custId);
+      } else if (custPhone != null && custPhone.toString().isNotEmpty && custPhone != '-') {
+        profileQuery = profileQuery.eq('phone', custPhone);
+      } else if (custName != null) {
+        profileQuery = profileQuery.eq('name', custName);
       }
 
-      final response = await query.order('created_at', ascending: false);
-      final List<Map<String, dynamic>> fetched = List<Map<String, dynamic>>.from(response);
+      final custResp = await profileQuery.maybeSingle();
+      Map<String, dynamic> fetchedProfile = {};
+      if (custResp != null) {
+        fetchedProfile = Map<String, dynamic>.from(custResp);
+      } else {
+        fetchedProfile = Map<String, dynamic>.from(widget.customer);
+      }
 
-      // 2. Fetch Total Omset Keseluruhan Toko
+      // 🟢 2. TARIK TRANSAKSI PELANGGAN SPESIFIK BERDASARKAN ID / KODE
+      var ordersQuery = Supabase.instance.client
+          .from('orders')
+          .select('*')
+          .eq('store_id', storeId);
+
+      // Prioritaskan customer_id atau customer_code agar tidak tertukar dengan pelanggan lain
+      if (custId != null) {
+        ordersQuery = ordersQuery.eq('customer_id', custId);
+      } else if (custCode != null && custCode.toString().isNotEmpty) {
+        ordersQuery = ordersQuery.eq('customer_code', custCode);
+      } else if (custPhone != null && custPhone.toString().isNotEmpty && custPhone != '-') {
+        ordersQuery = ordersQuery.eq('customer_phone', custPhone);
+      } else if (custName != null) {
+        ordersQuery = ordersQuery.eq('customer_name', custName);
+      }
+
+      final ordersResp = await ordersQuery.order('created_at', ascending: false);
+      final List<Map<String, dynamic>> fetchedOrders = List<Map<String, dynamic>>.from(ordersResp ?? []);
+
+      // 🟢 3. TARIK TOTAL OMSET KESELURUHAN TOKO UNTUK HITUNG KONTRIBUSI (%)
       final allOrdersResp = await Supabase.instance.client
           .from('orders')
           .select('total_price')
@@ -81,7 +113,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
 
       // Hitung Stats Pelanggan Ini
       num totalRp = 0;
-      for (var order in fetched) {
+      for (var order in fetchedOrders) {
         totalRp += num.tryParse(order['total_price']?.toString() ?? '0') ?? 0;
       }
 
@@ -92,8 +124,9 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
 
       if (mounted) {
         setState(() {
-          _allOrders = fetched;
-          _totalTransaksi = fetched.length;
+          _currentCustomerProfile = fetchedProfile;
+          _allOrders = fetchedOrders;
+          _totalTransaksi = fetchedOrders.length;
           _totalKontribusi = totalRp;
           _persenKontribusi = pct;
           _isLoading = false;
@@ -157,7 +190,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
         if (_selectedMetricFilter == 'Harga') {
           val = double.tryParse(o['total_price']?.toString() ?? '0') ?? 0;
         } else {
-          val = 1; // 🟢 Tambahkan 1 transaksi jika mode 'Transaksi'
+          val = 1; // Tambahkan 1 transaksi jika mode 'Transaksi'
         }
 
         int targetDay = 1;
@@ -207,8 +240,11 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
-    final name = (widget.customer['name'] ?? widget.customer['customer_name'] ?? 'Pelanggan').toString();
-    final phone = (widget.customer['phone'] ?? widget.customer['customer_phone'] ?? '-').toString();
+    final profile = _currentCustomerProfile.isNotEmpty ? _currentCustomerProfile : widget.customer;
+
+    final name = (profile['name'] ?? profile['customer_name'] ?? 'Pelanggan').toString();
+    final phone = (profile['phone'] ?? profile['customer_phone'] ?? '-').toString();
+    final customerCode = (profile['customer_code'] ?? 'NSH-????').toString();
 
     return Scaffold(
       backgroundColor: settings.bgDark,
@@ -259,25 +295,33 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                                     name,
                                     style: TextStyle(color: settings.textColor, fontWeight: FontWeight.bold, fontSize: 16),
                                   ),
-                                  Text(
-                                    phone,
-                                    style: TextStyle(color: settings.textColor.withOpacity(0.6), fontSize: 12),
+                                  const SizedBox(height: 2),
+                                  Row(
+                                    children: [
+                                      Text(
+                                        phone,
+                                        style: TextStyle(color: settings.textColor.withOpacity(0.6), fontSize: 12),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      // 🟢 TAMPILKAN BADGE KODE PELANGGAN NSH-xxxx
+                                      if (customerCode != 'NSH-????')
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: settings.accentColor.withOpacity(0.15),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            customerCode,
+                                            style: TextStyle(
+                                              color: settings.accentColor,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 10,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
                                   ),
-                                ],
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: settings.accentColor,
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.star, color: Colors.white, size: 12),
-                                  SizedBox(width: 2),
-                                  Text('VIP', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10)),
                                 ],
                               ),
                             ),
@@ -519,7 +563,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   }
 
   String _formatDateReadable(String raw) {
-    if (raw.isEmpty) return 'Senin, 01 Agustus 2026';
+    if (raw.isEmpty) return '-';
     try {
       final dt = DateTime.parse(raw);
       final List<String> days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];

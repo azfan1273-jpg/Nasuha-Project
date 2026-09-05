@@ -54,6 +54,9 @@ class _ParfumScreenState extends State<ParfumScreen> {
   Future<void> _showFormParfumDialog([Map<String, dynamic>? item]) async {
     final nameController = TextEditingController(text: item?['name'] ?? '');
     final isEdit = item != null;
+    // 🟢 PERBAIKAN: Pastikan membaca 'id' atau 'parfum_id' dengan fallback yang aman
+    final dynamic rawId = item?['id'] ?? item?['parfum_id'];
+    final parfumId = isEdit ? int.tryParse(rawId.toString()) : null;
 
     await showDialog(
       context: context,
@@ -86,7 +89,7 @@ class _ParfumScreenState extends State<ParfumScreen> {
               final storeId = context.read<SettingsProvider>().storeId;
               if (storeId == null) return;
 
-              final parfumId = isEdit ? int.tryParse(item['id'].toString()) : null;
+              final parfumId = isEdit ? int.tryParse((item['parfum_id'] ?? item['id']).toString()) : null;
 
               Navigator.pop(ctx);
               setState(() => _isLoading = true);
@@ -115,7 +118,10 @@ class _ParfumScreenState extends State<ParfumScreen> {
     try {
       final storeId = context.read<SettingsProvider>().storeId;
       final intId = int.tryParse(id.toString());
+      
       if (storeId == null || intId == null) return;
+
+      setState(() => _isLoading = true);
 
       await supabase.rpc('delete_parfum_by_store', params: {
         'p_id': intId,
@@ -125,6 +131,16 @@ class _ParfumScreenState extends State<ParfumScreen> {
       _fetchParfums();
     } catch (e) {
       debugPrint('Error delete parfum RPC: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal Hapus: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -183,7 +199,7 @@ class _ParfumScreenState extends State<ParfumScreen> {
                             ),
                             IconButton(
                               icon: const Icon(Icons.delete_outline_rounded, color: Colors.red, size: 18),
-                              onPressed: () => _deleteParfum(item['id']),
+                              onPressed: () => _deleteParfum(item['parfum_id'] ?? item['id']),
                             ),
                           ],
                         ),

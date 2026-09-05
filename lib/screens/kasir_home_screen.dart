@@ -15,39 +15,19 @@ class KasirHomeScreen extends StatefulWidget {
 }
 
 class KasirHomeScreenState extends State<KasirHomeScreen> {
-  final List<Map<String, dynamic>> _ordersHariIni = [];
   double _totalOmsetHariIniVal = 0.0;
   double _totalPengeluaranHariIniVal = 0.0;
-  bool _isLoading = false;
+
+  int _countMasukHariIni = 0;
+  int _countHarusSelesai = 0;
+  int _countTerlambat = 0;
+  int _countSelesai = 0;
 
   String _formatRupiah(num number) {
     final String str = number.toInt().toString();
     final RegExp reg = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
     final String result = str.replaceAllMapped(reg, (Match m) => '${m[1]}.');
     return 'Rp $result';
-  }
-
-  bool _isHariIni(String? rawDate) {
-    if (rawDate == null || rawDate.isEmpty) return false;
-    try {
-      final dt = DateTime.parse(rawDate).toLocal();
-      final now = DateTime.now();
-      return dt.year == now.year && dt.month == now.month && dt.day == now.day;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  bool _isTerlambat(String? rawDate) {
-    if (rawDate == null || rawDate.isEmpty) return false;
-    try {
-      final est = DateTime.parse(rawDate).toLocal();
-      final now = DateTime.now();
-      final todayStart = DateTime(now.year, now.month, now.day);
-      return est.isBefore(todayStart);
-    } catch (_) {
-      return false;
-    }
   }
 
   @override
@@ -57,59 +37,33 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
   }
 
   Future<void> refreshData() async {
-    await _loadOrdersFromSupabase();
     await _fetchKeuanganHariIniViaRPC();
+    await _fetchSummaryViaRPC();
   }
 
-  Future<void> _loadOrdersFromSupabase() async {
-      if (!mounted) return;
-      setState(() => _isLoading = true);
-  
-      try {
-        final currentStoreId = context.read<SettingsProvider>().storeId;
-        if (currentStoreId == null) return;
-  
-        // 🟢 1. Sertakan order_items(*) pada query Supabase
-        final List<dynamic> data = await supabase
-            .from('orders')
-            .select('*, order_items(*)')
-            .eq('store_id', currentStoreId)
-            .order('created_at', ascending: false);
-  
-        if (mounted) {
-          setState(() {
-            _ordersHariIni.clear();
-            _ordersHariIni.addAll(data.map((record) {
-              return {
-                'id': record['id'].toString(),
-                'customer': record['customer_name'] ?? 'Pelanggan',
-                'services': record['service_name'] ?? record['services_summary'] ?? 'Layanan',
-                'created_st': record['created_at'],
-                'created_at': record['created_at'],
-                'estimated_at': record['estimated_at'],
-                'status': record['status'],
-                'total_price': record['total_price'] ?? record['total'] ?? 0,
-                'store_id': record['store_id'],
-                'customer_phone': record['customer_phone'],
-                'nota_number': record['nota_number'],
-                'parfum': record['parfum'],
-                'status_pembayaran': record['status_pembayaran'],
-                'catatan': record['catatan'],
-                'discount': record['discount'],
-                // 🟢 2. Wajib lempar order_items agar terbawa sampai ke halaman detail & nota
-                'order_items': record['order_items'],
-              };
-            }));
-          });
-        }
-      } catch (e) {
-        debugPrint('Error load orders home: $e');
-      } finally {
-        if (mounted) setState(() => _isLoading = false);
-      }
-    }
+  Future<void> _fetchSummaryViaRPC() async {
+    try {
+      final currentStoreId = context.read<SettingsProvider>().storeId;
+      if (currentStoreId == null) return;
 
-  // 🟢 AMBIL DATA KEUANGAN HARI INI PRESISI DARI ENGINE RPC SUPABASE
+      final response = await supabase.rpc('get_dashboard_summary', params: {
+        'p_store_id': currentStoreId,
+      });
+
+      if (mounted && response != null) {
+        final data = Map<String, dynamic>.from(response);
+        setState(() {
+          _countMasukHariIni = num.tryParse(data['masuk_hari_ini']?.toString() ?? '0')?.toInt() ?? 0;
+          _countHarusSelesai = num.tryParse(data['harus_selesai']?.toString() ?? '0')?.toInt() ?? 0;
+          _countTerlambat = num.tryParse(data['terlambat']?.toString() ?? '0')?.toInt() ?? 0;
+          _countSelesai = num.tryParse(data['selesai']?.toString() ?? '0')?.toInt() ?? 0;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetch summary RPC: $e');
+    }
+  }
+
   Future<void> _fetchKeuanganHariIniViaRPC() async {
     try {
       final currentStoreId = context.read<SettingsProvider>().storeId;
@@ -132,59 +86,57 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
     }
   }
 
+  // 🟢 LANGSUNG NAVIGASI INSTAN VIA ROOT NAVIGATOR
+  void _bukaDetailOrderByStatus(String title, String categoryKey) async {
+    await Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute(
+        builder: (context) => DaftarOrderByStatusScreen(
+          title: title,
+          categoryKey: categoryKey,
+        ),
+      ),
+    );
+    refreshData();
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
 
     return Container(
-      width: double.infinity,
       color: const Color(0xFFFAF5F7),
-      child: Column(
-        children: [
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: refreshData,
-              color: settings.accentColor,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 6),
-                    _buildOrderSummaryCard(settings),
-                    const SizedBox(height: 10),
-                    _buildFinancialSummaryCard(settings),
-                    const SizedBox(height: 10),
-                    _buildTodayOrdersCard(settings),
-                    const SizedBox(height: 10),
-                  ],
+      child: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: refreshData,
+                color: settings.accentColor,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 6),
+                      _buildOrderSummaryCard(settings),
+                      const SizedBox(height: 10),
+                      _buildFinancialSummaryCard(settings),
+                      const SizedBox(height: 10),
+                      _buildTodayOrdersCard(settings),
+                      const SizedBox(height: 10),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-          _buildTransactionButton(settings),
-        ],
+            _buildTransactionButton(settings),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildOrderSummaryCard(SettingsProvider settings) {
-    final cucianAktifList = _ordersHariIni
-        .where((o) => o['status'] != 'Selesai' && o['status'] != 'Pengeluaran')
-        .toList();
-
-    final harusSelesaiList = _ordersHariIni
-        .where((o) => o['status'] != 'Selesai' && _isHariIni(o['estimated_at']))
-        .toList();
-
-    final terlambatList = _ordersHariIni
-        .where((o) => o['status'] != 'Selesai' && _isTerlambat(o['estimated_at']))
-        .toList();
-
-    final selesaiList = _ordersHariIni
-        .where((o) => o['status'] == 'Selesai')
-        .toList();
-
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -237,19 +189,19 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
           Row(
             children: [
               _buildGridStat(
-                'CUCIAN AKTIF',
-                '${cucianAktifList.length}',
-                Icons.local_laundry_service,
+                'MASUK HARI INI',
+                '$_countMasukHariIni',
+                Icons.move_to_inbox_rounded,
                 settings,
-                onTap: () => _bukaDetailOrderByStatus('Cucian Aktif', cucianAktifList),
+                onTap: () => _bukaDetailOrderByStatus('Order Masuk Hari Ini', 'masuk_hari_ini'),
               ),
               const SizedBox(width: 4),
               _buildGridStat(
                 'HARUS SELESAI',
-                '${harusSelesaiList.length}',
+                '$_countHarusSelesai',
                 Icons.timer_outlined,
                 settings,
-                onTap: () => _bukaDetailOrderByStatus('Harus Selesai Hari Ini', harusSelesaiList),
+                onTap: () => _bukaDetailOrderByStatus('Harus Selesai Hari Ini', 'harus_selesai'),
               ),
             ],
           ),
@@ -258,38 +210,24 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
             children: [
               _buildGridStat(
                 'TERLAMBAT',
-                '${terlambatList.length}',
+                '$_countTerlambat',
                 Icons.warning_amber_rounded,
                 settings,
-                onTap: () => _bukaDetailOrderByStatus('Orderan Terlambat', terlambatList),
+                onTap: () => _bukaDetailOrderByStatus('Orderan Terlambat', 'terlambat'),
               ),
               const SizedBox(width: 4),
               _buildGridStat(
                 'SELESAI',
-                '${selesaiList.length}',
+                '$_countSelesai',
                 Icons.check_circle_outline,
                 settings,
-                onTap: () => _bukaDetailOrderByStatus('Orderan Selesai', selesaiList),
+                onTap: () => _bukaDetailOrderByStatus('Orderan Selesai', 'selesai'),
               ),
             ],
           ),
         ],
       ),
     );
-  }
-
-  Future<void> _bukaDetailOrderByStatus(String title, List<Map<String, dynamic>> orders) async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => DaftarOrderByStatusScreen(
-          title: title,
-          orders: orders,
-        ),
-      ),
-    );
-
-    refreshData();
   }
 
   Widget _buildFinancialSummaryCard(SettingsProvider settings) {
@@ -463,7 +401,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                 ),
                 child: Row(
                   children: [
-                    // 1. KOLOM TERKUNCI / FROZEN (PELANGGAN)
                     Container(
                       width: 110,
                       decoration: BoxDecoration(
@@ -493,8 +430,7 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                             return InkWell(
                               onTap: () {
                                 if (item['cust_data'] != null) {
-                                  Navigator.push(
-                                    context,
+                                  Navigator.of(context, rootNavigator: true).push(
                                     MaterialPageRoute(
                                       builder: (context) => CustomerDetailScreen(customer: item['cust_data']),
                                     ),
@@ -521,7 +457,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                       ),
                     ),
 
-                    // 2. KOLOM SCROLLABLE HORIZONTAL
                     Expanded(
                       child: SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
@@ -555,8 +490,7 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
                                 return InkWell(
                                   onTap: () {
                                     if (item['cust_data'] != null) {
-                                      Navigator.push(
-                                        context,
+                                      Navigator.of(context, rootNavigator: true).push(
                                         MaterialPageRoute(
                                           builder: (context) => CustomerDetailScreen(customer: item['cust_data']),
                                         ),

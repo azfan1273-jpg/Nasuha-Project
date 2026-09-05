@@ -77,7 +77,7 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
           return status == 'PROSES' || status == 'PREPARED';
         case 'DELIVERED':
           return status == 'SELESAI' || status == 'DELIVERED';
-        case 'CANCELED': // 🟢 Filter Batal
+        case 'CANCELED':
           return status == 'BATAL' || status == 'CANCEL' || status == 'CANCELED';
         default:
           return false;
@@ -103,7 +103,7 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
           return status == 'PROSES' || status == 'PREPARED';
         case 'DELIVERED':
           return status == 'SELESAI' || status == 'DELIVERED';
-        case 'CANCELED': // 🟢 Filter Batal
+        case 'CANCELED':
           return status == 'BATAL' || status == 'CANCEL' || status == 'CANCELED';
         default:
           return true;
@@ -156,7 +156,7 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
                     },
                     decoration: const InputDecoration(
                       isDense: true,
-                      hintText: 'Search orders',
+                      hintText: 'Cari orderan...',
                       hintStyle: TextStyle(fontSize: 13, color: Colors.black45),
                       prefixIcon: Icon(Icons.search, size: 20, color: Colors.black45),
                       prefixIconConstraints: BoxConstraints(minWidth: 40, minHeight: 40),
@@ -168,22 +168,22 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
                 const SizedBox(height: 12),
                 
                 // HORIZONTAL TAB FILTER
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade200,
-                      borderRadius: BorderRadius.circular(25),
-                    ),
-                    child: Row(
-                      children: [
-                        _buildTabButton('PENDING', 'Pending', settings),
-                        _buildTabButton('PREPARED', 'Prepared', settings),
-                        _buildTabButton('DELIVERED', 'Delivered', settings),
-                        _buildTabButton('CANCELED', 'Batal', settings),
-                      ],
-                    ),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(25),
                   ),
+                  child: Row(
+                    children: [
+                      _buildTabButton('PENDING', 'Antrian', settings),
+                      _buildTabButton('PREPARED', 'Proses', settings),
+                      _buildTabButton('DELIVERED', 'Selesai', settings),
+                      _buildTabButton('CANCELED', 'Batal', settings),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -234,43 +234,41 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
   }
 
   Widget _buildTabButton(String filterKey, String label, SettingsProvider settings) {
-      final bool isSelected = _selectedFilter == filterKey;
-      final int count = _countOrdersByStatus(filterKey);
-  
-      return Expanded(
-        child: GestureDetector(
-          onTap: () => setState(() => _selectedFilter = filterKey),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            decoration: BoxDecoration(
-              // 🟢 Warna saat dipilih menggunakan warna tema/cardDark
-              color: isSelected ? settings.cardDark : Colors.transparent,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: isSelected
-                  ? [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ]
-                  : [],
-            ),
-            child: Text(
-              '$label ($count)',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                // 🟢 Teks aktif memakai accentColor/textColor tema
-                color: isSelected ? settings.accentColor : Colors.black54,
-              ),
+    final bool isSelected = _selectedFilter == filterKey;
+    final int count = _countOrdersByStatus(filterKey);
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedFilter = filterKey),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? settings.cardDark : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : [],
+          ),
+          child: Text(
+            '$label ($count)',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              color: isSelected ? settings.accentColor : Colors.black54,
             ),
           ),
         ),
-      );
-    }
+      ),
+    );
+  }
 
   Widget _buildOrderCardBar(Map<String, dynamic> item) {
     final String customerName = (item['customer_name'] ?? item['nama_pelanggan'] ?? 'Pelanggan').toString();

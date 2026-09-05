@@ -7,7 +7,7 @@ import 'package:open_file/open_file.dart';
 
 import '../main.dart';
 import '../providers/settings_provider.dart';
-import '../widgets/form_pengeluaran_dialog.dart';
+import '../widgets/order_detail_dialog.dart';
 import 'chart_screen.dart';
 import 'piutang_screen.dart';
 import 'custom_date_screen.dart';
@@ -26,27 +26,21 @@ class _ReportScreenState extends State<ReportScreen> {
   String _filterPeriode = 'Hari Ini';
   String _activeTabChart = 'Omset';
 
-  // 🟢 VARIABEL UNTUK KUSTOM TANGGAL
+  // VARIABEL UNTUK KUSTOM TANGGAL
   DateTimeRange? _customDateRange;
 
   double _totalOmset = 0;
   double _totalPendapatan = 0;
   double _totalPengeluaran = 0;
-
-  double _totalPiutang = 0; // <-- Tambahkan variabel ini di atas
-  
-  double _cashTotal = 0;
-  double _qrisTotal = 0;
+  double _totalPiutang = 0;
 
   List<dynamic> _rawOrders = [];
   List<dynamic> _rawExpenses = [];
-  List<Map<String, dynamic>> _listPengeluaran = [];
 
   @override
   void initState() {
     super.initState();
     _loadLaporanKeuangan();
-    _loadTotalPiutang();
   }
 
   Future<void> _loadLaporanKeuangan() async {
@@ -63,7 +57,6 @@ class _ReportScreenState extends State<ReportScreen> {
         'p_filter_periode': _filterPeriode == 'Sesuaikan Tanggal...' ? 'Custom' : _filterPeriode,
       };
 
-      // 🟢 MASUKKAN PARAMETER TANGGAL KUSTOM JIKA DIPILIH
       if (_filterPeriode == 'Sesuaikan Tanggal...' && _customDateRange != null) {
         params['p_start_date'] = _customDateRange!.start.toIso8601String().split('T')[0];
         params['p_end_date'] = _customDateRange!.end.toIso8601String().split('T')[0];
@@ -74,16 +67,26 @@ class _ReportScreenState extends State<ReportScreen> {
       if (mounted && response != null) {
         final Map<String, dynamic> data = Map<String, dynamic>.from(response);
 
+        final fetchedOrders = List<dynamic>.from(data['orders'] ?? []);
+        final fetchedExpenses = List<dynamic>.from(data['expenses'] ?? []);
+
+        // 🟢 HITUNG PIUTANG HANYA DARI ORDERAN PERIODE/RENTANG AKTIF
+        double piutangPeriode = 0;
+        for (var o in fetchedOrders) {
+          final statusBayar = (o['status_pembayaran'] ?? '').toString().trim().toLowerCase();
+          if (statusBayar != 'lunas') {
+            piutangPeriode += num.tryParse(o['total_price']?.toString() ?? '0')?.toDouble() ?? 0.0;
+          }
+        }
+
         setState(() {
           _totalOmset = num.tryParse(data['total_omset']?.toString() ?? '0')?.toDouble() ?? 0.0;
           _totalPendapatan = num.tryParse(data['total_pendapatan']?.toString() ?? '0')?.toDouble() ?? 0.0;
           _totalPengeluaran = num.tryParse(data['total_pengeluaran']?.toString() ?? '0')?.toDouble() ?? 0.0;
-          _cashTotal = num.tryParse(data['cash_total']?.toString() ?? '0')?.toDouble() ?? 0.0;
-          _qrisTotal = num.tryParse(data['qris_total']?.toString() ?? '0')?.toDouble() ?? 0.0;
-          
-          _rawOrders = List<dynamic>.from(data['orders'] ?? []);
-          _rawExpenses = List<dynamic>.from(data['expenses'] ?? []);
-          _listPengeluaran = List<Map<String, dynamic>>.from(data['expenses'] ?? []);
+          _totalPiutang = num.tryParse(data['total_piutang']?.toString() ?? '0')?.toDouble() ?? 0.0;
+        
+          _rawOrders = fetchedOrders;
+          _rawExpenses = fetchedExpenses;
           _isLoading = false;
         });
       }
@@ -93,60 +96,31 @@ class _ReportScreenState extends State<ReportScreen> {
     }
   }
 
-  Future<void> _loadTotalPiutang() async {
-        try {
-          final storeId = context.read<SettingsProvider>().storeId;
-          if (storeId == null) return;
-    
-          final response = await supabase
-              .from('orders')
-              .select('total_price') // <-- Ambil langsung kolom yang benar
-              .eq('store_id', storeId)
-              .eq('status_pembayaran', 'Belum Lunas');
-    
-          double sum = 0;
-          for (var item in (response as List)) {
-            final val = num.tryParse(item['total_price']?.toString() ?? '0')?.toDouble() ?? 0.0;
-            sum += val;
-          }
-    
-          if (mounted) {
-            setState(() {
-              _totalPiutang = sum;
-            });
-          }
-        } catch (e) {
-          debugPrint('Error load total piutang: $e');
-        }
-      }
-
-  // 🟢 DIALOG PICKER TANGGAL KUSTOM
   Future<void> _pickCustomDateRange() async {
-      // Panggil CustomDateScreen buatanmu dengan Navigator.push
-      final DateTimeRange? picked = await Navigator.push(
-        context,
-        PageRouteBuilder(
-          opaque: false, // Supaya latar belakangnya transparan/dimmed
-          pageBuilder: (context, animation, secondaryAnimation) => CustomDateScreen(
-            initialRange: _customDateRange,
-          ),
+    final DateTimeRange? picked = await Navigator.push(
+      context,
+      PageRouteBuilder(
+        opaque: false,
+        pageBuilder: (context, animation, secondaryAnimation) => CustomDateScreen(
+          initialRange: _customDateRange,
         ),
-      );
-  
-      if (picked != null) {
-        setState(() {
-          _customDateRange = picked;
-          _filterPeriode = 'Sesuaikan Tanggal...';
-        });
-        _loadLaporanKeuangan();
-      }
+      ),
+    );
+
+    if (picked != null) {
+      setState(() {
+        _customDateRange = picked;
+        _filterPeriode = 'Sesuaikan Tanggal...';
+      });
+      _loadLaporanKeuangan();
     }
+  }
 
   Future<void> _exportToExcel() async {
     setState(() => _isExporting = true);
     try {
       final excel = excel_lib.Excel.createExcel();
-      
+
       final excel_lib.Sheet sheet1 = excel['Ringkasan Keuangan'];
       sheet1.appendRow([excel_lib.TextCellValue('LAPORAN KEUANGAN LAUNDRY')]);
       sheet1.appendRow([excel_lib.TextCellValue('Periode: $_filterPeriode')]);
@@ -155,20 +129,27 @@ class _ReportScreenState extends State<ReportScreen> {
       sheet1.appendRow([excel_lib.TextCellValue('Total Omset'), excel_lib.TextCellValue(_totalOmset.toString())]);
       sheet1.appendRow([excel_lib.TextCellValue('Total Pendapatan Riil'), excel_lib.TextCellValue(_totalPendapatan.toString())]);
       sheet1.appendRow([excel_lib.TextCellValue('Total Pengeluaran'), excel_lib.TextCellValue(_totalPengeluaran.toString())]);
-      sheet1.appendRow([excel_lib.TextCellValue('Laba Bersih'), excel_lib.TextCellValue((_totalPendapatan - _totalPengeluaran).toString())]);
+      sheet1.appendRow([excel_lib.TextCellValue('Laba Bersih Riil'), excel_lib.TextCellValue((_totalPendapatan - _totalPengeluaran).toString())]);
 
-      final excel_lib.Sheet sheet2 = excel['Detail Pengeluaran'];
-      sheet2.appendRow([excel_lib.TextCellValue('Tanggal'), excel_lib.TextCellValue('Kategori'), excel_lib.TextCellValue('Catatan'), excel_lib.TextCellValue('Nominal')]);
+      final excel_lib.Sheet sheet2 = excel['Detail Orderan'];
+      sheet2.appendRow([
+        excel_lib.TextCellValue('Tanggal'),
+        excel_lib.TextCellValue('Pelanggan'),
+        excel_lib.TextCellValue('Layanan'),
+        excel_lib.TextCellValue('Status Bayar'),
+        excel_lib.TextCellValue('Total')
+      ]);
 
-      for (var item in _listPengeluaran) {
-        final rawDate = item['expense_date'] ?? item['created_at'];
+      for (var item in _rawOrders) {
+        final rawDate = item['created_at'] ?? '';
         final displayDate = rawDate.toString().split('T')[0];
 
         sheet2.appendRow([
           excel_lib.TextCellValue(displayDate),
-          excel_lib.TextCellValue(item['category'] ?? 'Lain-lain'),
-          excel_lib.TextCellValue(item['notes'] ?? '-'),
-          excel_lib.TextCellValue((item['amount'] ?? 0).toString()),
+          excel_lib.TextCellValue(item['customer_name'] ?? '-'),
+          excel_lib.TextCellValue(item['services_summary'] ?? item['service_name'] ?? '-'),
+          excel_lib.TextCellValue(item['status_pembayaran'] ?? '-'),
+          excel_lib.TextCellValue((item['total_price'] ?? 0).toString()),
         ]);
       }
 
@@ -179,7 +160,7 @@ class _ReportScreenState extends State<ReportScreen> {
       final fileBytes = excel.save();
       final directory = await getApplicationDocumentsDirectory();
       final filePath = '${directory.path}/Laporan_Keuangan_${DateTime.now().millisecondsSinceEpoch}.xlsx';
-      
+
       final file = File(filePath);
       await file.writeAsBytes(fileBytes!);
 
@@ -209,12 +190,26 @@ class _ReportScreenState extends State<ReportScreen> {
     return isNeg ? '-Rp $formatted' : 'Rp $formatted';
   }
 
+  String _formatDateReadable(String raw) {
+    if (raw.isEmpty) return '-';
+    try {
+      final dt = DateTime.parse(raw);
+      return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+    } catch (_) {
+      return raw.split('T')[0];
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    // 🟢 RUMUS LABA BERSIH BERDASARKAN PENDAPATAN RIIL (UANG DITERIMA - PENGELUARAN)
     final labaBersih = _totalPendapatan - _totalPengeluaran;
-    final profitMargin = _totalPendapatan > 0 ? ((labaBersih / _totalPendapatan) * 100).toStringAsFixed(1) : '0';
+    final profitMargin = _totalPendapatan > 0
+        ? ((labaBersih / _totalPendapatan) * 100).toStringAsFixed(1)
+        : '0';
+
     final settings = context.watch<SettingsProvider>();
-    
+
     return Scaffold(
       backgroundColor: settings.bgDark,
       appBar: AppBar(
@@ -256,7 +251,7 @@ class _ReportScreenState extends State<ReportScreen> {
             },
           ),
           IconButton(
-            icon: _isExporting 
+            icon: _isExporting
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.table_chart_rounded, color: Colors.green),
             tooltip: 'Export ke Excel',
@@ -265,19 +260,6 @@ class _ReportScreenState extends State<ReportScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          showDialog(
-            context: context,
-            builder: (context) => FormPengeluaranDialog(
-              onSuccess: () => _loadLaporanKeuangan(),
-            ),
-          );
-        },
-        backgroundColor: settings.accentColor,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('Pengeluaran', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-      ),
       body: _isLoading
           ? Center(child: CircularProgressIndicator(color: settings.accentColor))
           : RefreshIndicator(
@@ -285,7 +267,7 @@ class _ReportScreenState extends State<ReportScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  // 🟢 SUBTITLE TANGGAL JIKA FILTER KUSTOM AKTIF
+                  // SUBTITLE TANGGAL JIKA FILTER KUSTOM AKTIF
                   if (_filterPeriode == 'Sesuaikan Tanggal...' && _customDateRange != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12),
@@ -308,6 +290,7 @@ class _ReportScreenState extends State<ReportScreen> {
                       ),
                     ),
 
+                  // BARIS SUMMARY: OMSET & PENGELUARAN
                   Row(
                     children: [
                       Expanded(
@@ -333,10 +316,9 @@ class _ReportScreenState extends State<ReportScreen> {
                   ),
                   const SizedBox(height: 12),
 
-				// Baris 2: Piutang & Laba Bersih (Sejajar / 2 Kolom)
+                  // BARIS SUMMARY: PIUTANG & LABA BERSIH
                   Row(
                     children: [
-                      // Kartu Piutang (Bisa diklik menuju PiutangScreen)
                       Expanded(
                         child: InkWell(
                           onTap: () {
@@ -345,7 +327,6 @@ class _ReportScreenState extends State<ReportScreen> {
                               MaterialPageRoute(builder: (context) => const PiutangScreen()),
                             ).then((_) {
                               _loadLaporanKeuangan();
-                              _loadTotalPiutang(); // <-- Refresh juga total piutangnya
                             });
                           },
                           child: Container(
@@ -365,37 +346,38 @@ class _ReportScreenState extends State<ReportScreen> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Piutang', style: TextStyle(fontSize: 11, color: settings.textColor.withOpacity(0.6), fontWeight: FontWeight.w500)),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      _formatRupiah(_totalPiutang),
-                                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: settings.textColor),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Piutang', style: TextStyle(fontSize: 11, color: settings.textColor.withOpacity(0.6), fontWeight: FontWeight.w500)),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        _formatRupiah(_totalPiutang),
+                                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: settings.textColor),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildSummaryCard(
-                        title: 'Laba Bersih ($profitMargin%)',
-                        amount: _formatRupiah(labaBersih),
-                        color: labaBersih >= 0 ? Colors.blue : Colors.redAccent,
-                        icon: Icons.account_balance_wallet_rounded,
-                        settings: settings,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildSummaryCard(
+                          title: 'Laba Bersih ($profitMargin%)',
+                          amount: _formatRupiah(labaBersih),
+                          color: labaBersih >= 0 ? Colors.blue : Colors.redAccent,
+                          icon: Icons.account_balance_wallet_rounded,
+                          settings: settings,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
                   const SizedBox(height: 20),
-                  
+
+                  // CONTAINER GRAFIK DAN TAB
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
@@ -441,76 +423,204 @@ class _ReportScreenState extends State<ReportScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
-
-                  _buildPaymentMethodCard(settings),
                   const SizedBox(height: 24),
 
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Riwayat Pengeluaran', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: settings.textColor)),
-                      Text('${_listPengeluaran.length} Transaksi', style: TextStyle(fontSize: 12, color: settings.textColor.withOpacity(0.6))),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-
-                  _listPengeluaran.isEmpty
-                      ? Container(
-                          padding: const EdgeInsets.all(32),
-                          decoration: BoxDecoration(
-                            color: settings.cardDark,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: settings.textColor.withOpacity(0.05)),
-                          ),
-                          child: Column(
-                            children: [
-                              Icon(Icons.receipt_long_outlined, size: 48, color: settings.textColor.withOpacity(0.4)),
-                              const SizedBox(height: 8),
-                              Text('Belum ada catat pengeluaran', style: TextStyle(color: settings.textColor.withOpacity(0.6))),
-                            ],
-                          ),
-                        )
-                      : ListView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: _listPengeluaran.length,
-                          itemBuilder: (context, index) {
-                            final item = _listPengeluaran[index];
-                            final amount = num.tryParse(item['amount']?.toString() ?? '0')?.toDouble() ?? 0.0;
-                            final note = item['notes'] ?? item['category'] ?? 'Pengeluaran';
-                            final category = item['category'] ?? 'Umum';
-
-                            final rawDate = item['expense_date'] ?? item['created_at'] ?? '';
-                            final displayDate = rawDate.toString().split('T')[0];
-
-                            return Card(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              color: settings.cardDark,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              elevation: 0,
-                              child: ListTile(
-                                leading: CircleAvatar(
-                                  backgroundColor: Colors.redAccent.withOpacity(0.1),
-                                  child: const Icon(Icons.remove_circle_outline, color: Colors.redAccent, size: 20),
-                                ),
-                                title: Text(note, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: settings.textColor)),
-                                subtitle: Text(
-                                  '$displayDate • $category',
-                                  style: TextStyle(fontSize: 11, color: settings.textColor.withOpacity(0.6)),
-                                ),
-                                trailing: Text(
-                                  '- ${_formatRupiah(amount)}',
-                                  style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
+                  // 🟢 BAGIAN LIST TRANSAKSI / DAFTAR ORDER SESUAI TAB GRAFIK AKTIF
+                  _buildDynamicTransactionList(settings),
                 ],
               ),
             ),
     );
+  }
+
+  // 🟢 WIDGET MENAMPILKAN DAFTAR ORDERAN ATAU PENGELUARAN PRESISI SESUAI TAB GRAFIK
+  Widget _buildDynamicTransactionList(SettingsProvider settings) {
+    final bool isExpenseTab = _activeTabChart == 'Pengeluaran';
+    
+    List<dynamic> displayList = [];
+
+    if (isExpenseTab) {
+      // 1. TAB PENGELUARAN: Semua pengeluaran di rentang waktu
+      displayList = _rawExpenses;
+    } else if (_activeTabChart == 'Pendapatan' || _activeTabChart == 'Profit') {
+      // 2. TAB PENDAPATAN & PROFIT: Hanya transaksi yang LUNAS
+      displayList = _rawOrders.where((o) {
+        final st = (o['status_pembayaran'] ?? '').toString().trim().toLowerCase();
+        return st == 'lunas';
+      }).toList();
+    } else {
+      // 3. TAB OMSET: Semua transaksi (Lunas maupun Belum Lunas)
+      displayList = _rawOrders;
+    }
+
+    String headerTitle = 'Daftar Order ($_activeTabChart - $filterTitleText)';
+    if (isExpenseTab) {
+      headerTitle = 'Daftar Pengeluaran ($filterTitleText)';
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              headerTitle,
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: settings.textColor),
+            ),
+            Text(
+              '${displayList.length} Items',
+              style: TextStyle(fontSize: 12, color: settings.textColor.withOpacity(0.6)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        displayList.isEmpty
+            ? Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(32),
+                decoration: BoxDecoration(
+                  color: settings.cardDark,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: settings.textColor.withOpacity(0.05)),
+                ),
+                child: Column(
+                  children: [
+                    Icon(
+                      isExpenseTab ? Icons.receipt_long_outlined : Icons.inbox_outlined,
+                      size: 44,
+                      color: settings.textColor.withOpacity(0.4),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      isExpenseTab
+                          ? 'Tidak ada pengeluaran pada periode ini'
+                          : 'Tidak ada orderan pada periode ini',
+                      style: TextStyle(color: settings.textColor.withOpacity(0.6), fontSize: 12),
+                    ),
+                  ],
+                ),
+              )
+            : ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: displayList.length,
+                itemBuilder: (context, index) {
+                  final item = Map<String, dynamic>.from(displayList[index]);
+
+                  if (isExpenseTab) {
+                    final amount = num.tryParse(item['amount']?.toString() ?? '0')?.toDouble() ?? 0.0;
+                    final note = item['notes'] ?? item['category'] ?? 'Pengeluaran';
+                    final category = item['category'] ?? 'Umum';
+                    final displayDate = _formatDateReadable(item['expense_date'] ?? item['created_at'] ?? '');
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      color: settings.cardDark,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: Colors.redAccent.withOpacity(0.1),
+                          child: const Icon(Icons.remove_circle_outline, color: Colors.redAccent, size: 20),
+                        ),
+                        title: Text(
+                          note,
+                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: settings.textColor),
+                        ),
+                        subtitle: Text(
+                          '$displayDate • $category',
+                          style: TextStyle(fontSize: 11, color: settings.textColor.withOpacity(0.6)),
+                        ),
+                        trailing: Text(
+                          '- ${_formatRupiah(amount)}',
+                          style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                      ),
+                    );
+                  }
+
+                  // TAMPILAN ITEM ORDERAN
+                  final custName = item['customer_name'] ?? item['customer'] ?? 'Pelanggan';
+                  final price = num.tryParse(item['total_price']?.toString() ?? '0')?.toDouble() ?? 0.0;
+                  final service = item['services_summary'] ?? item['service_name'] ?? 'Layanan Laundry';
+                  final statusBayar = item['status_pembayaran'] ?? 'Belum Lunas';
+                  final isLunas = statusBayar.toString().trim().toLowerCase() == 'lunas';
+                  final displayDate = _formatDateReadable(item['created_at'] ?? '');
+
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    color: settings.cardDark,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                    child: ListTile(
+                      onTap: () {
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => OrderDetailDialog(
+                            order: item,
+                            onOrderUpdated: _loadLaporanKeuangan,
+                          ),
+                        );
+                      },
+                      leading: CircleAvatar(
+                        backgroundColor: (isLunas ? Colors.green : Colors.orangeAccent).withOpacity(0.15),
+                        child: Icon(
+                          isLunas ? Icons.check_circle_outline : Icons.pending_actions,
+                          color: isLunas ? Colors.green : Colors.orangeAccent,
+                          size: 20,
+                        ),
+                      ),
+                      title: Text(
+                        custName,
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: settings.textColor),
+                      ),
+                      subtitle: Text(
+                        '$displayDate • $service',
+                        style: TextStyle(fontSize: 11, color: settings.textColor.withOpacity(0.6)),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            _formatRupiah(price),
+                            style: TextStyle(color: settings.textColor, fontWeight: FontWeight.bold, fontSize: 12),
+                          ),
+                          const SizedBox(height: 2),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: (isLunas ? Colors.green : Colors.orangeAccent).withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              statusBayar,
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: isLunas ? Colors.green : Colors.orangeAccent,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+      ],
+    );
+  }
+
+  String get filterTitleText {
+    if (_filterPeriode == 'Sesuaikan Tanggal...' && _customDateRange != null) {
+      return 'Kustom';
+    }
+    return _filterPeriode;
   }
 
   Widget _buildSummaryCard({
@@ -552,62 +662,6 @@ class _ReportScreenState extends State<ReportScreen> {
           )
         ],
       ),
-    );
-  }
-
-  Widget _buildPaymentMethodCard(SettingsProvider settings) {
-    final total = _cashTotal + _qrisTotal;
-    final cashPct = total > 0 ? (_cashTotal / total) : 0.0;
-    final qrisPct = total > 0 ? (_qrisTotal / total) : 0.0;
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: settings.cardDark,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: settings.textColor.withOpacity(0.05)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Metode Pembayaran', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: settings.textColor)),
-          const SizedBox(height: 12),
-          _buildPaymentProgressItem(label: 'Tunai (Cash)', amount: _formatRupiah(_cashTotal), percentage: cashPct, color: Colors.green, settings: settings),
-          const SizedBox(height: 10),
-          _buildPaymentProgressItem(label: 'QRIS / Transfer', amount: _formatRupiah(_qrisTotal), percentage: qrisPct, color: Colors.blueAccent, settings: settings),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPaymentProgressItem({
-    required String label,
-    required String amount,
-    required double percentage,
-    required Color color,
-    required SettingsProvider settings,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label, style: TextStyle(fontSize: 11, color: settings.textColor.withOpacity(0.6), fontWeight: FontWeight.w500)),
-            Text('${(percentage * 100).toStringAsFixed(0)}%', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: settings.textColor)),
-          ],
-        ),
-        const SizedBox(height: 4),
-        LinearProgressIndicator(
-          value: percentage,
-          backgroundColor: color.withOpacity(0.1),
-          valueColor: AlwaysStoppedAnimation<Color>(color),
-          minHeight: 6,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        const SizedBox(height: 2),
-        Text(amount, style: TextStyle(fontSize: 10, color: settings.textColor, fontWeight: FontWeight.w600)),
-      ],
     );
   }
 }

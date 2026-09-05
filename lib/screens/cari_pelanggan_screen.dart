@@ -12,7 +12,7 @@ class CariPelangganScreen extends StatefulWidget {
 
   const CariPelangganScreen({
     super.key,
-    this.isSelectionMode = true,
+    this.isSelectionMode = false,
   });
 
   @override
@@ -58,8 +58,18 @@ class _CariPelangganScreenState extends State<CariPelangganScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final storeId = context.read<SettingsProvider>().storeId;
-      if (storeId == null) {
+      final settings = context.read<SettingsProvider>();
+
+      // 🟢 Pastikan storeId sudah ter-fetch jika sebelumnya null
+      if (settings.storeId == null || settings.storeId!.isEmpty) {
+        await settings.fetchStoreId();
+      }
+
+      final storeId = settings.storeId;
+      debugPrint('🔍 CHECK STORE_ID: $storeId');
+
+      if (storeId == null || storeId.isEmpty) {
+        debugPrint('⚠️ STORE ID KOSONG/NULL!');
         if (mounted) setState(() => _isLoading = false);
         return;
       }
@@ -69,6 +79,8 @@ class _CariPelangganScreenState extends State<CariPelangganScreen> {
         'p_keyword': keyword,
       });
 
+      debugPrint('FETCH SUCCESS: $response');
+
       final dataList = List<Map<String, dynamic>>.from(response ?? []);
 
       if (mounted) {
@@ -77,7 +89,7 @@ class _CariPelangganScreenState extends State<CariPelangganScreen> {
         });
       }
     } catch (e) {
-      debugPrint('Error fetch customers RPC: $e');
+      debugPrint('❌ Error fetch customers RPC: $e');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -318,6 +330,7 @@ class _CariPelangganScreenState extends State<CariPelangganScreen> {
   @override
   Widget build(BuildContext context) {
     final displayItems = _displayList;
+    final accentColor = context.watch<SettingsProvider>().accentColor;
 
     return Scaffold(
       backgroundColor: _bgDark,
@@ -401,6 +414,8 @@ class _CariPelangganScreenState extends State<CariPelangganScreen> {
                               }
 
                               final cust = item as Map<String, dynamic>;
+                              final custCode = cust['customer_code']?.toString() ?? '';
+
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 8),
                                 decoration: BoxDecoration(
@@ -417,14 +432,62 @@ class _CariPelangganScreenState extends State<CariPelangganScreen> {
                                     cust['name'] ?? '-',
                                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _textBlack),
                                   ),
-                                  subtitle: Text(
-                                    '${cust['phone'] ?? '-'} • ${cust['address'] ?? '-'}',
-                                    style: const TextStyle(fontSize: 10, color: Colors.black54),
+                                  subtitle: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start, // 🟢 Rata kiri bersusun
+                                    children: [
+                                      const SizedBox(height: 2),
+                                      // 1. BARIS NOMOR HP
+                                      Text(
+                                        cust['phone'] ?? '-',
+                                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 1),
+                                      // 2. BARIS ALAMAT (DI BAWAH NO HP)
+                                      Text(
+                                        cust['address'] ?? '-',
+                                        style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
                                   ),
-                                  trailing: IconButton(
-                                    icon: const Icon(Icons.edit_outlined, color: Colors.grey, size: 20),
-                                    tooltip: 'Edit Pelanggan',
-                                    onPressed: () => _showEditPelangganDialog(cust),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      // 🟢 BADGE 3D KODE PELANGGAN DI SEBELAH KANAN
+                                      if (custCode.isNotEmpty)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                          margin: const EdgeInsets.only(right: 6),
+                                          decoration: BoxDecoration(
+                                            color: accentColor,
+                                            borderRadius: BorderRadius.circular(6),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withOpacity(0.15),
+                                                offset: const Offset(0, 2),
+                                                blurRadius: 3,
+                                              ),
+                                            ],
+                                          ),
+                                          child: Text(
+                                            custCode,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 10,
+                                              letterSpacing: 0.8,
+                                            ),
+                                          ),
+                                        ),
+                                      IconButton(
+                                        icon: const Icon(Icons.edit_outlined, color: Colors.grey, size: 20),
+                                        tooltip: 'Edit Pelanggan',
+                                        onPressed: () => _showEditPelangganDialog(cust),
+                                      ),
+                                    ],
                                   ),
                                   onTap: () {
                                     if (widget.isSelectionMode) {

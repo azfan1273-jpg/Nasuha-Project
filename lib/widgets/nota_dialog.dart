@@ -23,16 +23,22 @@ class _NotaDialogState extends State<NotaDialog> {
   }
 
   String _formatTanggal(dynamic rawDate) {
-    if (rawDate == null) return '-';
-    final String str = rawDate.toString().trim();
-    if (str.isEmpty || str == 'null') return '-';
-    try {
-      final dt = DateTime.parse(str);
-      return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
-    } catch (_) {
-      return str;
+      if (rawDate == null) return '-';
+      final String str = rawDate.toString().trim();
+      if (str.isEmpty || str == 'null') return '-';
+      try {
+        // 🟢 PAKAI .toLocal() AGAR BERUBAH KE JAM WIB HP
+        final dt = DateTime.parse(str).toLocal();
+        final String day = dt.day.toString().padLeft(2, '0');
+        final String month = dt.month.toString().padLeft(2, '0');
+        final String hour = dt.hour.toString().padLeft(2, '0');
+        final String minute = dt.minute.toString().padLeft(2, '0');
+        
+        return '$day/$month/${dt.year} $hour:$minute';
+      } catch (_) {
+        return str;
+      }
     }
-  }
 
   String _formatTwoColumns(String left, String right, {int width = 32}) {
     int spaceCount = width - left.length - right.length;

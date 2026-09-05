@@ -518,7 +518,7 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                       settings: settings,
                       onTap: () {
                         Navigator.pop(context);
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const CariPelangganScreen()));
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const CariPelangganScreen(isSelectionMode: false)));
                       },
                     ),
                     _buildSidebarItem(
