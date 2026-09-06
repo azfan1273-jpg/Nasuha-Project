@@ -129,30 +129,49 @@ class ReportChartWidget extends StatelessWidget {
       );
     }
 
-    // 🟢 PERBAIKAN LOGIKA PENGELOMPOKAN GRAFIK
+    // 🟢 PERBAIKAN LOGIKA PENGELOMPOKAN GRAFIK BERDASARKAN TAB AKTIF & WAKTU LOCAL
     final Map<String, Map<String, double>> dailyMap = {};
     
     for (var item in items) {
-      final String rawDate = item['created_at']?.toString() ?? '';
+      final bool isLunas = (item['status_pembayaran'] ?? '').toString().trim().toLowerCase() == 'lunas';
+      
+      // Ambil tanggal ISO UTC dari database
+      final String rawDate = isLunas 
+          ? (item['waktu_pelunasan'] ?? item['created_at'] ?? '').toString()
+          : (item['created_at'] ?? '').toString();
+
       if (rawDate.isEmpty) continue;
       
-      // Gunakan YYYY-MM-DD sebagai key agar pengurutan tanggal akurat
-      final String dateKey = rawDate.split('T')[0]; 
+      // Standar Konversi UTC ke Waktu Lokal HP User
+      String dateKey = rawDate.split('T')[0];
+      try {
+        final dt = DateTime.parse(rawDate).toLocal();
+        dateKey = '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+      } catch (_) {}
+
       final double amount = num.tryParse(item['total_price']?.toString() ?? '0')?.toDouble() ?? 0.0;
-      final bool isLunas = (item['status_pembayaran'] ?? '').toString().toLowerCase() == 'lunas';
-    
+
       dailyMap.putIfAbsent(dateKey, () => {'omset': 0.0, 'pendapatan': 0.0, 'pengeluaran': 0.0});
+      
+      // Omset dihitung dari semua nota yang dibuat
       dailyMap[dateKey]!['omset'] = (dailyMap[dateKey]!['omset'] ?? 0.0) + amount;
+      
+      // Pendapatan riil hanya dihitung dari yang lunas
       if (isLunas) {
         dailyMap[dateKey]!['pendapatan'] = (dailyMap[dateKey]!['pendapatan'] ?? 0.0) + amount;
       }
     }
     
     for (var item in expenses) {
-      final String rawDate = item['created_at']?.toString() ?? '';
+      final String rawDate = (item['expense_date'] ?? item['created_at'] ?? '').toString();
       if (rawDate.isEmpty) continue;
       
-      final String dateKey = rawDate.split('T')[0]; 
+      String dateKey = rawDate.split('T')[0];
+      try {
+        final dt = DateTime.parse(rawDate).toLocal();
+        dateKey = '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+      } catch (_) {}
+
       final double amount = num.tryParse(item['amount']?.toString() ?? '0')?.toDouble() ?? 0.0;
     
       dailyMap.putIfAbsent(dateKey, () => {'omset': 0.0, 'pendapatan': 0.0, 'pengeluaran': 0.0});
@@ -168,7 +187,7 @@ class ReportChartWidget extends StatelessWidget {
       final double p = dailyMap[isoDate]!['pendapatan'] ?? 0.0;
       final double e = dailyMap[isoDate]!['pengeluaran'] ?? 0.0;
       return {
-        'date': _formatShortDate(isoDate), // Diformat di sini khusus untuk tampilan label sumbu-X
+        'date': _formatShortDate(isoDate), // Label sumbu-X tanggal lokal
         'omset': o,
         'pendapatan': p,
         'pengeluaran': e,
@@ -248,7 +267,6 @@ class DonutChartPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
-// 🟢 PAINTER GRAFIK DENGAN DUKUNGAN TITIK NOL DI TENGAH (RUGI / UNTUNG)
 class DynamicLineChartPainter extends CustomPainter {
   final List<Map<String, dynamic>> data;
   final String activeTab;
@@ -292,10 +310,9 @@ class DynamicLineChartPainter extends CustomPainter {
       if (v < minVal) minVal = v;
     }
 
-    // 🟢 DUKUNGAN TITIK NOL DI TENGAH UNTUK TAB PROFIT / LOSS
     if (activeTab == 'Profit') {
       double bound = max(maxVal.abs(), minVal.abs());
-      if (bound == 0) bound = 50000.0; // Fallback skala
+      if (bound == 0) bound = 50000.0;
       maxVal = bound;
       minVal = -bound;
     } else {
@@ -312,12 +329,10 @@ class DynamicLineChartPainter extends CustomPainter {
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
     const int steps = 4;
 
-    // GAMBAR GARIS GRID DAN SUBTITEL Y-AXIS
     for (int i = 0; i <= steps; i++) {
       final double y = paddingTop + (chartHeight / steps) * i;
       final double currentVal = maxVal - ((range / steps) * i);
 
-      // Garis Nol Merah Khusus
       if (activeTab == 'Profit' && currentVal.round() == 0) {
         final zeroPaint = Paint()
           ..color = Colors.redAccent.withOpacity(0.6)

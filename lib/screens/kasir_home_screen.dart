@@ -69,7 +69,7 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
       final currentStoreId = context.read<SettingsProvider>().storeId;
       if (currentStoreId == null) return;
 
-      final response = await supabase.rpc('get_financial_report_by_store', params: {
+      final response = await supabase.rpc('laporan_keuangan', params: {
         'p_store_id': currentStoreId,
         'p_filter_periode': 'Hari Ini',
       });
@@ -86,7 +86,6 @@ class KasirHomeScreenState extends State<KasirHomeScreen> {
     }
   }
 
-  // 🟢 LANGSUNG NAVIGASI INSTAN VIA ROOT NAVIGATOR
   void _bukaDetailOrderByStatus(String title, String categoryKey) async {
     await Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(

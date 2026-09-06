@@ -189,7 +189,7 @@ class FormOrderDialogState extends State<FormOrderDialog> {
       context,
       MaterialPageRoute(
         builder: (context) => const CariPelangganScreen(
-        	isSelectionMode: true,
+          isSelectionMode: true,
         ),
       ),
     );
@@ -209,27 +209,22 @@ class FormOrderDialogState extends State<FormOrderDialog> {
 
     if (result != null) {
       setState(() {
-        // Mengambil quantity yang dikirimkan dari DaftarLayananScreen (hasil dialog input user)
         final double qtyToAdd = (result['quantity'] as num?)?.toDouble() ?? 1.0;
         
-        // Buat salinan map agar data aman dan key quantity/unit terdefinisi dengan benar
         final Map<String, dynamic> newItem = Map<String, dynamic>.from(result);
         newItem['quantity'] = qtyToAdd;
         newItem['unit'] = newItem['unit'] ?? 'Kg';
 
         final idx = _selectedServices.indexWhere((element) => element['name'] == newItem['name']);
         if (idx >= 0) {
-          // Jika layanan sudah ada di keranjang, tambahkan quantity-nya
           _selectedServices[idx]['quantity'] = (_selectedServices[idx]['quantity'] as num).toDouble() + qtyToAdd;
         } else {
-          // Jika belum ada, masukkan item baru ke keranjang
           _selectedServices.add(newItem);
         }
       });
     }
   }
 
-  // DIALOG UBAH QTY/BERAT LANGSUNG DI KERANJANG
   Future<void> _editQuantity(int index) async {
     final item = _selectedServices[index];
     final TextEditingController qtyController = TextEditingController(
@@ -309,17 +304,18 @@ class FormOrderDialogState extends State<FormOrderDialog> {
         };
       }).toList();
 
+      // 🟢 FIX: Gunakan .toUtc().toIso8601String() agar tanggal & jam dikirim berstandar UTC presisi
       await supabase.rpc('create_order_with_items', params: {
         'p_store_id': currentStoreId,
         'p_customer_name': _selectedCustomer!['name'],
         'p_customer_phone': _selectedCustomer!['phone'] ?? '-',
         'p_service_summary': serviceNames,
         'p_total_price': _totalPrice,
-        'p_estimated_at': estimatedDate.toIso8601String(),
+        'p_estimated_at': estimatedDate.toUtc().toIso8601String(),
         'p_status': 'Antrian',
         'p_metode_pembayaran': null,
         'p_items': itemsPayload,
-        'p_created_at': _selectedOrderDate.toIso8601String(),
+        'p_created_at': _selectedOrderDate.toUtc().toIso8601String(),
         'p_parfum': _selectedParfum,
         'p_catatan': _catatanController.text,
       });

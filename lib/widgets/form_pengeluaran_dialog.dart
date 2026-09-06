@@ -67,7 +67,7 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
       final rawDate = item['expense_date'] ?? item['created_at'];
       if (rawDate == null) return false;
 
-      final date = DateTime.tryParse(rawDate.toString());
+      final date = DateTime.tryParse(rawDate.toString())?.toLocal();
       if (date == null) return false;
 
       if (_filterPeriode == '7 Hari') {
@@ -117,7 +117,7 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
   String _formatTanggalItem(dynamic rawDate) {
     if (rawDate == null) return '-';
     try {
-      final DateTime dt = DateTime.parse(rawDate.toString());
+      final DateTime dt = DateTime.parse(rawDate.toString()).toLocal();
       return "${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}";
     } catch (_) {
       return rawDate.toString();
@@ -200,7 +200,14 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
     );
     if (picked != null) {
       setState(() {
-        _selectedDate = picked;
+        _selectedDate = DateTime(
+          picked.year,
+          picked.month,
+          picked.day,
+          DateTime.now().hour,
+          DateTime.now().minute,
+          DateTime.now().second,
+        );
         _tanggalController.text =
             "${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}";
       });
@@ -518,7 +525,7 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
     );
   }
 
-  // 🟢 SIMPAN PENGELUARAN DENGAN RPC BACKEND
+  // 🟢 SIMPAN PENGELUARAN DENGAN RPC BACKEND (FIX UTC TIMESTAMPTZ)
   Future<void> _simpanPengeluaran() async {
     final String rawTotal = _totalController.text.replaceAll('.', '').trim();
     final double totalHarga = double.tryParse(rawTotal) ?? 0.0;
@@ -547,14 +554,15 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
         throw Exception("storeId tidak ditemukan");
       }
 
-      final formattedDate = _selectedDate.toIso8601String().split('T')[0];
+      // 🟢 FIX: Kirim tanggal berstandar ISO-8601 UTC agar presisi di Supabase TIMESTAMPTZ
+      final String formattedDateUtc = _selectedDate.toUtc().toIso8601String();
 
       await supabase.rpc('insert_expense_by_store', params: {
         'p_store_id': storeId,
         'p_category': _selectedKategori,
         'p_amount': totalHarga,
         'p_notes': _catatanController.text.trim(),
-        'p_expense_date': formattedDate,
+        'p_expense_date': formattedDateUtc,
       });
 
       _totalController.clear();
@@ -591,7 +599,6 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // HEADER DAFTAR PENGELUARAN & FILTER
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -637,7 +644,6 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
             ),
             const SizedBox(height: 10),
 
-            // TABEL DAFTAR PENGELUARAN
             Container(
               height: 200,
               decoration: BoxDecoration(
@@ -792,7 +798,6 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
               ),
             ),
 
-            // SUB-TOTAL PENGELUARAN
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Row(
@@ -818,7 +823,6 @@ class _FormPengeluaranDialogState extends State<FormPengeluaranDialog> {
             ),
             const SizedBox(height: 8),
 
-            // CARD FORM INPUT PENGELUARAN
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(

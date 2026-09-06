@@ -15,8 +15,8 @@ class _BuatOrderDialogState extends State<BuatOrderDialog> {
   late PageController _pageController;
   int _activeTab = 0; // 0 = Form Order, 1 = Form Pengeluaran
 
-  	static const Color _primaryPink = Color(0xFFE91E63);
-    static const Color _trackBg = Color(0xFFE5E7EB);
+  static const Color _primaryPink = Color(0xFFE91E63);
+  static const Color _trackBg = Color(0xFFE5E7EB);
 
   @override
   void initState() {
@@ -42,52 +42,52 @@ class _BuatOrderDialogState extends State<BuatOrderDialog> {
   }
 
   @override
-    Widget build(BuildContext context) {
-      return Scaffold(
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFFAF5F7),
+      appBar: AppBar(
         backgroundColor: const Color(0xFFFAF5F7),
-        appBar: AppBar(
-          backgroundColor: const Color(0xFFFAF5F7),
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black87, size: 20),
-            onPressed: () => Navigator.pop(context),
-          ),
-          title: const Text(
-            'Buat Transaksi',
-            style: TextStyle(color: Colors.black87, fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          centerTitle: true,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black87, size: 20),
+          onPressed: () => Navigator.pop(context),
         ),
-        body: SafeArea(
-          child: Column(
-            children: [
-              _buildCustomTabBar(),
-              Expanded(
-                child: PageView(
-                  controller: _pageController,
-                  onPageChanged: (index) {
-                    setState(() {
-                      _activeTab = index;
-                    });
-                  },
-                  children: [
-                    FormOrderDialog(
-                      type: 'IN',
-                      onOrderSuccess: widget.onOrderCreated,
-                    ),
-                    FormPengeluaranDialog(
-                      onSuccess: widget.onOrderCreated,
-                    ),
-                  ],
-                ),
+        title: const Text(
+          'Buat Transaksi',
+          style: TextStyle(color: Colors.black87, fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildCustomTabBar(),
+            Expanded(
+              child: PageView(
+                controller: _pageController,
+                onPageChanged: (index) {
+                  setState(() {
+                    _activeTab = index;
+                  });
+                },
+                children: [
+                  FormOrderDialog(
+                    type: 'IN',
+                    onOrderSuccess: widget.onOrderCreated,
+                  ),
+                  FormPengeluaranDialog(
+                    onSuccess: widget.onOrderCreated,
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-      );
-    }
+      ),
+    );
+  }
 
- Widget _buildCustomTabBar() {
+  Widget _buildCustomTabBar() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       height: 42,

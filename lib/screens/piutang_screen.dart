@@ -21,45 +21,31 @@ class _PiutangScreenState extends State<PiutangScreen> {
   }
 
   Future<void> _fetchPiutangData() async {
-      setState(() => _isLoading = true);
-      try {
-        final storeId = context.read<SettingsProvider>().storeId;
-        if (storeId == null) return;
-  
-        final response = await supabase
-            .from('orders')
-            .select('*')
-            .eq('store_id', storeId)
-            .eq('status_pembayaran', 'Belum Lunas')
-            .order('created_at', ascending: false);
-  
-        if (mounted) {
-          final list = List<Map<String, dynamic>>.from(response);
-          
-          // HITUNG TOTAL SELURUH PIUTANG
-          double totalSemuaPiutang = 0;
-          for (var item in list) {
-            final nominal = num.tryParse(
-                  item['grand_total']?.toString() ?? 
-                  item['total']?.toString() ?? 
-                  item['total_harga']?.toString() ?? '0'
-                )?.toDouble() ?? 0.0;
-            totalSemuaPiutang += nominal;
-          }
-  
-          setState(() {
-            _listPiutang = list;
-            _isLoading = false;
-          });
-  
-          // Kirim balik total piutang ke ReportScreen saat pop / kembali
-          // (Opsional, atau kita bisa buat state lokal di report screen)
-        }
-      } catch (e) {
-        debugPrint('Error fetch piutang: $e');
-        if (mounted) setState(() => _isLoading = false);
+    setState(() => _isLoading = true);
+    try {
+      final storeId = context.read<SettingsProvider>().storeId;
+      if (storeId == null) return;
+
+      final response = await supabase
+          .from('orders')
+          .select('*')
+          .eq('store_id', storeId)
+          .ilike('status_pembayaran', 'Belum Lunas')
+          .order('created_at', ascending: false);
+
+      if (mounted) {
+        final list = List<Map<String, dynamic>>.from(response);
+
+        setState(() {
+          _listPiutang = list;
+          _isLoading = false;
+        });
       }
+    } catch (e) {
+      debugPrint('Error fetch piutang: $e');
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
 
   Future<void> _bayarPiutang(dynamic orderId) async {
     try {
@@ -69,16 +55,32 @@ class _PiutangScreenState extends State<PiutangScreen> {
         builder: (_) => const Center(child: CircularProgressIndicator()),
       );
 
-      // Ubah status pembayaran jadi Lunas dan catat waktu pelunasan
-      await supabase.from('orders').update({
-        'status_pembayaran': 'Lunas',
-        'waktu_pelunasan': DateTime.now().toIso8601String(),
-      }).eq('id', orderId);
+      final storeId = context.read<SettingsProvider>().storeId;
+      final intParsedId = int.tryParse(orderId.toString());
+
+      if (intParsedId != null && storeId != null) {
+        // Panggil RPC update_order_status_by_store agar waktu_pelunasan diisi UTC oleh DB
+        await supabase.rpc('update_order_status_by_store', params: {
+          'p_order_id': intParsedId,
+          'p_store_id': storeId,
+          'p_new_status': 'SELESAI',
+          'p_metode_pembayaran': 'Tunai',
+        });
+      } else {
+        // Fallback jika id bertipe UUID
+        await supabase.from('orders').update({
+          'status_pembayaran': 'Lunas',
+          'waktu_pelunasan': DateTime.now().toUtc().toIso8601String(),
+        }).eq('id', orderId);
+      }
 
       if (mounted) {
-        Navigator.pop(context); // Tutup loading
+        Navigator.pop(context); // Tutup loading dialog
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Piutang berhasil dilunasi!')),
+          const SnackBar(
+            content: Text('Piutang berhasil dilunasi!'),
+            backgroundColor: Colors.green,
+          ),
         );
         _fetchPiutangData(); // Refresh list
       }
@@ -99,6 +101,16 @@ class _PiutangScreenState extends State<PiutangScreen> {
     return 'Rp $formatted';
   }
 
+  String _formatDateReadable(String raw) {
+    if (raw.isEmpty) return '-';
+    try {
+      final dt = DateTime.parse(raw).toLocal();
+      return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+    } catch (_) {
+      return raw.split('T')[0];
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
@@ -106,7 +118,10 @@ class _PiutangScreenState extends State<PiutangScreen> {
     return Scaffold(
       backgroundColor: settings.bgDark,
       appBar: AppBar(
-        title: Text('Daftar Piutang Pelanggan', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: settings.textColor)),
+        title: Text(
+          'Daftar Piutang Pelanggan',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: settings.textColor),
+        ),
         backgroundColor: settings.cardDark,
         foregroundColor: settings.textColor,
         elevation: 0,
@@ -120,7 +135,10 @@ class _PiutangScreenState extends State<PiutangScreen> {
                     children: [
                       Icon(Icons.check_circle_outline, size: 64, color: Colors.green.withOpacity(0.6)),
                       const SizedBox(height: 12),
-                      Text('Tidak ada piutang aktif saat ini!', style: TextStyle(color: settings.textColor.withOpacity(0.7), fontSize: 15)),
+                      Text(
+                        'Tidak ada piutang aktif saat ini!',
+                        style: TextStyle(color: settings.textColor.withOpacity(0.7), fontSize: 15),
+                      ),
                     ],
                   ),
                 )
@@ -134,7 +152,7 @@ class _PiutangScreenState extends State<PiutangScreen> {
                       final nota = item['nota_number'] ?? '-';
                       final customer = item['customer_name'] ?? 'Umum';
                       final total = num.tryParse(item['total_price']?.toString() ?? '0') ?? 0;
-                      final date = item['created_at']?.toString().split('T')[0] ?? '';
+                      final date = _formatDateReadable(item['created_at']?.toString() ?? '');
 
                       return Card(
                         margin: const EdgeInsets.only(bottom: 12),
@@ -155,7 +173,10 @@ class _PiutangScreenState extends State<PiutangScreen> {
                               const SizedBox(height: 8),
                               Text(customer, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: settings.textColor)),
                               const SizedBox(height: 4),
-                              Text('Total Tagihan: ${_formatRupiah(total)}', style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600, fontSize: 14)),
+                              Text(
+                                'Total Tagihan: ${_formatRupiah(total)}',
+                                style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600, fontSize: 14),
+                              ),
                               const Divider(height: 20),
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.end,

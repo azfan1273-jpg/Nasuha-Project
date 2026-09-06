@@ -226,106 +226,168 @@ class _CariPelangganScreenState extends State<CariPelangganScreen> {
     }
   }
 
-  // 🟢 FITUR EDIT PELANGGAN BARU
-  Future<void> _showEditPelangganDialog(Map<String, dynamic> cust) async {
-    final nameController = TextEditingController(text: cust['name'] ?? '');
-    final phoneController = TextEditingController(text: (cust['phone'] == '-') ? '' : cust['phone'] ?? '');
-    final addressController = TextEditingController(text: (cust['address'] == '-') ? '' : cust['address'] ?? '');
+ // 🟢 FITUR EDIT & HAPUS PELANGGAN
+   Future<void> _showEditPelangganDialog(Map<String, dynamic> cust) async {
+     final nameController = TextEditingController(text: cust['name'] ?? '');
+     final phoneController = TextEditingController(text: (cust['phone'] == '-') ? '' : cust['phone'] ?? '');
+     final addressController = TextEditingController(text: (cust['address'] == '-') ? '' : cust['address'] ?? '');
+ 
+     final isUpdated = await showDialog<bool>(
+       context: context,
+       builder: (dialogContext) => AlertDialog(
+         backgroundColor: _bgDark,
+         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+         title: const Text(
+           'Edit Data Pelanggan',
+           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: _textBlack),
+         ),
+         content: SingleChildScrollView(
+           child: Column(
+             mainAxisSize: MainAxisSize.min,
+             children: [
+               TextField(
+                 controller: nameController,
+                 style: const TextStyle(fontSize: 12),
+                 decoration: InputDecoration(
+                   labelText: 'Nama Lengkap',
+                   filled: true,
+                   fillColor: Colors.white,
+                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                 ),
+               ),
+               const SizedBox(height: 8),
+               TextField(
+                 controller: phoneController,
+                 keyboardType: TextInputType.phone,
+                 style: const TextStyle(fontSize: 12),
+                 decoration: InputDecoration(
+                   labelText: 'No. WhatsApp / HP',
+                   filled: true,
+                   fillColor: Colors.white,
+                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                 ),
+               ),
+               const SizedBox(height: 8),
+               TextField(
+                 controller: addressController,
+                 style: const TextStyle(fontSize: 12),
+                 decoration: InputDecoration(
+                   labelText: 'Alamat',
+                   filled: true,
+                   fillColor: Colors.white,
+                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                 ),
+               ),
+               const SizedBox(height: 16),
+             ],
+           ),
+         ),
+         actions: [
+           TextButton(
+             onPressed: () => Navigator.pop(dialogContext, false),
+             child: const Text('Batal', style: TextStyle(color: Colors.grey, fontSize: 12)),
+           ),
+           ElevatedButton(
+             style: ElevatedButton.styleFrom(
+               backgroundColor: _goldAccent,
+               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+             ),
+             onPressed: () async {
+               if (nameController.text.trim().isEmpty) return;
+ 
+               try {
+                 await supabase.from('customers').update({
+                   'name': nameController.text.trim(),
+                   'phone': phoneController.text.trim().isEmpty ? '-' : phoneController.text.trim(),
+                   'address': addressController.text.trim().isEmpty ? '-' : addressController.text.trim(),
+                 }).eq('id', cust['id']);
+ 
+                 if (dialogContext.mounted) {
+                   ScaffoldMessenger.of(dialogContext).showSnackBar(
+                     const SnackBar(
+                       content: Text('Data pelanggan berhasil diperbarui!'),
+                       backgroundColor: Colors.green,
+                     ),
+                   );
+                   Navigator.pop(dialogContext, true);
+                 }
+               } catch (e) {
+                 if (dialogContext.mounted) {
+                   ScaffoldMessenger.of(dialogContext).showSnackBar(
+                     SnackBar(content: Text('Gagal memperbarui data: $e'), backgroundColor: Colors.red),
+                   );
+                 }
+               }
+             },
+             child: const Text('SIMPAN PERUBAHAN', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+           ),
+         ],
+       ),
+     );
+ 
+     if (isUpdated == true && mounted) {
+       _loadCustomers(_searchController.text.trim());
+     }
+   }
 
-    final isUpdated = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: _bgDark,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          'Edit Data Pelanggan',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: _textBlack),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              style: const TextStyle(fontSize: 12),
-              decoration: InputDecoration(
-                labelText: 'Nama Lengkap',
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-              ),
+  // 🟢 DIALOG KONFIRMASI HAPUS PELANGGAN YANG AMAN
+    Future<void> _showDeleteConfirmation(BuildContext context, Map<String, dynamic> cust) async {
+      // 1. Tampilkan dialog konfirmasi
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: _bgDark,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text(
+            'Hapus Pelanggan?',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.redAccent),
+          ),
+          content: Text(
+            'Apakah Anda yakin ingin menghapus "${cust['name']}"? Tindakan ini tidak dapat dibatalkan.',
+            style: const TextStyle(fontSize: 12, color: _textBlack),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false), // Tutup dialog, return false
+              child: const Text('Batal', style: TextStyle(color: Colors.grey, fontSize: 12)),
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: phoneController,
-              keyboardType: TextInputType.phone,
-              style: const TextStyle(fontSize: 12),
-              decoration: InputDecoration(
-                labelText: 'No. WhatsApp / HP',
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: addressController,
-              style: const TextStyle(fontSize: 12),
-              decoration: InputDecoration(
-                labelText: 'Alamat',
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-              ),
+              onPressed: () => Navigator.pop(ctx, true), // Tutup dialog, return true
+              child: const Text('HAPUS', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Batal', style: TextStyle(color: Colors.grey, fontSize: 12)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _goldAccent,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () async {
-              if (nameController.text.trim().isEmpty) return;
-
-              try {
-                await supabase.from('customers').update({
-                  'name': nameController.text.trim(),
-                  'phone': phoneController.text.trim().isEmpty ? '-' : phoneController.text.trim(),
-                  'address': addressController.text.trim().isEmpty ? '-' : addressController.text.trim(),
-                }).eq('id', cust['id']);
-
-                if (dialogContext.mounted) {
-                  ScaffoldMessenger.of(dialogContext).showSnackBar(
-                    const SnackBar(
-                      content: Text('Data pelanggan berhasil diperbarui!'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                  Navigator.pop(dialogContext, true);
-                }
-              } catch (e) {
-                if (dialogContext.mounted) {
-                  ScaffoldMessenger.of(dialogContext).showSnackBar(
-                    SnackBar(content: Text('Gagal memperbarui data: $e'), backgroundColor: Colors.red),
-                  );
-                }
-              }
-            },
-            child: const Text('SIMPAN PERUBAHAN', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-
-    if (isUpdated == true && mounted) {
-      _loadCustomers(_searchController.text.trim());
+      );
+  
+      // 2. Jika user menekan tombol HAPUS (confirm == true)
+      if (confirm == true && mounted) {
+        try {
+          // Hapus dari database Supabase
+          await supabase.from('customers').delete().eq('id', cust['id']);
+  
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Pelanggan berhasil dihapus!'),
+                backgroundColor: Colors.green,
+              ),
+            );
+            // Refresh list pelanggan
+            _loadCustomers(_searchController.text.trim());
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Gagal menghapus pelanggan: $e'), backgroundColor: Colors.red),
+            );
+          }
+        }
+      }
     }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -456,11 +518,11 @@ class _CariPelangganScreenState extends State<CariPelangganScreen> {
                                   trailing: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      // 🟢 BADGE 3D KODE PELANGGAN DI SEBELAH KANAN
+                                      // 🟢 BADGE 3D KODE PELANGGAN
                                       if (custCode.isNotEmpty)
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                          margin: const EdgeInsets.only(right: 6),
+                                          margin: const EdgeInsets.only(right: 4),
                                           decoration: BoxDecoration(
                                             color: accentColor,
                                             borderRadius: BorderRadius.circular(6),
@@ -482,10 +544,21 @@ class _CariPelangganScreenState extends State<CariPelangganScreen> {
                                             ),
                                           ),
                                         ),
+                                      // 🟢 TOMBOL EDIT (PENSIL)
                                       IconButton(
                                         icon: const Icon(Icons.edit_outlined, color: Colors.grey, size: 20),
                                         tooltip: 'Edit Pelanggan',
+                                        constraints: const BoxConstraints(),
+                                        padding: const EdgeInsets.symmetric(horizontal: 4),
                                         onPressed: () => _showEditPelangganDialog(cust),
+                                      ),
+                                      // 🟢 TOMBOL HAPUS DI SEBELAH KANAN PENSIL
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
+                                        tooltip: 'Hapus Pelanggan',
+                                        constraints: const BoxConstraints(),
+                                        padding: const EdgeInsets.only(left: 6, right: 4),
+                                        onPressed: () => _showDeleteConfirmation(context, cust),
                                       ),
                                     ],
                                   ),

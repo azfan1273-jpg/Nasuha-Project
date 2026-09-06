@@ -58,11 +58,15 @@ class _ReportScreenState extends State<ReportScreen> {
       };
 
       if (_filterPeriode == 'Sesuaikan Tanggal...' && _customDateRange != null) {
-        params['p_start_date'] = _customDateRange!.start.toIso8601String().split('T')[0];
-        params['p_end_date'] = _customDateRange!.end.toIso8601String().split('T')[0];
+        // Format YYYY-MM-DD bersih untuk dikirim ke PostgreSQL RPC
+        final startStr = '${_customDateRange!.start.year}-${_customDateRange!.start.month.toString().padLeft(2, '0')}-${_customDateRange!.start.day.toString().padLeft(2, '0')}';
+        final endStr = '${_customDateRange!.end.year}-${_customDateRange!.end.month.toString().padLeft(2, '0')}-${_customDateRange!.end.day.toString().padLeft(2, '0')}';
+
+        params['p_start_date'] = startStr;
+        params['p_end_date'] = endStr;
       }
 
-      final response = await supabase.rpc('get_financial_report_by_store', params: params);
+      final response = await supabase.rpc('laporan_keuangan', params: params);
 
       if (mounted && response != null) {
         final Map<String, dynamic> data = Map<String, dynamic>.from(response);
@@ -70,21 +74,12 @@ class _ReportScreenState extends State<ReportScreen> {
         final fetchedOrders = List<dynamic>.from(data['orders'] ?? []);
         final fetchedExpenses = List<dynamic>.from(data['expenses'] ?? []);
 
-        // 🟢 HITUNG PIUTANG HANYA DARI ORDERAN PERIODE/RENTANG AKTIF
-        double piutangPeriode = 0;
-        for (var o in fetchedOrders) {
-          final statusBayar = (o['status_pembayaran'] ?? '').toString().trim().toLowerCase();
-          if (statusBayar != 'lunas') {
-            piutangPeriode += num.tryParse(o['total_price']?.toString() ?? '0')?.toDouble() ?? 0.0;
-          }
-        }
-
         setState(() {
           _totalOmset = num.tryParse(data['total_omset']?.toString() ?? '0')?.toDouble() ?? 0.0;
           _totalPendapatan = num.tryParse(data['total_pendapatan']?.toString() ?? '0')?.toDouble() ?? 0.0;
           _totalPengeluaran = num.tryParse(data['total_pengeluaran']?.toString() ?? '0')?.toDouble() ?? 0.0;
           _totalPiutang = num.tryParse(data['total_piutang']?.toString() ?? '0')?.toDouble() ?? 0.0;
-        
+
           _rawOrders = fetchedOrders;
           _rawExpenses = fetchedExpenses;
           _isLoading = false;
@@ -141,8 +136,11 @@ class _ReportScreenState extends State<ReportScreen> {
       ]);
 
       for (var item in _rawOrders) {
-        final rawDate = item['created_at'] ?? '';
-        final displayDate = rawDate.toString().split('T')[0];
+        final isLunas = (item['status_pembayaran'] ?? '').toString().trim().toLowerCase() == 'lunas';
+        final rawDate = isLunas 
+            ? (item['waktu_pelunasan'] ?? item['created_at'] ?? '')
+            : (item['created_at'] ?? '');
+        final displayDate = _formatDateReadable(rawDate.toString());
 
         sheet2.appendRow([
           excel_lib.TextCellValue(displayDate),
@@ -193,7 +191,7 @@ class _ReportScreenState extends State<ReportScreen> {
   String _formatDateReadable(String raw) {
     if (raw.isEmpty) return '-';
     try {
-      final dt = DateTime.parse(raw);
+      final dt = DateTime.parse(raw).toLocal();
       return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
     } catch (_) {
       return raw.split('T')[0];
@@ -202,7 +200,6 @@ class _ReportScreenState extends State<ReportScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 🟢 RUMUS LABA BERSIH BERDASARKAN PENDAPATAN RIIL (UANG DITERIMA - PENGELUARAN)
     final labaBersih = _totalPendapatan - _totalPengeluaran;
     final profitMargin = _totalPendapatan > 0
         ? ((labaBersih / _totalPendapatan) * 100).toStringAsFixed(1)
@@ -267,7 +264,6 @@ class _ReportScreenState extends State<ReportScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  // SUBTITLE TANGGAL JIKA FILTER KUSTOM AKTIF
                   if (_filterPeriode == 'Sesuaikan Tanggal...' && _customDateRange != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12),
@@ -290,7 +286,6 @@ class _ReportScreenState extends State<ReportScreen> {
                       ),
                     ),
 
-                  // BARIS SUMMARY: OMSET & PENGELUARAN
                   Row(
                     children: [
                       Expanded(
@@ -316,7 +311,6 @@ class _ReportScreenState extends State<ReportScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  // BARIS SUMMARY: PIUTANG & LABA BERSIH
                   Row(
                     children: [
                       Expanded(
@@ -377,7 +371,6 @@ class _ReportScreenState extends State<ReportScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // CONTAINER GRAFIK DAN TAB
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
@@ -425,7 +418,6 @@ class _ReportScreenState extends State<ReportScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  // 🟢 BAGIAN LIST TRANSAKSI / DAFTAR ORDER SESUAI TAB GRAFIK AKTIF
                   _buildDynamicTransactionList(settings),
                 ],
               ),
@@ -433,23 +425,21 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
-  // 🟢 WIDGET MENAMPILKAN DAFTAR ORDERAN ATAU PENGELUARAN PRESISI SESUAI TAB GRAFIK
   Widget _buildDynamicTransactionList(SettingsProvider settings) {
     final bool isExpenseTab = _activeTabChart == 'Pengeluaran';
     
     List<dynamic> displayList = [];
 
     if (isExpenseTab) {
-      // 1. TAB PENGELUARAN: Semua pengeluaran di rentang waktu
       displayList = _rawExpenses;
     } else if (_activeTabChart == 'Pendapatan' || _activeTabChart == 'Profit') {
-      // 2. TAB PENDAPATAN & PROFIT: Hanya transaksi yang LUNAS
+      // Tab Pendapatan / Profit: Tampilkan order yang lunas dari RPC
       displayList = _rawOrders.where((o) {
         final st = (o['status_pembayaran'] ?? '').toString().trim().toLowerCase();
         return st == 'lunas';
       }).toList();
     } else {
-      // 3. TAB OMSET: Semua transaksi (Lunas maupun Belum Lunas)
+      // Tab Omset: Percayai 100% data order buatan RPC (tanpa filter manual lokal lagi)
       displayList = _rawOrders;
     }
 
@@ -547,7 +537,11 @@ class _ReportScreenState extends State<ReportScreen> {
                   final service = item['services_summary'] ?? item['service_name'] ?? 'Layanan Laundry';
                   final statusBayar = item['status_pembayaran'] ?? 'Belum Lunas';
                   final isLunas = statusBayar.toString().trim().toLowerCase() == 'lunas';
-                  final displayDate = _formatDateReadable(item['created_at'] ?? '');
+                  
+                  final rawDate = isLunas 
+                      ? (item['waktu_pelunasan'] ?? item['created_at'] ?? '')
+                      : (item['created_at'] ?? '');
+                  final displayDate = _formatDateReadable(rawDate.toString());
 
                   return Card(
                     margin: const EdgeInsets.only(bottom: 8),

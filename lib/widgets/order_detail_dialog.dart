@@ -69,7 +69,8 @@ class _OrderDetailDialogState extends State<OrderDetailDialog> {
     final String str = rawDate.toString().trim();
     if (str.isEmpty || str == 'null') return '-';
     try {
-      final dt = DateTime.parse(str);
+      // 🟢 Standar Konversi UTC ke Waktu Lokal HP User
+      final dt = DateTime.parse(str).toLocal();
       return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
     } catch (_) {
       return str;
@@ -110,17 +111,21 @@ class _OrderDetailDialogState extends State<OrderDetailDialog> {
     }
   }
 
-  // 🟢 2. UPDATE PEMBAYARAN SEKALIAN MENGESET STATUS JADI SELESAI & LUNAS
+  // 🟢 2. UPDATE PEMBAYARAN SEKALIAN MENGESET STATUS JADI SELESAI & LUNAS (FIX UTC TIMESTAMPTZ)
   Future<void> _updatePayment(BuildContext context, String method) async {
     try {
       final orderId = int.tryParse(_currentOrder['id'].toString());
       if (orderId == null) return;
+
+      // Send waktu_pelunasan dalam ISO String UTC resmi
+      final String nowUtcIso = DateTime.now().toUtc().toIso8601String();
 
       await Supabase.instance.client.rpc('update_order_status_by_store', params: {
         'p_order_id': orderId,
         'p_store_id': _currentOrder['store_id']?.toString() ?? '',
         'p_new_status': 'SELESAI',
         'p_metode_pembayaran': method,
+        'p_waktu_pelunasan': nowUtcIso,
       });
 
       if (context.mounted) {
