@@ -46,10 +46,12 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
       }
 
       final List<dynamic> data = await supabase
-          .from('orders')
-          .select('*, order_items(*)')
-          .eq('store_id', currentStoreId)
-          .order('created_at', ascending: false);
+                    .from('orders')
+                    .select('*, order_items(*)')
+                    .eq('store_id', currentStoreId)
+                    // 🟢 UTAMAKAN WAKTU PELUNASAN TERBARU (SAMA SEPERTI SUPABASE TABLE EDITOR)
+                    .order('waktu_pelunasan', ascending: false, nullsFirst: false)
+                    .order('created_at', ascending: false);
 
       if (mounted) {
         setState(() {
@@ -86,30 +88,41 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
   }
 
   List<Map<String, dynamic>> get _filteredOrders {
-    return _allOrders.where((order) {
-      final name = (order['customer_name'] ?? '').toString().toLowerCase();
-      final phone = (order['customer_phone'] ?? '').toString().toLowerCase();
-      final query = _searchQuery.toLowerCase();
-      final matchesSearch = name.contains(query) || phone.contains(query);
-
-      if (!matchesSearch) return false;
-
-      final status = (order['status'] ?? 'BARU').toString().toUpperCase();
-
-      switch (_selectedFilter) {
-        case 'PENDING':
-          return status == 'ANTRIAN' || status == 'BARU' || status == 'PENDING';
-        case 'PREPARED':
-          return status == 'PROSES' || status == 'PREPARED';
-        case 'DELIVERED':
-          return status == 'SELESAI' || status == 'DELIVERED';
-        case 'CANCELED':
-          return status == 'BATAL' || status == 'CANCEL' || status == 'CANCELED';
-        default:
-          return true;
+      final list = _allOrders.where((order) {
+        final name = (order['customer_name'] ?? '').toString().toLowerCase();
+        final phone = (order['customer_phone'] ?? '').toString().toLowerCase();
+        final query = _searchQuery.toLowerCase();
+        final matchesSearch = name.contains(query) || phone.contains(query);
+  
+        if (!matchesSearch) return false;
+  
+        final status = (order['status'] ?? 'BARU').toString().toUpperCase();
+  
+        switch (_selectedFilter) {
+          case 'PENDING':
+            return status == 'ANTRIAN' || status == 'BARU' || status == 'PENDING';
+          case 'PREPARED':
+            return status == 'PROSES' || status == 'PREPARED';
+          case 'DELIVERED':
+            return status == 'SELESAI' || status == 'DELIVERED';
+          case 'CANCELED':
+            return status == 'BATAL' || status == 'CANCEL' || status == 'CANCELED';
+          default:
+            return true;
+        }
+      }).toList();
+  
+      // 🟢 URUTKAN ULANG KHUSUS UNTUK TAB SELESAI / DELIVERED
+      if (_selectedFilter == 'DELIVERED') {
+        list.sort((a, b) {
+          final aTime = a['waktu_pelunasan'] ?? a['created_at'] ?? '';
+          final bTime = b['waktu_pelunasan'] ?? b['created_at'] ?? '';
+          return bTime.toString().compareTo(aTime.toString());
+        });
       }
-    }).toList();
-  }
+  
+      return list;
+    }
 
   String _formatRupiah(num number) {
     final String str = number.toInt().toString();

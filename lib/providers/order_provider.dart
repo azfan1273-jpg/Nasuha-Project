@@ -18,25 +18,27 @@ class OrderProvider with ChangeNotifier {
   }
 
   // Fetch orders terisolasi menggunakan storeId yang dipass langsung
-  Future<void> fetchOrders(String storeId) async {
-    _isLoading = true;
-    notifyListeners();
-
-    try {
-      final List<dynamic> data = await _supabase
-          .from('orders')
-          .select('*, order_items(*)')
-          .eq('store_id', storeId)
-          .order('created_at', ascending: false);
-
-      _orders = List<Map<String, dynamic>>.from(data);
-    } catch (e) {
-      debugPrint('Error fetchOrders di OrderProvider: $e');
-    } finally {
-      _isLoading = false;
+    Future<void> fetchOrders(String storeId) async {
+      _isLoading = true;
       notifyListeners();
+  
+      try {
+        final List<dynamic> data = await _supabase
+            .from('orders')
+            .select('*, order_items(*)')
+            .eq('store_id', storeId)
+            // 🟢 UTAMAKAN URUTAN BERDASARKAN WAKTU PELUNASAN TERBARU (SAMA DENGAN TABEL SUPABASE)
+            .order('waktu_pelunasan', ascending: false, nullsFirst: false)
+            .order('created_at', ascending: false);
+  
+        _orders = List<Map<String, dynamic>>.from(data);
+      } catch (e) {
+        debugPrint('Error fetchOrders di OrderProvider: $e');
+      } finally {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
-  }
 
   // Create Order menggunakan RPC Supabase
   Future<bool> createOrder({

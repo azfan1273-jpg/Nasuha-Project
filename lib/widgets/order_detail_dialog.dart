@@ -111,37 +111,42 @@ class _OrderDetailDialogState extends State<OrderDetailDialog> {
     }
   }
 
-  // 🟢 2. UPDATE PEMBAYARAN SEKALIAN MENGESET STATUS JADI SELESAI & LUNAS (FIX UTC TIMESTAMPTZ)
-  Future<void> _updatePayment(BuildContext context, String method) async {
-    try {
-      final orderId = int.tryParse(_currentOrder['id'].toString());
-      if (orderId == null) return;
-
-      // Send waktu_pelunasan dalam ISO String UTC resmi
-      final String nowUtcIso = DateTime.now().toUtc().toIso8601String();
-
-      await Supabase.instance.client.rpc('update_order_status_by_store', params: {
-        'p_order_id': orderId,
-        'p_store_id': _currentOrder['store_id']?.toString() ?? '',
-        'p_new_status': 'SELESAI',
-        'p_metode_pembayaran': method,
-        'p_waktu_pelunasan': nowUtcIso,
-      });
-
-      if (context.mounted) {
-        widget.onOrderUpdated?.call();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Pembayaran ($method) berhasil! Status LUNAS & SELESAI'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pop(context);
+  // 🟢 2. UPDATE PEMBAYARAN SEKALIAN MENGESET STATUS JADI SELESAI & LUNAS
+    Future<void> _updatePayment(BuildContext context, String method) async {
+      try {
+        final orderId = int.tryParse(_currentOrder['id'].toString());
+        if (orderId == null) return;
+  
+        // 🟢 Panggil RPC tanpa parameter p_waktu_pelunasan (karena sudah dihandle otomatis oleh SQL)
+        await Supabase.instance.client.rpc('update_order_status_by_store', params: {
+          'p_order_id': orderId,
+          'p_store_id': _currentOrder['store_id']?.toString() ?? '',
+          'p_new_status': 'SELESAI',
+          'p_metode_pembayaran': method,
+        });
+  
+        if (context.mounted) {
+          widget.onOrderUpdated?.call();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Pembayaran ($method) berhasil! Status LUNAS & SELESAI'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.pop(context);
+        }
+      } catch (e) {
+        debugPrint('Error update pembayaran: $e');
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Gagal memperbarui pembayaran: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
-    } catch (e) {
-      debugPrint('Error update pembayaran: $e');
     }
-  }
 
   Future<void> _sendWaNotification(BuildContext context) async {
     String rawPhone = (_currentOrder['customer_phone'] ?? '').toString().trim();
