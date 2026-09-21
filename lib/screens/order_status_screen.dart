@@ -15,10 +15,12 @@ class OrderStatusScreen extends StatefulWidget {
 class _OrderStatusScreenState extends State<OrderStatusScreen> {
   final List<Map<String, dynamic>> _allOrders = [];
   final TextEditingController _searchController = TextEditingController();
-
   String _selectedFilter = 'PENDING';
   String _searchQuery = '';
   bool _isLoading = false;
+  
+  // 🟢 VARIABEL UNTUK LOAD MORE
+  int _visibleCount = 10; // Default tampil 10 pertama
 
   @override
   void initState() {
@@ -32,27 +34,37 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
     super.dispose();
   }
 
+  //  FUNGSI LOAD MORE - TAMBAH 10 ITEM LAGI
+  void _loadMore() {
+    setState(() {
+      _visibleCount += 10;
+    });
+  }
+
+  // 🟢 RESET VISIBLE COUNT SAAT FILTER/SEARCH BERUBAH
+  void _resetVisibleCount() {
+    setState(() {
+      _visibleCount = 10;
+    });
+  }
+
   // AMBIL DATA TERISOLASI BERDASARKAN STORE_ID
   Future<void> _fetchOrders() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
-
     try {
       final currentStoreId = context.read<SettingsProvider>().storeId;
-
       if (currentStoreId == null) {
         debugPrint('Log: store_id tidak ditemukan');
         return;
       }
-
       final List<dynamic> data = await supabase
-                    .from('orders')
-                    .select('*, order_items(*)')
-                    .eq('store_id', currentStoreId)
-                    // 🟢 UTAMAKAN WAKTU PELUNASAN TERBARU (SAMA SEPERTI SUPABASE TABLE EDITOR)
-                    .order('waktu_pelunasan', ascending: false, nullsFirst: false)
-                    .order('created_at', ascending: false);
-
+          .from('orders')
+          .select('*, order_items(*)')
+          .eq('store_id', currentStoreId)
+          // 🟢 UTAMAKAN WAKTU PELUNASAN TERBARU (SAMA SEPERTI SUPABASE TABLE EDITOR)
+          .order('waktu_pelunasan', ascending: false, nullsFirst: false)
+          .order('created_at', ascending: false);
       if (mounted) {
         setState(() {
           _allOrders.clear();
@@ -88,41 +100,70 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
   }
 
   List<Map<String, dynamic>> get _filteredOrders {
-      final list = _allOrders.where((order) {
-        final name = (order['customer_name'] ?? '').toString().toLowerCase();
-        final phone = (order['customer_phone'] ?? '').toString().toLowerCase();
-        final query = _searchQuery.toLowerCase();
-        final matchesSearch = name.contains(query) || phone.contains(query);
-  
-        if (!matchesSearch) return false;
-  
-        final status = (order['status'] ?? 'BARU').toString().toUpperCase();
-  
-        switch (_selectedFilter) {
-          case 'PENDING':
-            return status == 'ANTRIAN' || status == 'BARU' || status == 'PENDING';
-          case 'PREPARED':
-            return status == 'PROSES' || status == 'PREPARED';
-          case 'DELIVERED':
-            return status == 'SELESAI' || status == 'DELIVERED';
-          case 'CANCELED':
-            return status == 'BATAL' || status == 'CANCEL' || status == 'CANCELED';
-          default:
-            return true;
-        }
-      }).toList();
-  
-      // 🟢 URUTKAN ULANG KHUSUS UNTUK TAB SELESAI / DELIVERED
-      if (_selectedFilter == 'DELIVERED') {
-        list.sort((a, b) {
-          final aTime = a['waktu_pelunasan'] ?? a['created_at'] ?? '';
-          final bTime = b['waktu_pelunasan'] ?? b['created_at'] ?? '';
-          return bTime.toString().compareTo(aTime.toString());
-        });
+    final list = _allOrders.where((order) {
+      final name = (order['customer_name'] ?? '').toString().toLowerCase();
+      final phone = (order['customer_phone'] ?? '').toString().toLowerCase();
+      final query = _searchQuery.toLowerCase();
+      final matchesSearch = name.contains(query) || phone.contains(query);
+      if (!matchesSearch) return false;
+
+      final status = (order['status'] ?? 'BARU').toString().toUpperCase();
+      switch (_selectedFilter) {
+        case 'PENDING':
+          return status == 'ANTRIAN' || status == 'BARU' || status == 'PENDING';
+        case 'PREPARED':
+          return status == 'PROSES' || status == 'PREPARED';
+        case 'DELIVERED':
+          return status == 'SELESAI' || status == 'DELIVERED';
+        case 'CANCELED':
+          return status == 'BATAL' || status == 'CANCEL' || status == 'CANCELED';
+        default:
+          return true;
       }
-  
-      return list;
+    }).toList();
+
+    //  URUTKAN ULANG KHUSUS UNTUK TAB SELESAI / DELIVERED
+    if (_selectedFilter == 'DELIVERED') {
+      list.sort((a, b) {
+        final aTime = a['waktu_pelunasan'] ?? a['created_at'] ?? '';
+        final bTime = b['waktu_pelunasan'] ?? b['created_at'] ?? '';
+        return bTime.toString().compareTo(aTime.toString());
+      });
     }
+
+    // 🟢 BATASI JUMLAH ITEM YANG DITAMPILKAN SESUAI _visibleCount
+    if (list.length > _visibleCount) {
+      return list.sublist(0, _visibleCount);
+    }
+    return list;
+  }
+
+  // 🟢 CEK APAKAH MASIH ADA DATA YANG BELUM DITAMPILKAN
+  bool get _hasMoreData {
+    final allFiltered = _allOrders.where((order) {
+      final name = (order['customer_name'] ?? '').toString().toLowerCase();
+      final phone = (order['customer_phone'] ?? '').toString().toLowerCase();
+      final query = _searchQuery.toLowerCase();
+      final matchesSearch = name.contains(query) || phone.contains(query);
+      if (!matchesSearch) return false;
+
+      final status = (order['status'] ?? 'BARU').toString().toUpperCase();
+      switch (_selectedFilter) {
+        case 'PENDING':
+          return status == 'ANTRIAN' || status == 'BARU' || status == 'PENDING';
+        case 'PREPARED':
+          return status == 'PROSES' || status == 'PREPARED';
+        case 'DELIVERED':
+          return status == 'SELESAI' || status == 'DELIVERED';
+        case 'CANCELED':
+          return status == 'BATAL' || status == 'CANCEL' || status == 'CANCELED';
+        default:
+          return true;
+      }
+    }).toList();
+
+    return _visibleCount < allFiltered.length;
+  }
 
   String _formatRupiah(num number) {
     final String str = number.toInt().toString();
@@ -144,7 +185,6 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
-
     return Scaffold(
       backgroundColor: settings.bgDark,
       body: Column(
@@ -165,7 +205,10 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
                     controller: _searchController,
                     style: TextStyle(fontSize: 13, color: settings.textColor),
                     onChanged: (val) {
-                      setState(() => _searchQuery = val);
+                      setState(() {
+                        _searchQuery = val;
+                        _resetVisibleCount(); // Reset ke 10 saat search
+                      });
                     },
                     decoration: const InputDecoration(
                       isDense: true,
@@ -179,7 +222,6 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                
                 // HORIZONTAL TAB FILTER
                 Container(
                   width: double.infinity,
@@ -201,7 +243,6 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
             ),
           ),
           const SizedBox(height: 12),
-
           // LIST ORDER DATA
           Expanded(
             child: Padding(
@@ -228,31 +269,61 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
                       : RefreshIndicator(
                           onRefresh: _fetchOrders,
                           color: settings.accentColor,
-                          child: ListView.builder(
-                            itemCount: _filteredOrders.length,
-                            itemBuilder: (context, index) {
-                              final item = _filteredOrders[index];
-                              return _buildOrderCardBar(item);
-                            },
+                          child: ListView(
+                            children: [
+                              // List order yang sudah di-filter dan di-batasi
+                              ..._filteredOrders.map((item) => _buildOrderCardBar(item)),
+                              
+                              // 🟢 TOMBOL "MUAT 10 LAGI" (hanya muncul jika masih ada data)
+                              if (_hasMoreData) ...[
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 44,
+                                  child: OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(color: settings.accentColor, width: 1.5),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    onPressed: _loadMore,
+                                    icon: Icon(Icons.arrow_downward, color: settings.accentColor, size: 18),
+                                    label: Text(
+                                      'Muat 10 Lagi',
+                                      style: TextStyle(
+                                        color: settings.accentColor,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                              ],
+                            ],
                           ),
                         ),
             ),
           ),
-          
           // TOMBOL MENU TRANSAKSI
           _buildTransactionButton(settings),
         ],
       ),
-    );  
+    );
   }
 
   Widget _buildTabButton(String filterKey, String label, SettingsProvider settings) {
     final bool isSelected = _selectedFilter == filterKey;
     final int count = _countOrdersByStatus(filterKey);
-
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _selectedFilter = filterKey),
+        onTap: () {
+          setState(() {
+            _selectedFilter = filterKey;
+            _resetVisibleCount(); // Reset ke 10 saat ganti tab
+          });
+        },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -286,7 +357,6 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
   Widget _buildOrderCardBar(Map<String, dynamic> item) {
     final String customerName = (item['customer_name'] ?? item['nama_pelanggan'] ?? 'Pelanggan').toString();
     final num totalPrice = num.tryParse(item['total_price']?.toString() ?? '0') ?? 0;
-
     int serviceCount = 0;
     if (item['order_items'] is List && (item['order_items'] as List).isNotEmpty) {
       serviceCount = (item['order_items'] as List).length;
@@ -294,17 +364,14 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
       serviceCount = item['service_name'].toString().split(',').length;
     }
     final String serviceText = '$serviceCount layanan';
-
     String estText = 'Est: -';
     final dynamic rawEst = item['estimated_at'] ?? item['estimasi_selesai'] ?? item['estimasi'];
-    
     if (rawEst != null && rawEst.toString().isNotEmpty && rawEst.toString() != 'null') {
       try {
         final targetDate = DateTime.parse(rawEst.toString());
         estText = 'Est: ${_formatTanggal(targetDate.toIso8601String())}';
       } catch (_) {}
     }
-
     return InkWell(
       onTap: () {
         showDialog(

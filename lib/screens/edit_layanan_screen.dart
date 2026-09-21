@@ -6,606 +6,588 @@ import '../providers/settings_provider.dart';
 final supabase = Supabase.instance.client;
 
 class EditLayananScreen extends StatefulWidget {
-  final Map<String, dynamic>? serviceData;
-
-  const EditLayananScreen({super.key, this.serviceData});
+  const EditLayananScreen({super.key});
 
   @override
   State<EditLayananScreen> createState() => _EditLayananScreenState();
 }
 
 class _EditLayananScreenState extends State<EditLayananScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _priceController = TextEditingController();
-  final _estimationValueController = TextEditingController();
-  final _notesController = TextEditingController();
-  final _searchController = TextEditingController();
+  static const Color _bgDark = Color(0xFFFAF5F7);
+  static const Color _pinkAccent = Color(0xFFEC4899);
+  static const Color _textBlack = Color(0xFF111827);
 
-  // 🟢 Kategori default tanpa data dummy 'Sepatu & Tas'
-  List<String> _kategoriOptions = ['Kiloan', 'Satuan'];
-  List<Map<String, dynamic>> _servicesList = [];
+  final TextEditingController _searchController = TextEditingController();
   
-  Map<String, dynamic>? _selectedServiceForEdit;
+  // Controller Form Tambah / Edit
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _priceController = TextEditingController();
+  final TextEditingController _estController = TextEditingController();
+
+  List<Map<String, dynamic>> _servicesList = [];
+  List<String> _categoriesList = [];
+  
   String _selectedCategory = 'Kiloan';
   String _selectedUnit = 'kg';
-  String _selectedTimeUnit = 'Hari';
-  String _searchKeyword = '';
-  
-  bool _isLoading = false;
-  bool _isLoadingList = true;
+  String _selectedEstUnit = 'Hari'; // Variable dropdown estimasi (Hari/Jam)
+  String _searchQuery = '';
+  bool _isLoading = true;
+  String? _editingServiceId;
 
   @override
   void initState() {
     super.initState();
-    if (widget.serviceData != null) {
-      _populateFormForEdit(widget.serviceData!);
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _fetchServices();
-    });
+    _loadData();
   }
 
   @override
   void dispose() {
+    _searchController.dispose();
     _nameController.dispose();
     _priceController.dispose();
-    _estimationValueController.dispose();
-    _notesController.dispose();
-    _searchController.dispose();
+    _estController.dispose();
     super.dispose();
   }
 
-  Future<void> _fetchServices() async {
-    setState(() => _isLoadingList = true);
+  String _formatRupiah(num number) {
+    final String str = number.toInt().toString();
+    final RegExp reg = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
+    return 'Rp ${str.replaceAllMapped(reg, (Match m) => '${m[1]}.')}';
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
     try {
       final storeId = context.read<SettingsProvider>().storeId;
       if (storeId == null) {
-        if (mounted) setState(() => _isLoadingList = false);
+        if (mounted) setState(() => _isLoading = false);
         return;
       }
-
+  
       final response = await supabase.rpc('get_services_by_store', params: {
         'p_store_id': storeId,
         'p_keyword': '',
       });
-
-      final List data = (response as List?) ?? [];
-      final List<Map<String, dynamic>> loadedServices = List<Map<String, dynamic>>.from(data);
-
-      List<String> categories = List.from(_kategoriOptions);
-      for (var item in loadedServices) {
-        final cat = (item['category'] ?? '').toString().trim();
-        if (cat.isNotEmpty && !categories.contains(cat)) {
-          categories.add(cat);
+  
+      final servicesData = List<Map<String, dynamic>>.from(response ?? []);
+  
+      // Ambil kategori unik dari database
+      final Set<String> fetchedCategories = {};
+      for (var service in servicesData) {
+        final cat = (service['category'] ?? '').toString().trim();
+        if (cat.isNotEmpty) {
+          fetchedCategories.add(cat);
         }
       }
-
+  
+      List<String> finalCategories = fetchedCategories.toList();
+      if (finalCategories.isEmpty) {
+        finalCategories = ['Kiloan', 'Satuan'];
+      }
+  
       if (mounted) {
         setState(() {
-          _servicesList = loadedServices;
-          _kategoriOptions = categories;
-          _isLoadingList = false;
+          _servicesList = servicesData;
+          _categoriesList = finalCategories;
+          if (finalCategories.isNotEmpty) {
+            _selectedCategory = finalCategories.first;
+          }
+          _isLoading = false;
         });
       }
     } catch (e) {
       debugPrint('Error fetch services: $e');
-      if (mounted) setState(() => _isLoadingList = false);
-    }
-  }
-
-  // 🟢 ISI FORM SAAT ITEM KARTU DIKLIK (EDIT MODE)
-    void _populateFormForEdit(Map<String, dynamic> data) {
-        setState(() {
-          _selectedServiceForEdit = data;
-          _nameController.text = data['name'] ?? data['service_name'] ?? '';
-          _priceController.text = (data['price'] ?? '').toString();
-          _selectedCategory = data['category'] ?? 'Kiloan';
-          _selectedUnit = data['unit'] ?? 'kg';
-          _notesController.text = data['notes'] ?? '';
-    
-          // 🟢 BACA TEPAT NILAI ESTIMASI DARI DATABASE
-          final String rawEst = (data['estimation'] ?? data['estimasi'] ?? '').toString().trim();
-    
-          if (rawEst.isNotEmpty && rawEst != 'null') {
-            final parts = rawEst.split(' ');
-            _estimationValueController.text = parts[0]; // Isikan angka aslinya dari DB
-    
-            if (parts.length > 1 && (parts[1] == 'Hari' || parts[1] == 'Jam')) {
-              _selectedTimeUnit = parts[1];
-            } else {
-              _selectedTimeUnit = 'Hari';
-            }
-          } else {
-            _estimationValueController.clear(); // Kosongkan jika memang tidak diset
-            _selectedTimeUnit = 'Hari';
-          }
-        });
-      }
-
-  void _resetForm() {
-    setState(() {
-      _selectedServiceForEdit = null;
-      _nameController.clear();
-      _priceController.clear();
-      _estimationValueController.clear();
-      _notesController.clear();
-      _selectedUnit = 'kg';
-      _selectedTimeUnit = 'Hari';
-    });
-  }
-
-  Future<void> _saveService() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      final storeId = context.read<SettingsProvider>().storeId;
-      if (storeId == null) throw Exception('ID Toko tidak ditemukan.');
-
-      final serviceId = _selectedServiceForEdit != null 
-          ? int.tryParse(_selectedServiceForEdit!['id'].toString()) 
-          : null;
-
-      final String estimationText = '${_estimationValueController.text.trim()} $_selectedTimeUnit';
-
-      await supabase.rpc('upsert_service_by_store', params: {
-        'p_id': serviceId,
-        'p_store_id': storeId,
-        'p_name': _nameController.text.trim(),
-        'p_price': double.tryParse(_priceController.text.trim()) ?? 0,
-        'p_unit': _selectedUnit,
-        'p_category': _selectedCategory,
-        'p_estimation': estimationText,
-        'p_notes': _notesController.text.trim(),
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_selectedServiceForEdit != null ? 'Layanan berhasil diperbarui!' : 'Layanan baru ditambahkan!'),
-            backgroundColor: const Color(0xFF10B981),
-          ),
-        );
-        _resetForm();
-        _fetchServices();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal menyimpan: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
-    } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _deleteService(int serviceId) async {
-    try {
-      final storeId = context.read<SettingsProvider>().storeId;
-      await supabase.rpc('delete_service_by_store', params: {
-        'p_id': serviceId,
-        'p_store_id': storeId,
-      });
+  List<Map<String, dynamic>> get _filteredServices {
+    if (_searchQuery.isEmpty) return _servicesList;
+    return _servicesList.where((service) {
+      final name = (service['name'] ?? '').toString().toLowerCase();
+      return name.contains(_searchQuery.toLowerCase());
+    }).toList();
+  }
 
+  void _resetForm() {
+    _editingServiceId = null;
+    _nameController.clear();
+    _priceController.clear();
+    _estController.clear();
+    _selectedCategory = _categoriesList.isNotEmpty ? _categoriesList.first : 'Kiloan';
+    _selectedUnit = 'kg';
+    _selectedEstUnit = 'Hari';
+  }
+
+  Future<void> _saveLayanan() async {
+    final name = _nameController.text.trim();
+    final price = double.tryParse(_priceController.text.trim()) ?? 0;
+    final est = int.tryParse(_estController.text.trim()) ?? 1;
+    final storeId = context.read<SettingsProvider>().storeId;
+
+    if (name.isEmpty || price <= 0 || storeId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nama dan Biaya Layanan wajib diisi!'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    try {
+      final payload = {
+        'name': name,
+        'category': _selectedCategory,
+        'unit': _selectedUnit,
+        'price': price,
+        'estimated_days': est,
+        'estimated_unit': _selectedEstUnit,
+      };
+
+      if (_editingServiceId != null) {
+        await supabase.from('services').update(payload).eq('id', _editingServiceId!);
+      } else {
+        await supabase.from('services').insert({
+          'store_id': storeId,
+          ...payload,
+        });
+      }
+
+      _resetForm();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Layanan berhasil dihapus!'), backgroundColor: Colors.orange),
+          const SnackBar(content: Text('Layanan berhasil disimpan!'), backgroundColor: Colors.green),
         );
-        if (_selectedServiceForEdit?['id'] == serviceId) {
-          _resetForm();
-        }
-        _fetchServices();
+      }
+      _loadData();
+    } catch (e) {
+      debugPrint('Error save service: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal menyimpan: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteLayanan(String id) async {
+    try {
+      await supabase.from('services').delete().eq('id', id);
+      _loadData();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Layanan berhasil dihapus')),
+        );
       }
     } catch (e) {
       debugPrint('Error delete service: $e');
     }
   }
 
-  void _showAddCategoryDialog() {
+  void _showTambahKategoriDialog(BuildContext mainContext, StateSetter setPopUpState) {
     final catController = TextEditingController();
+  
     showDialog(
-      context: context,
+      context: mainContext,
       builder: (ctx) => AlertDialog(
         title: const Text('Tambah Kategori Baru', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
         content: TextField(
           controller: catController,
-          decoration: const InputDecoration(hintText: 'Nama Kategori'),
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: 'Contoh: Sepatu / Helm',
+            hintStyle: const TextStyle(fontSize: 12),
+            filled: true,
+            fillColor: Colors.grey.shade100,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide.none,
+            ),
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Batal'),
+            child: const Text('Batal', style: TextStyle(color: Colors.grey, fontSize: 12)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFED4C9D)),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEC4899)),
             onPressed: () {
               final newCat = catController.text.trim();
-              if (newCat.isNotEmpty && !_kategoriOptions.contains(newCat)) {
+              if (newCat.isNotEmpty) {
                 setState(() {
-                  _kategoriOptions.add(newCat);
+                  if (!_categoriesList.contains(newCat)) {
+                    _categoriesList.add(newCat);
+                  }
+                });
+                setPopUpState(() {
                   _selectedCategory = newCat;
                 });
               }
               Navigator.pop(ctx);
             },
-            child: const Text('Tambah', style: TextStyle(color: Colors.white)),
+            child: const Text('SIMPAN', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
   }
 
-  void _confirmDeleteCategory(String categoryName) {
+  void _openTambahPopUp([Map<String, dynamic>? item]) {
+    if (item != null) {
+      _editingServiceId = item['id'].toString();
+      _nameController.text = item['name'] ?? '';
+      _priceController.text = (item['price'] ?? 0).toString();
+      _estController.text = (item['estimated_days'] ?? 1).toString();
+      _selectedCategory = item['category'] ?? 'Kiloan';
+      _selectedUnit = item['unit'] ?? 'kg';
+      _selectedEstUnit = item['estimated_unit'] ?? 'Hari';
+    } else {
+      _resetForm();
+    }
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Hapus Kategori', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-        content: Text('Yakin ingin menghapus kategori "$categoryName"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-            onPressed: () {
-              setState(() {
-                _kategoriOptions.remove(categoryName);
-                if (_selectedCategory == categoryName) {
-                  _selectedCategory = _kategoriOptions.isNotEmpty ? _kategoriOptions.first : '';
-                }
-              });
-              Navigator.pop(ctx);
-            },
-            child: const Text('Hapus', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatRupiah(num number) {
-    final String str = number.toInt().toString();
-    final RegExp reg = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
-    final String result = str.replaceAllMapped(reg, (Match m) => '${m[1]}.');
-    return 'Rp $result';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    const bgPink = Color(0xFFFFE5EC);
-    const purpleBar = Color(0xFF5E0B5B);
-    const primaryPink = Color(0xFFED4C9D);
-
-    final isEdit = _selectedServiceForEdit != null;
-
-    return Scaffold(
-      backgroundColor: bgPink,
-      appBar: AppBar(
-        backgroundColor: bgPink,
-        elevation: 0,
-        title: const Text(
-          'KELOLA LAYANAN LAUNDRY',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Colors.black87),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      // 🟢 LAYOUT FIX (TANPA SINGLECHILDSCROLLVIEW)
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // 🟢 1. SECTION DAFTAR LAYANAN (GLOBAL / TANPA FILTER KATEGORI)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Daftar Layanan',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black87),
-                  ),
-                  if (isEdit)
-                    TextButton.icon(
-                      onPressed: _resetForm,
-                      icon: const Icon(Icons.add_circle_outline, size: 14, color: primaryPink),
-                      label: const Text('Batal Edit', style: TextStyle(color: primaryPink, fontSize: 11)),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 4),
-
-              // SEARCH INPUT
-              TextField(
-                controller: _searchController,
-                style: const TextStyle(fontSize: 12),
-                onChanged: (val) {
-                  setState(() => _searchKeyword = val.toLowerCase());
-                },
-                decoration: InputDecoration(
-                  hintText: 'Cari layanan...',
-                  hintStyle: const TextStyle(fontSize: 12, color: Colors.grey),
-                  prefixIcon: const Icon(Icons.search, size: 18, color: Colors.grey),
-                  isDense: true,
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 6),
-
-              // LIST LAYANAN FLEXIBLE
-              Expanded(
-                flex: 2,
-                child: _isLoadingList
-                    ? const Center(child: CircularProgressIndicator(color: primaryPink))
-                    : Builder(
-                        builder: (context) {
-                          // 🟢 Hanya menyaring berdasarkan kata kunci pencarian (Tanpa filter kategori)
-                          final filtered = _servicesList.where((s) {
-                            final name = (s['name'] ?? s['service_name'] ?? '').toString().toLowerCase();
-                            return name.contains(_searchKeyword);
-                          }).toList();
-
-                          if (filtered.isEmpty) {
-                            return Container(
-                              width: double.infinity,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
-                              child: const Text('Belum ada layanan.', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                            );
-                          }
-
-                          return Container(
-                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
-                            child: ListView.separated(
-                              itemCount: filtered.length,
-                              separatorBuilder: (_, __) => const Divider(height: 1),
-                              // 📍 Lokasi: ListTile di dalam ListView.separated
-                              itemBuilder: (ctx, idx) {
-                                final item = filtered[idx];
-                                final bool isSelected = _selectedServiceForEdit?['id'] == item['id'];
-                                final price = num.tryParse(item['price']?.toString() ?? '0') ?? 0;
-                              
-                                // 🟢 AMBIL TEKS ESTIMASI UNTUK DITAMPILKAN DI LIST
-                                final estText = (item['estimation'] ?? item['estimasi'] ?? '').toString().trim();
-                                final displayEst = (estText.isNotEmpty && estText != 'null') ? ' • Est: $estText' : '';
-                              
-                                return ListTile(
-                                  dense: true,
-                                  selected: isSelected,
-                                  selectedTileColor: primaryPink.withOpacity(0.1),
-                                  title: Text(
-                                    item['name'] ?? item['service_name'] ?? '-', 
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)
-                                  ),
-                                  // 🟢 SUBTITLE SEKARANG MENAMPILKAN HARGA, SATUAN, KATEGORI, & ESTIMASI
-                                  subtitle: Text(
-                                    '${_formatRupiah(price)} / ${item['unit'] ?? 'kg'} • ${item['category'] ?? 'Umum'}$displayEst', 
-                                    style: const TextStyle(fontSize: 11, color: Colors.black54)
-                                  ),
-                                  trailing: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.edit, size: 16, color: Colors.blue),
-                                        onPressed: () => _populateFormForEdit(item),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.delete_outline, size: 16, color: Colors.redAccent),
-                                        onPressed: () => _deleteService(int.parse(item['id'].toString())),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }
-                            ),
-                          );
-                        },
-                      ),
-              ),
-
-              const SizedBox(height: 10),
-
-              // 🟢 2. BAR KATEGORI (BERSIH DARI DATA DUMMY)
-              Container(
-                decoration: BoxDecoration(
-                  color: purpleBar,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setPopUpState) {
+            return Dialog(
+              backgroundColor: const Color(0xFFFAF5F7),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16.0),
                 child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      GestureDetector(
-                        onTap: _showAddCategoryDialog,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF10B981),
-                            borderRadius: BorderRadius.circular(6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            _editingServiceId != null ? 'Edit Layanan' : 'Tambah Layanan',
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _textBlack),
                           ),
-                          child: const Text(
-                            '+ Kategory',
-                            style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded, size: 20),
+                            onPressed: () => Navigator.pop(dialogContext),
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+
+                      // List Kategori Scroll Horizontal (+ Tombol Kategori)
+                      SizedBox(
+                        height: 34,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: _categoriesList.length + 1,
+                          separatorBuilder: (_, __) => const SizedBox(width: 6),
+                          itemBuilder: (context, index) {
+                            if (index == 0) {
+                              return ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF10B981),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                ),
+                                onPressed: () {
+                                  _showTambahKategoriDialog(context, setPopUpState);
+                                },
+                                icon: const Icon(Icons.add, color: Colors.white, size: 14),
+                                label: const Text(
+                                  'Kategori',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              );
+                            }
+                      
+                            final cat = _categoriesList[index - 1];
+                            final isSelected = _selectedCategory == cat;
+                            return GestureDetector(
+                              onTap: () {
+                                setPopUpState(() => _selectedCategory = cat);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: isSelected ? const Color(0xFFBE185D) : const Color(0xFF831843),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  cat,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      ..._kategoriOptions.map((cat) {
-                        final isSel = cat == _selectedCategory;
-                        return GestureDetector(
-                          onTap: () => setState(() => _selectedCategory = cat),
-                          onLongPress: () => _confirmDeleteCategory(cat),
-                          child: Container(
-                            margin: const EdgeInsets.only(right: 6),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: isSel ? primaryPink : Colors.transparent,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              cat,
-                              style: TextStyle(
-                                color: isSel ? Colors.white : Colors.white70,
-                                fontSize: 11,
-                                fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ],
-                  ),
-                ),
-              ),
+                      const SizedBox(height: 16),
 
-              const SizedBox(height: 10),
-
-              // 🟢 3. FORM INPUT / EDIT FIX
-              Expanded(
-                flex: 3,
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      const Text('Nama Layanan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                      TextFormField(
+                      // Nama Layanan Input
+                      const Text('Nama Layanan', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _textBlack)),
+                      const SizedBox(height: 6),
+                      TextField(
                         controller: _nameController,
-                        style: const TextStyle(fontSize: 12),
                         decoration: InputDecoration(
                           hintText: 'Contoh: Cuci Komplit / Cuci Lipat',
+                          hintStyle: const TextStyle(fontSize: 12, color: Colors.grey),
                           filled: true,
                           fillColor: Colors.white,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                         ),
-                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Nama wajib diisi' : null,
                       ),
+                      const SizedBox(height: 14),
 
-                      const Text('Satuan Hitungan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                      // Satuan Hitungan
+                      const Text('Satuan Hitungan', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _textBlack)),
                       Row(
-                        children: ['kg', 'Pcs', 'meter', 'pasang'].map((unit) {
-                          return Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Radio<String>(
-                                value: unit,
-                                groupValue: _selectedUnit,
-                                activeColor: primaryPink,
-                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                onChanged: (val) => setState(() => _selectedUnit = val!),
-                              ),
-                              Text(unit, style: const TextStyle(fontSize: 11)),
-                              const SizedBox(width: 8),
-                            ],
-                          );
-                        }).toList(),
+                        children: [
+                          _buildRadioOption('kg', setPopUpState),
+                          _buildRadioOption('Pcs', setPopUpState),
+                          _buildRadioOption('meter', setPopUpState),
+                          _buildRadioOption('pasang', setPopUpState),
+                        ],
                       ),
+                      const SizedBox(height: 14),
 
-                      const Text('Biaya Layanan (Rp)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                      TextFormField(
+                      // Biaya Layanan
+                      const Text('Biaya Layanan (Rp)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _textBlack)),
+                      const SizedBox(height: 6),
+                      TextField(
                         controller: _priceController,
                         keyboardType: TextInputType.number,
-                        style: const TextStyle(fontSize: 12),
                         decoration: InputDecoration(
                           hintText: '8000',
+                          hintStyle: const TextStyle(fontSize: 12, color: Colors.grey),
                           filled: true,
                           fillColor: Colors.white,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                         ),
-                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Biaya wajib diisi' : null,
                       ),
+                      const SizedBox(height: 14),
 
-                      const Text('Estimasi Pengerjaan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                      // Estimasi Pengerjaan & Dropdown Interactive
+                      const Text('Estimasi Pengerjaan', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _textBlack)),
+                      const SizedBox(height: 6),
                       Row(
                         children: [
                           Expanded(
-                            child: TextFormField(
-                              controller: _estimationValueController,
+                            flex: 3,
+                            child: TextField(
+                              controller: _estController,
                               keyboardType: TextInputType.number,
-                              style: const TextStyle(fontSize: 12),
                               decoration: InputDecoration(
                                 hintText: '2',
+                                hintStyle: const TextStyle(fontSize: 12, color: Colors.grey),
                                 filled: true,
                                 fillColor: Colors.white,
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 10),
                           Expanded(
+                            flex: 2,
                             child: Container(
+                              height: 48,
                               padding: const EdgeInsets.symmetric(horizontal: 12),
-                              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
                               child: DropdownButtonHideUnderline(
                                 child: DropdownButton<String>(
-                                  value: _selectedTimeUnit,
+                                  value: _selectedEstUnit,
                                   isExpanded: true,
-                                  items: ['Hari', 'Jam'].map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 11)))).toList(),
-                                  onChanged: (val) => setState(() => _selectedTimeUnit = val!),
+                                  icon: const Icon(Icons.arrow_drop_down, color: Colors.grey),
+                                  style: const TextStyle(fontSize: 12, color: _textBlack, fontWeight: FontWeight.w500),
+                                  items: const [
+                                    DropdownMenuItem(value: 'Hari', child: Text('Hari')),
+                                    DropdownMenuItem(value: 'Jam', child: Text('Jam')),
+                                  ],
+                                  onChanged: (String? newValue) {
+                                    if (newValue != null) {
+                                      setPopUpState(() {
+                                        _selectedEstUnit = newValue;
+                                      });
+                                    }
+                                  },
                                 ),
                               ),
                             ),
                           ),
                         ],
                       ),
+                      const SizedBox(height: 20),
 
-                     SizedBox(
+                      // Tombol Simpan
+                      SizedBox(
                         width: double.infinity,
-                        height: 40,
+                        height: 44,
                         child: ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
-                            // 🟢 Jika Mode Edit (isEdit = true) warna HIJAU, jika Tambah Baru warna PINK
-                            backgroundColor: isEdit ? const Color(0xFF10B981) : primaryPink,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            elevation: 0,
+                            backgroundColor: _pinkAccent,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                           ),
-                          onPressed: _isLoading ? null : _saveService,
-                          icon: _isLoading
-                              ? const SizedBox.shrink()
-                              : Icon(
-                                  isEdit ? Icons.check_circle_outline : Icons.add_rounded,
-                                  size: 18,
-                                  color: Colors.white,
-                                ),
-                          label: _isLoading
-                              ? const SizedBox(
-                                  height: 18,
-                                  width: 18,
-                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                                )
-                              : Text(
-                                  isEdit ? 'UPDATE LAYANAN' : 'SIMPAN LAYANAN BARU',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                  ),
-                                ),
+                          onPressed: () async {
+                            Navigator.pop(dialogContext);
+                            await _saveLayanan();
+                          },
+                          icon: const Icon(Icons.add_rounded, color: Colors.white, size: 18),
+                          label: Text(
+                            _editingServiceId != null ? 'UPDATE LAYANAN' : '+ SIMPAN LAYANAN BARU',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
                         ),
-                      )
+                      ),
                     ],
                   ),
                 ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildRadioOption(String value, StateSetter setPopUpState) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Radio<String>(
+          value: value,
+          groupValue: _selectedUnit,
+          activeColor: _pinkAccent,
+          visualDensity: VisualDensity.compact,
+          onChanged: (val) {
+            if (val != null) {
+              setPopUpState(() => _selectedUnit = val);
+            }
+          },
+        ),
+        Text(value, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+        const SizedBox(width: 6),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filteredList = _filteredServices;
+
+    return Scaffold(
+      backgroundColor: _bgDark,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 1,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded, color: _textBlack),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'KELOLA LAYANAN LAUNDRY',
+          style: TextStyle(color: _textBlack, fontSize: 14, fontWeight: FontWeight.bold),
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Tambah Layanan Baru',
+            icon: const Icon(Icons.add_circle_outline_rounded, color: _pinkAccent, size: 26),
+            onPressed: () => _openTambahPopUp(),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Daftar Layanan', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _textBlack)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _searchController,
+                onChanged: (val) => setState(() => _searchQuery = val.trim()),
+                decoration: InputDecoration(
+                  hintText: 'Cari layanan...',
+                  hintStyle: const TextStyle(fontSize: 12, color: Colors.grey),
+                  prefixIcon: const Icon(Icons.search_rounded, color: Colors.grey),
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              Expanded(
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator(color: _pinkAccent))
+                    : filteredList.isEmpty
+                        ? const Center(child: Text('Layanan tidak ditemukan', style: TextStyle(fontSize: 12, color: Colors.grey)))
+                        : ListView.separated(
+                            itemCount: filteredList.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 8),
+                            itemBuilder: (context, index) {
+                              final item = filteredList[index];
+                              final price = (item['price'] as num?) ?? 0;
+                              final unit = item['unit'] ?? 'kg';
+                              final cat = item['category'] ?? '-';
+                              final est = item['estimated_days'] ?? 1;
+                              final estUnit = item['estimated_unit'] ?? 'Hari';
+
+                              return Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: Colors.black12),
+                                ),
+                                child: ListTile(
+                                  dense: true,
+                                  title: Text(
+                                    item['name'] ?? '-',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _textBlack),
+                                  ),
+                                  subtitle: Text(
+                                    '${_formatRupiah(price)} / $unit  •  $cat  •  Est: $est $estUnit',
+                                    style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                  ),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.edit_rounded, color: Colors.blue, size: 18),
+                                        onPressed: () => _openTambahPopUp(item),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.red, size: 18),
+                                        onPressed: () => _deleteLayanan(item['id'].toString()),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
               ),
             ],
           ),

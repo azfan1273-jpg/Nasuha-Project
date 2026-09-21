@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import '../providers/settings_provider.dart';
+import '../helpers/bluetooth_helper.dart';
 
 class NotaDialog extends StatefulWidget {
   final Map<String, dynamic> order;
@@ -77,173 +78,251 @@ class _NotaDialogState extends State<NotaDialog> {
     return itemsList;
   }
 
-  Future<void> _printReceiptToBluetooth(BuildContext context, bool isCustomerMode) async {
-    bool isConnected = await PrintBluetoothThermal.connectionStatus;
-    if (!isConnected) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Printer tidak terhubung! Hubungkan di menu Printer & Nota.')),
-        );
-      }
-      return;
-    }
-
-    final settingsProv = context.read<SettingsProvider>();
-    final storeSettings = settingsProv.storeSettings;
-    
-    final String namaToko = settingsProv.namaToko.isNotEmpty ? settingsProv.namaToko.toUpperCase() : 'NAMA TOKO';
-    final String subHeader = storeSettings?['header_nama_toko'] ?? '';
-    final String headerHp = storeSettings?['header_hp'] ?? '';
-    final String footerNota = storeSettings?['footer_nota'] ?? '';
-    
-    final bool showNamaKasir = storeSettings?['show_nama_kasir'] ?? true;
-    final bool showFooter = storeSettings?['show_footer_nota'] ?? true;
-    final String paperSize = storeSettings?['paper_size'] ?? '58 mm';
-    
-    final int printWidth = (paperSize == '80 mm') ? 48 : 32;
-
-    final String nota = (widget.order['nota_number'] ?? 'LNDR-${(widget.order['id'] ?? 0).toString().padLeft(5, '0')}').toString();
-    final String customerName = (widget.order['customer_name'] ?? 'Pelanggan').toString();
-    final String kasirName = (widget.order['kasir_name'] ?? widget.order['user_name'] ?? 'Admin').toString();
-    final String parfum = (widget.order['parfum'] ?? 'Standard').toString();
-    final String paymentStatus = (widget.order['status_pembayaran'] ?? widget.order['payment_status'] ?? 'Belum Lunas').toString();
-    final String createdDate = _formatTanggal(widget.order['created_at']);
-    final String estDate = _formatTanggal(widget.order['estimated_at']);
-    final String notes = (widget.order['catatan'] ?? widget.order['notes'] ?? '-').toString();
-    final num totalPrice = num.tryParse(widget.order['total_price']?.toString() ?? '0') ?? 0;
-    final num discount = num.tryParse(widget.order['discount']?.toString() ?? '0') ?? 0;
-    final num subTotal = totalPrice + discount;
-
-    final List<Map<String, dynamic>> itemsList = _getItemsList();
-    final String lineDivider = '-' * printWidth;
-    final String doubleDivider = '=' * printWidth;
-
-    StringBuffer sb = StringBuffer();
-
-    sb.write("\x1B\x40");
-    sb.write("\x1B\x21\x00");
-    sb.write("\x1B\x4D\x00");
-    
-    sb.writeln("\n");
-
-    if (isCustomerMode) {
-      sb.write("\x1B\x61\x01");
-      sb.write("\x1D\x21\x11");
-      sb.writeln(namaToko);
-      sb.write("\x1D\x21\x00");
-      
-      if (subHeader.isNotEmpty) sb.writeln(subHeader);
-      if (headerHp.isNotEmpty && headerHp != '{{HP :}}') sb.writeln("NO. HP: $headerHp");
-      
-      sb.write("\x1B\x61\x00");
-      sb.writeln(lineDivider);
-      
-      sb.write("\x1B\x61\x01");
-      sb.write("\x1B\x45\x01");
-      sb.writeln(customerName.toUpperCase());
-      sb.write("\x1B\x45\x00");
-      sb.writeln(nota);
-      sb.write("\x1B\x61\x00");
-      
-      if (showNamaKasir) {
-        sb.writeln(_formatTwoColumns("Kasir:", kasirName, width: printWidth));
-      }
-      sb.writeln();
-      sb.writeln(_formatTwoColumns("Tgl Masuk", createdDate, width: printWidth));
-      sb.writeln(_formatTwoColumns("Est. Selesai", estDate, width: printWidth));
-      sb.writeln(lineDivider);
-
-      // 🟢 Parfum & Status di atas rincian item
-      sb.writeln(_formatTwoColumns("Parfum:", parfum, width: printWidth));
-      sb.writeln(_formatTwoColumns("STATUS:", paymentStatus.toUpperCase(), width: printWidth));
-      if (notes != '-' && notes.isNotEmpty) {
-        sb.writeln("(Ket: $notes)");
-      }
-      sb.writeln(lineDivider);
-      
-      // Rincian item layanan persis UI
-      for (var item in itemsList) {
-        final name = (item['service_name'] ?? item['name'] ?? 'Layanan').toString();
-        final unit = (item['unit'] ?? 'Kg').toString();
-        final rawQty = num.tryParse((item['qty'] ?? item['quantity'] ?? 1).toString()) ?? 1;
-        final formattedQty = (rawQty % 1 == 0) ? rawQty.toInt().toString() : rawQty.toStringAsFixed(2);
-        
-        final num itemPrice = num.tryParse((item['price'] ?? 0).toString()) ?? 0;
-        final num itemSubtotal = num.tryParse((item['subtotal'] ?? (rawQty * itemPrice)).toString()) ?? (rawQty * itemPrice);
-
-        sb.write("\x1B\x45\x01");
-        sb.writeln(name);
-        sb.write("\x1B\x45\x00");
-        sb.writeln(_formatTwoColumns("  $formattedQty $unit x ${_formatRupiah(itemPrice)}", _formatRupiah(itemSubtotal), width: printWidth));
-      }
-      sb.writeln(lineDivider);
-      
-      sb.writeln(_formatTwoColumns("Sub Total", _formatRupiah(subTotal), width: printWidth));
-      sb.writeln(_formatTwoColumns("Discount", _formatRupiah(discount), width: printWidth));
-      
-      sb.write("\x1B\x45\x01");
-      sb.writeln(_formatTwoColumns("TOTAL", _formatRupiah(totalPrice), width: printWidth));
-      sb.write("\x1B\x45\x00");
-      sb.writeln(lineDivider);
-      
-      sb.write("\x1B\x61\x01");
-      if (showFooter && footerNota.isNotEmpty) {
-        sb.writeln(footerNota);
-        sb.writeln();
-      }
-      sb.writeln("**** TERIMA KASIH ****");
-      sb.write("\x1B\x61\x00");
-      sb.writeln("\n\n");
-    } else {
-      sb.write("\x1B\x61\x01");
-      sb.writeln("[ NOTA PRODUKSI / WORKSHOP ]");
-      sb.writeln();
-      
-      sb.write("\x1D\x21\x11");
-      sb.writeln(namaToko);
-      sb.write("\x1D\x21\x00");
-      sb.writeln(nota);
-      
-      sb.write("\x1B\x45\x01");
-      sb.writeln("Pelanggan: ${customerName.toUpperCase()}");
-      sb.write("\x1B\x45\x00");
-      
-      sb.write("\x1B\x61\x00");
-      sb.writeln(doubleDivider);
-      
-      for (var item in itemsList) {
-        final name = (item['service_name'] ?? item['name'] ?? 'Layanan').toString();
-        final unit = (item['unit'] ?? 'Pcs').toString();
-        final rawQty = num.tryParse((item['qty'] ?? item['quantity'] ?? 1).toString()) ?? 1;
-        final formattedQty = (rawQty % 1 == 0) ? rawQty.toInt().toString() : rawQty.toStringAsFixed(2);
-        
-        final num itemPrice = num.tryParse((item['price'] ?? 0).toString()) ?? 0;
-        final num itemSubtotal = num.tryParse((item['subtotal'] ?? (rawQty * itemPrice)).toString()) ?? (rawQty * itemPrice);
-
-        sb.write("\x1B\x45\x01");
-        sb.writeln(name);
-        sb.write("\x1B\x45\x00");
-        sb.writeln(_formatTwoColumns("  $formattedQty $unit x ${_formatRupiah(itemPrice)}", _formatRupiah(itemSubtotal), width: printWidth));
-      }
-      sb.writeln(doubleDivider);
-      
-      sb.writeln(_formatTwoColumns("PARFUM:", parfum.toUpperCase(), width: printWidth));
-      sb.writeln(_formatTwoColumns("TGL MASUK:", createdDate, width: printWidth));
-      sb.writeln(_formatTwoColumns("DEADLINE:", estDate, width: printWidth));
-      sb.writeln("CATATAN PRODUKSI:\n$notes");
-      sb.writeln("$doubleDivider\n\n");
-    }
-
-    bool result = await PrintBluetoothThermal.writeString(
-      printText: PrintTextSize(size: 1, text: sb.toString()),
-    );
-
-    if (!result && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Gagal mengirim data ke mesin printer!')),
-      );
-    }
-  }
+	Future<void> _printReceiptToBluetooth(BuildContext context, bool isCustomerMode) async {
+	  // 🟢 STEP 1: CEK STATUS KONEKSI
+	  bool isConnected = await BluetoothHelper.isPrinterConnected();
+	  
+	  if (!isConnected) {
+	    print('️ Printer belum terhubung, mencoba auto-connect...');
+	    
+	    // Tampilkan loading dialog
+	    if (context.mounted) {
+	      showDialog(
+	        context: context,
+	        barrierDismissible: false,
+	        builder: (ctx) => AlertDialog(
+	          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+	          content: Row(
+	            children: [
+	              SizedBox(
+	                width: 24,
+	                height: 24,
+	                child: CircularProgressIndicator(
+	                  color: Colors.blue,
+	                  strokeWidth: 2,
+	                ),
+	              ),
+	              const SizedBox(width: 16),
+	              const Expanded(
+	                child: Column(
+	                  mainAxisSize: MainAxisSize.min,
+	                  crossAxisAlignment: CrossAxisAlignment.start,
+	                  children: [
+	                    Text(
+	                      'Menghubungkan Printer...',
+	                      style: TextStyle(
+	                        fontWeight: FontWeight.bold,
+	                        fontSize: 14,
+	                      ),
+	                    ),
+	                    SizedBox(height: 4),
+	                    Text(
+	                      'Mohon tunggu, sedang menghubungkan ke printer terakhir...',
+	                      style: TextStyle(fontSize: 11, color: Colors.grey),
+	                    ),
+	                  ],
+	                ),
+	              ),
+	            ],
+	          ),
+	        ),
+	      );
+	    }
+	    
+	    // Coba auto-connect
+	    final settingsProv = context.read<SettingsProvider>();
+	    bool autoConnectResult = await BluetoothHelper.autoConnectPrinter(settingsProv);
+	    
+	    // Tutup loading dialog
+	    if (context.mounted) {
+	      Navigator.pop(context);
+	    }
+	    
+	    if (!autoConnectResult) {
+	      if (context.mounted) {
+	        ScaffoldMessenger.of(context).showSnackBar(
+	          SnackBar(
+	            content: const Column(
+	              mainAxisSize: MainAxisSize.min,
+	              children: [
+	                Text(
+	                  'Gagal Menghubungkan Printer',
+	                  style: TextStyle(fontWeight: FontWeight.bold),
+	                ),
+	                SizedBox(height: 4),
+	                Text(
+	                  'Pastikan printer sudah di-pair di Bluetooth HP dan pernah terhubung sebelumnya.',
+	                  style: TextStyle(fontSize: 12),
+	                ),
+	              ],
+	            ),
+	            backgroundColor: Colors.red,
+	            duration: Duration(seconds: 5),
+	            behavior: SnackBarBehavior.floating,
+	            margin: const EdgeInsets.all(16),
+	          ),
+	        );
+	      }
+	      return;
+	    }
+	    
+	    // Sukses connect
+	    if (context.mounted) {
+	      ScaffoldMessenger.of(context).showSnackBar(
+	        SnackBar(
+	          content: const Text('✅ Printer berhasil terhubung! Mencetak...'),
+	          backgroundColor: Colors.green,
+	          duration: Duration(seconds: 2),
+	          behavior: SnackBarBehavior.floating,
+	          margin: const EdgeInsets.all(16),
+	        ),
+	      );
+	    }
+	  }
+	
+	  // 🟢 STEP 2: PROSES PRINTING
+	  final settingsProv = context.read<SettingsProvider>();
+	  final storeSettings = settingsProv.storeSettings;
+	  final String namaToko = settingsProv.namaToko.isNotEmpty ? settingsProv.namaToko.toUpperCase() : 'NAMA TOKO';
+	  final String subHeader = storeSettings?['header_nama_toko'] ?? '';
+	  final String headerHp = storeSettings?['header_hp'] ?? '';
+	  final String footerNota = storeSettings?['footer_nota'] ?? '';
+	  final bool showNamaKasir = storeSettings?['show_nama_kasir'] ?? true;
+	  final bool showFooter = storeSettings?['show_footer_nota'] ?? true;
+	  final String paperSize = storeSettings?['paper_size'] ?? '58 mm';
+	  final int printWidth = (paperSize == '80 mm') ? 48 : 32;
+	  
+	  final String nota = (widget.order['nota_number'] ?? 'LNDR-${(widget.order['id'] ?? 0).toString().padLeft(5, '0')}').toString();
+	  final String customerName = (widget.order['customer_name'] ?? 'Pelanggan').toString();
+	  final String kasirName = (widget.order['kasir_name'] ?? widget.order['user_name'] ?? 'Admin').toString();
+	  final String parfum = (widget.order['parfum'] ?? 'Standard').toString();
+	  final String paymentStatus = (widget.order['status_pembayaran'] ?? widget.order['payment_status'] ?? 'Belum Lunas').toString();
+	  final String createdDate = _formatTanggal(widget.order['created_at']);
+	  final String estDate = _formatTanggal(widget.order['estimated_at']);
+	  final String notes = (widget.order['catatan'] ?? widget.order['notes'] ?? '-').toString();
+	  final num totalPrice = num.tryParse(widget.order['total_price']?.toString() ?? '0') ?? 0;
+	  final num discount = num.tryParse(widget.order['discount']?.toString() ?? '0') ?? 0;
+	  final num subTotal = totalPrice + discount;
+	  final List<Map<String, dynamic>> itemsList = _getItemsList();
+	  
+	  final String lineDivider = '-' * printWidth;
+	  final String doubleDivider = '=' * printWidth;
+	  
+	  StringBuffer sb = StringBuffer();
+	  sb.write("\x1B\x40");
+	  sb.write("\x1B\x21\x00");
+	  sb.write("\x1B\x4D\x00");
+	  sb.writeln("\n");
+	  
+	  if (isCustomerMode) {
+	    sb.write("\x1B\x61\x01");
+	    sb.write("\x1D\x21\x11");
+	    sb.writeln(namaToko);
+	    sb.write("\x1D\x21\x00");
+	    if (subHeader.isNotEmpty) sb.writeln(subHeader);
+	    if (headerHp.isNotEmpty && headerHp != '{{HP :}}') sb.writeln("NO. HP: $headerHp");
+	    sb.write("\x1B\x61\x00");
+	    sb.writeln(lineDivider);
+	    sb.write("\x1B\x61\x01");
+	    sb.write("\x1B\x45\x01");
+	    sb.writeln(customerName.toUpperCase());
+	    sb.write("\x1B\x45\x00");
+	    sb.writeln(nota);
+	    sb.write("\x1B\x61\x00");
+	    if (showNamaKasir) {
+	      sb.writeln(_formatTwoColumns("Kasir:", kasirName, width: printWidth));
+	    }
+	    sb.writeln();
+	    sb.writeln(_formatTwoColumns("Tgl Masuk", createdDate, width: printWidth));
+	    sb.writeln(_formatTwoColumns("Est. Selesai", estDate, width: printWidth));
+	    sb.writeln(lineDivider);
+	    sb.writeln(_formatTwoColumns("Parfum:", parfum, width: printWidth));
+	    sb.writeln(_formatTwoColumns("STATUS:", paymentStatus.toUpperCase(), width: printWidth));
+	    if (notes != '-' && notes.isNotEmpty) {
+	      sb.writeln("(Ket: $notes)");
+	    }
+	    sb.writeln(lineDivider);
+	    
+	    for (var item in itemsList) {
+	      final name = (item['service_name'] ?? item['name'] ?? 'Layanan').toString();
+	      final unit = (item['unit'] ?? 'Kg').toString();
+	      final rawQty = num.tryParse((item['qty'] ?? item['quantity'] ?? 1).toString()) ?? 1;
+	      final formattedQty = (rawQty % 1 == 0) ? rawQty.toInt().toString() : rawQty.toStringAsFixed(2);
+	      final num itemPrice = num.tryParse((item['price'] ?? 0).toString()) ?? 0;
+	      final num itemSubtotal = num.tryParse((item['subtotal'] ?? (rawQty * itemPrice)).toString()) ?? (rawQty * itemPrice);
+	      sb.write("\x1B\x45\x01");
+	      sb.writeln(name);
+	      sb.write("\x1B\x45\x00");
+	      sb.writeln(_formatTwoColumns("  $formattedQty $unit x ${_formatRupiah(itemPrice)}", _formatRupiah(itemSubtotal), width: printWidth));
+	    }
+	    sb.writeln(lineDivider);
+	    sb.writeln(_formatTwoColumns("Sub Total", _formatRupiah(subTotal), width: printWidth));
+	    sb.writeln(_formatTwoColumns("Discount", _formatRupiah(discount), width: printWidth));
+	    sb.write("\x1B\x45\x01");
+	    sb.writeln(_formatTwoColumns("TOTAL", _formatRupiah(totalPrice), width: printWidth));
+	    sb.write("\x1B\x45\x00");
+	    sb.writeln(lineDivider);
+	    sb.write("\x1B\x61\x01");
+	    if (showFooter && footerNota.isNotEmpty) {
+	      sb.writeln(footerNota);
+	      sb.writeln("\n");
+	    }
+	    sb.writeln("**** TERIMA KASIH ****");
+	    sb.write("\x1B\x61\x00");
+	    sb.writeln("\n");
+	  } else {
+	    sb.write("\x1B\x61\x01");
+	    sb.writeln("[ NOTA PRODUKSI / WORKSHOP ]");
+	    sb.writeln("\n");
+	    sb.write("\x1D\x21\x11");
+	    sb.writeln(namaToko);
+	    sb.write("\x1D\x21\x00");
+	    sb.writeln(nota);
+	    sb.write("\x1B\x45\x01");
+	    sb.writeln("Pelanggan: ${customerName.toUpperCase()}");
+	    sb.write("\x1B\x45\x00");
+	    sb.write("\x1B\x61\x00");
+	    sb.writeln(doubleDivider);
+	    for (var item in itemsList) {
+	      final name = (item['service_name'] ?? item['name'] ?? 'Layanan').toString();
+	      final unit = (item['unit'] ?? 'Pcs').toString();
+	      final rawQty = num.tryParse((item['qty'] ?? item['quantity'] ?? 1).toString()) ?? 1;
+	      final formattedQty = (rawQty % 1 == 0) ? rawQty.toInt().toString() : rawQty.toStringAsFixed(2);
+	      final num itemPrice = num.tryParse((item['price'] ?? 0).toString()) ?? 0;
+	      final num itemSubtotal = num.tryParse((item['subtotal'] ?? (rawQty * itemPrice)).toString()) ?? (rawQty * itemPrice);
+	      sb.write("\x1B\x45\x01");
+	      sb.writeln(name);
+	      sb.write("\x1B\x45\x00");
+	      sb.writeln(_formatTwoColumns("  $formattedQty $unit x ${_formatRupiah(itemPrice)}", _formatRupiah(itemSubtotal), width: printWidth));
+	    }
+	    sb.writeln(doubleDivider);
+	    sb.writeln(_formatTwoColumns("PARFUM:", parfum.toUpperCase(), width: printWidth));
+	    sb.writeln(_formatTwoColumns("TGL MASUK:", createdDate, width: printWidth));
+	    sb.writeln(_formatTwoColumns("DEADLINE:", estDate, width: printWidth));
+	    sb.writeln("CATATAN PRODUKSI:\n$notes");
+	    sb.writeln("$doubleDivider\n");
+	  }
+	  
+	  bool result = await PrintBluetoothThermal.writeString(
+	    printText: PrintTextSize(size: 1, text: sb.toString()),
+	  );
+	  
+	  if (!result && context.mounted) {
+	    ScaffoldMessenger.of(context).showSnackBar(
+	      const SnackBar(content: Text('Gagal mengirim data ke mesin printer!')),
+	    );
+	  } else if (context.mounted) {
+	    ScaffoldMessenger.of(context).showSnackBar(
+	      SnackBar(
+	        content: Text('✅ Nota ${isCustomerMode ? "Customer" : "Produksi"} berhasil dicetak!'),
+	        backgroundColor: Colors.green,
+	        duration: Duration(seconds: 2),
+	        behavior: SnackBarBehavior.floating,
+	        margin: const EdgeInsets.all(16),
+	      ),
+	    );
+	  }
+	}
 
   @override
   Widget build(BuildContext context) {

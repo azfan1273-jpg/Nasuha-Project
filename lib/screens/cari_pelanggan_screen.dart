@@ -515,14 +515,9 @@ class _CariPelangganScreenState extends State<CariPelangganScreen> {
                                       ),
                                     ],
                                   ),
-                                  trailing: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      // 🟢 BADGE 3D KODE PELANGGAN
-                                      if (custCode.isNotEmpty)
-                                        Container(
+                                  trailing: custCode.isNotEmpty
+                                      ? Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                          margin: const EdgeInsets.only(right: 4),
                                           decoration: BoxDecoration(
                                             color: accentColor,
                                             borderRadius: BorderRadius.circular(6),
@@ -543,25 +538,8 @@ class _CariPelangganScreenState extends State<CariPelangganScreen> {
                                               letterSpacing: 0.8,
                                             ),
                                           ),
-                                        ),
-                                      // 🟢 TOMBOL EDIT (PENSIL)
-                                      IconButton(
-                                        icon: const Icon(Icons.edit_outlined, color: Colors.grey, size: 20),
-                                        tooltip: 'Edit Pelanggan',
-                                        constraints: const BoxConstraints(),
-                                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                                        onPressed: () => _showEditPelangganDialog(cust),
-                                      ),
-                                      // 🟢 TOMBOL HAPUS DI SEBELAH KANAN PENSIL
-                                      IconButton(
-                                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
-                                        tooltip: 'Hapus Pelanggan',
-                                        constraints: const BoxConstraints(),
-                                        padding: const EdgeInsets.only(left: 6, right: 4),
-                                        onPressed: () => _showDeleteConfirmation(context, cust),
-                                      ),
-                                    ],
-                                  ),
+                                        )
+                                      : null,
                                   onTap: () {
                                     if (widget.isSelectionMode) {
                                       Navigator.pop(context, cust);

@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../providers/settings_provider.dart';
 import 'kasir_home_screen.dart';
 import 'order_status_screen.dart';
+import 'get_order_screen.dart';
 
 import 'owner_screen.dart';
 import 'kasir_screen.dart';
@@ -18,7 +19,11 @@ import '../providers/order_provider.dart';
 import '../helpers/database_helper.dart';
 import 'discount_screen.dart';
 import 'login_screen.dart';
-import 'chat_screen.dart'; 
+ 
+import 'aa_pengumuman_developer.dart';
+import '../helpers/notification_helper.dart';
+
+
 
 
 class KasirPageManager extends StatefulWidget {
@@ -39,10 +44,30 @@ class _KasirPageManagerState extends State<KasirPageManager> {
   // State untuk Broadcast Announcement dari Developer
   Map<String, dynamic>? _announcement;
 
+// initstate untuk notification hp order pesanan baru
   @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: 0);
+    
+    // Init Notifikasi
+    NotificationHelper.init();
+  
+    // Listener Realtime untuk Notifikasi
+    Supabase.instance.client
+        .from('online_orders')
+        .stream(primaryKey: ['id'])
+        .eq('status', 'PENDING')
+        .listen((data) {
+      // Cek kalau ada data baru masuk
+      if (data.isNotEmpty) {
+        final latestOrder = data.first;
+        NotificationHelper.showNewOrderNotification(
+          customerName: latestOrder['customer_name'] ?? 'Pelanggan',
+          serviceName: latestOrder['service_name'] ?? 'Layanan',
+        );
+      }
+    });
   
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (mounted) {
@@ -53,25 +78,24 @@ class _KasirPageManagerState extends State<KasirPageManager> {
     });
   }
 
-  Future<void> _fetchDeveloperAnnouncement() async {
-    try {
-      final res = await Supabase.instance.client
-          .from('app_announcements')
-          .select()
-          .eq('is_active', true)
-          .order('created_at', ascending: false)
-          .limit(1)
-          .maybeSingle();
-
-      if (res != null && mounted) {
-        setState(() {
-          _announcement = res;
-        });
+ Future<void> _fetchDeveloperAnnouncement() async {
+      try {
+        final List<dynamic> res = await Supabase.instance.client
+            .from('app_announcements')
+            .select()
+            .eq('is_active', true)
+            .order('created_at', ascending: false)
+            .limit(1);
+  
+        if (mounted && res.isNotEmpty) {
+          setState(() {
+            _announcement = res.first as Map<String, dynamic>;
+          });
+        }
+      } catch (e) {
+        debugPrint('Error Pengumuman: $e');
       }
-    } catch (e) {
-      debugPrint('Error Pengumuman: $e');
     }
-  }
 
   Future<void> _openAnnouncementUrl(String urlString) async {
     final Uri url = Uri.parse(urlString);
@@ -104,35 +128,8 @@ class _KasirPageManagerState extends State<KasirPageManager> {
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: settings.bgDark,
-      drawer: _buildCustomSidebar(context, settings, emailReal, namaTokoReal),
+      drawer: _buildCustomSidebar(context, settings, emailReal, namaTokoReal),      
 
-  	 // 🟢 TOMBOL CHAT MENGAMBANG KHUSUS KASIR
-     floatingActionButton: settings.userRole == 'kasir'
-     ? Padding(
-         padding: const EdgeInsets.only(bottom: 50.0), // 🟢 Digeser ke atas sedikit agar tidak menutupi menu bawah
-         child: FloatingActionButton(
-           onPressed: () {
-             Navigator.push(
-               context,
-               MaterialPageRoute(
-                 builder: (_) => const ChatScreen(
-                   chatType: 'kasir_kasir',
-                   title: 'Ruang Gosip Kasir 🤫',
-                 ),
-               ),
-             );
-           },
-           backgroundColor: settings.accentColor,
-           elevation: 4,
-           child: const Icon(
-             Icons.chat_bubble_rounded,
-             color: Colors.white,
-             size: 22,
-           ),
-         ),
-       )
-     : null, // Jika owner yang login, tombolnya null (tidak muncul)
-      
       body: SafeArea(
         child: Column(
           children: [
@@ -160,15 +157,17 @@ class _KasirPageManagerState extends State<KasirPageManager> {
             const SizedBox(height: 8),
 
             // TAB BAR NAVIGASI
-            Container(
+           Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.start,
                 children: [
-                  _buildTabButton(0, 'Beranda Kasir', Icons.home_rounded, settings.accentColor),
-                  const SizedBox(width: 8),
-                  _buildTabButton(1, 'Order Status', Icons.bar_chart_rounded, settings.accentColor),
+                  _buildTabButton(0, 'Beranda', Icons.home_rounded, settings.accentColor),
+                  const SizedBox(width: 6),
+                  _buildTabButton(1, 'Order', Icons.bar_chart_rounded, settings.accentColor),
+                  const SizedBox(width: 6),
+                  _buildTabButton(2, 'Pesanan Masuk', Icons.inbox_rounded, settings.accentColor),
                 ],
               ),
             ),
@@ -187,6 +186,10 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                   const Material(
                     color: Colors.transparent,
                     child: OrderStatusScreen(),
+                  ),
+                  const Material(
+                    color: Colors.transparent,
+                    child: GetOrderScreen(),
                   ),
                 ],
               ),
@@ -225,9 +228,10 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            title,
-                            overflow: TextOverflow.ellipsis,
+                          // 🟢 GANTI DENGAN MARQUEETEXT AGAR TITLE BERJALAN
+                          MarqueeText(
+                            text: title,
+                            velocity: 25.0,
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
@@ -509,7 +513,7 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                       settings: settings,
                       onTap: () {
                         Navigator.pop(context);
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const EditLayananScreen()));
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => EditLayananScreen()));
                       },
                     ),
                     _buildSidebarItem(

@@ -23,25 +23,35 @@ class _DaftarOrderByStatusScreenState extends State<DaftarOrderByStatusScreen> {
   List<Map<String, dynamic>> _currentOrders = [];
   bool _isLoading = true;
 
+  // 🟢 BARU: jumlah order yang tampil di layar (mulai 10, tambah 10 tiap klik tombol)
+  int _visibleCount = 10;
+
   @override
   void initState() {
     super.initState();
     _fetchOrders();
   }
 
+  // 🟢 BARU: potongan list yang BOLEH tampil (dibatasi _visibleCount)
+  List<Map<String, dynamic>> get _visibleOrders {
+    if (_currentOrders.length <= _visibleCount) return _currentOrders;
+    return _currentOrders.sublist(0, _visibleCount);
+  }
+
+  // 🟢 BARU: true kalau masih ada data yang disembunyikan (buat munculin tombol)
+  bool get _hasMoreOrders => _currentOrders.length > _visibleCount;
+
   // 1. TARIK DATA DARI SUPABASE SAAT HALAMAN DIBUKA
   Future<void> _fetchOrders() async {
     setState(() {
       _isLoading = true;
     });
-
     try {
       final storeId = context.read<SettingsProvider>().storeId;
       if (storeId == null) {
         if (mounted) setState(() => _isLoading = false);
         return;
       }
-
       final List<dynamic> data = await supabase.rpc(
         'get_orders_by_dashboard_category',
         params: {
@@ -49,7 +59,6 @@ class _DaftarOrderByStatusScreenState extends State<DaftarOrderByStatusScreen> {
           'p_category': widget.categoryKey,
         },
       );
-
       if (mounted) {
         setState(() {
           _currentOrders = data.map((record) {
@@ -83,17 +92,14 @@ class _DaftarOrderByStatusScreenState extends State<DaftarOrderByStatusScreen> {
     try {
       final storeId = context.read<SettingsProvider>().storeId;
       if (storeId == null) return;
-
       final orderId = int.tryParse(order['id'].toString());
       if (orderId == null) return;
-
       await supabase.rpc('update_order_status_by_store', params: {
         'p_order_id': orderId,
         'p_store_id': storeId,
         'p_new_status': newStatus,
         'p_metode_pembayaran': metodePembayaran,
       });
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -115,67 +121,67 @@ class _DaftarOrderByStatusScreenState extends State<DaftarOrderByStatusScreen> {
   }
 
   // 3. DIALOG PILIH STATUS (DENGAN REDIREKSI WAJIB BAYAR)
-      void _showPilihStatusDialog(Map<String, dynamic> order) {
-        final List<String> statusList = ['Antrian', 'Proses', 'Selesai', 'Batal'];
-    
-        showDialog(
-          context: context,
-          builder: (dialogCtx) => AlertDialog(
-            title: Text(
-              'Ubah Status Order #${order['id']}',
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: statusList.map((status) {
-                final isCurrent = (order['status'] ?? '').toString().toLowerCase() == status.toLowerCase();
-                return ListTile(
-                  title: Text(
-                    status,
-                    style: TextStyle(
-                      fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                      color: isCurrent ? Colors.pink : Colors.black87,
-                    ),
-                  ),
-                  trailing: isCurrent ? const Icon(Icons.check_circle, color: Colors.pink) : null,
-                  onTap: () {
-                    Navigator.pop(dialogCtx);
-                    if (!isCurrent) {
-                      // 🟢 JIKA DIUBAH KE SELESAI, CEK KETAT STATUS PEMBAYARAN
-                      if (status.toLowerCase() == 'selesai') {
-                        final String paymentStatus = (order['status_pembayaran'] ?? 
-                                                      order['payment_status'] ?? 
-                                                      '').toString().trim().toUpperCase();
-                        final String rawPayment = (order['metode_pembayaran'] ?? 
-                                                   order['payment_method'] ?? 
-                                                   '').toString().trim().toLowerCase();
-    
-                        // Cetak data ke terminal Termux untuk analisa
-                        debugPrint('--- LOG CEK BAYAR ORDER #${order['id']} ---');
-                        debugPrint('status_pembayaran: "$paymentStatus"');
-                        debugPrint('metode_pembayaran: "$rawPayment"');
-    
-                        // Daftar metode pembayaran sah
-                        final validMethods = ['tunai', 'qris', 'transfer', 'debit', 'edc', 'cash', 'qris / transfer'];
-                        final bool isLunas = paymentStatus == 'LUNAS' || validMethods.contains(rawPayment);
-    
-                        // 🛑 JIKA BELUM LUNAS, PAKSA MUNCULKAN POP-UP PEMBAYARAN!
-                        if (!isLunas) {
-                          _showPilihMetodePembayaranDialog(order, status);
-                          return; // STOP! Batal update status sebelum bayar dipilih
-                        }
-                      }
-    
-                      // Jika sudah lunas atau ubah ke status lain (Proses/Batal), eksekusi update
-                      _updateStatus(order, status);
+  void _showPilihStatusDialog(Map<String, dynamic> order) {
+    final List<String> statusList = ['Antrian', 'Proses', 'Selesai', 'Batal'];
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: Text(
+          'Ubah Status Order #${order['id']}',
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: statusList.map((status) {
+            final isCurrent = (order['status'] ?? '').toString().toLowerCase() == status.toLowerCase();
+            return ListTile(
+              title: Text(
+                status,
+                style: TextStyle(
+                  fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                  color: isCurrent ? Colors.pink : Colors.black87,
+                ),
+              ),
+              trailing: isCurrent ? const Icon(Icons.check_circle, color: Colors.pink) : null,
+              onTap: () {
+                Navigator.pop(dialogCtx);
+                if (!isCurrent) {
+                  // 🟢 JIKA DIUBAH KE SELESAI, CEK KETAT STATUS PEMBAYARAN
+                  if (status.toLowerCase() == 'selesai') {
+                    final String paymentStatus = (order['status_pembayaran'] ??
+                            order['payment_status'] ??
+                            '')
+                        .toString()
+                        .trim()
+                        .toUpperCase();
+                    final String rawPayment = (order['metode_pembayaran'] ??
+                            order['payment_method'] ??
+                            '')
+                        .toString()
+                        .trim()
+                        .toLowerCase();
+
+                    debugPrint('--- LOG CEK BAYAR ORDER #${order['id']} ---');
+                    debugPrint('status_pembayaran: "$paymentStatus"');
+                    debugPrint('metode_pembayaran: "$rawPayment"');
+
+                    final validMethods = ['tunai', 'qris', 'transfer', 'debit', 'edc', 'cash', 'qris / transfer'];
+                    final bool isLunas = paymentStatus == 'LUNAS' || validMethods.contains(rawPayment);
+
+                    if (!isLunas) {
+                      _showPilihMetodePembayaranDialog(order, status);
+                      return;
                     }
-                  },
-                );
-              }).toList(),
-            ),
-          ),
-        );
-      }
+                  }
+                  _updateStatus(order, status);
+                }
+              },
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
 
   // 4. DIALOG PILIH METODE PEMBAYARAN
   void _showPilihMetodePembayaranDialog(Map<String, dynamic> order, String newStatus) {
@@ -231,11 +237,43 @@ class _DaftarOrderByStatusScreenState extends State<DaftarOrderByStatusScreen> {
                     )
                   : ListView.builder(
                       padding: const EdgeInsets.all(12),
-                      itemCount: _currentOrders.length,
+                      // 🟢 UBAH: jumlah yang tampil + 1 slot tambahan buat tombol (kalau masih ada sisa)
+                      itemCount: _visibleOrders.length + (_hasMoreOrders ? 1 : 0),
                       itemBuilder: (context, index) {
-                        final order = _currentOrders[index];
-                        final num totalPrice = num.tryParse((order['total_price'] ?? order['total'] ?? '0').toString()) ?? 0;
+                        // 🟢 BARU: kalau index kena slot tambahan -> tampilin tombol Muat 10 Lagi
+                        if (_hasMoreOrders && index == _visibleOrders.length) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: SizedBox(
+                              width: double.infinity,
+                              height: 44,
+                              child: OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: Colors.pink, width: 1.5),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _visibleCount += 10;
+                                  });
+                                },
+                                icon: const Icon(Icons.arrow_downward, color: Colors.pink, size: 18),
+                                label: Text(
+                                  'Muat 10 Lagi (sisa ${_currentOrders.length - _visibleCount})',
+                                  style: const TextStyle(
+                                    color: Colors.pink,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }
 
+                        // 🟢 UBAH: ambil data dari _visibleOrders (bukan _currentOrders)
+                        final order = _visibleOrders[index];
+                        final num totalPrice = num.tryParse((order['total_price'] ?? order['total'] ?? '0').toString()) ?? 0;
                         return Card(
                           margin: const EdgeInsets.only(bottom: 8),
                           child: ListTile(

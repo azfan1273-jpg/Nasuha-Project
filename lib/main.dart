@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'providers/settings_provider.dart';
 import 'providers/order_provider.dart';
@@ -8,18 +9,19 @@ import 'screens/login_screen.dart';
 import 'screens/kasir_page_manager.dart';
 import 'screens/splash_screen.dart';
 
-const String supabaseUrl = 'https://elesjrpswpppbliaifbw.supabase.co';
-const String supabaseAnonKey = 'sb_publishable_iX0RtTSOEZjtsyz_wj4-aw_hgPjOIUZ';
-
 SupabaseClient get supabase => Supabase.instance.client;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Load file .env dulu
+  await dotenv.load(fileName: ".env");
+
   await Supabase.initialize(
-    url: supabaseUrl,
-    anonKey: supabaseAnonKey,
+    url: dotenv.env['SUPABASE_URL']!,
+    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
+  
 
   runApp(
     MultiProvider(

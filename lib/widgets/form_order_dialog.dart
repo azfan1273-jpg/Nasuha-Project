@@ -203,7 +203,7 @@ class FormOrderDialogState extends State<FormOrderDialog> {
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
-        builder: (context) => const DaftarLayananScreen(),
+        builder: (context) => DaftarLayananScreen(),
       ),
     );
 
@@ -295,20 +295,32 @@ class FormOrderDialogState extends State<FormOrderDialog> {
       final List<Map<String, dynamic>> itemsPayload = _selectedServices.map((s) {
         final double price = (s['price'] as num).toDouble();
         final double qty = (s['quantity'] as num).toDouble();
+        final subtotal = price * qty;
+        
         return {
           'service_name': s['name'] ?? '',
-          'price': price,
+          'price': price.round(),
           'qty': qty, 
-          'subtotal': price * qty,
+          'subtotal': subtotal.round(),
           'unit': s['unit'] ?? 'Kg',
         };
       }).toList();
+
+      // Hitung total
+      final totalPrice = itemsPayload.fold<double>(
+        0, 
+        (sum, item) => sum + (item['subtotal'] as double)
+      ).round(); // ✅ ROUND TOTAL
+      
+
+      final customerCode = _selectedCustomer?['customer_code']?.toString() ?? '';
 
       // 🟢 FIX: Gunakan .toUtc().toIso8601String() agar tanggal & jam dikirim berstandar UTC presisi
       await supabase.rpc('create_order_with_items', params: {
         'p_store_id': currentStoreId,
         'p_customer_name': _selectedCustomer!['name'],
         'p_customer_phone': _selectedCustomer!['phone'] ?? '-',
+        'p_customer_code': customerCode,
         'p_service_summary': serviceNames,
         'p_total_price': _totalPrice,
         'p_estimated_at': estimatedDate.toUtc().toIso8601String(),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'edit_layanan_screen.dart';
 import 'package:provider/provider.dart';
 import '../providers/settings_provider.dart';
 
@@ -15,18 +14,25 @@ class DaftarLayananScreen extends StatefulWidget {
 
 class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
   static const Color _bgDark = Color(0xFFFAF5F7);
-  static const Color _cardDark = Color(0xFFFCE7F3);
-  static const Color _goldAccent = Color(0xFFEC4899);
+  static const Color _pinkAccent = Color(0xFFEC4899);
   static const Color _textBlack = Color(0xFF111827);
 
   final TextEditingController _searchController = TextEditingController();
   
+  // Controller Form Tambah / Edit
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _priceController = TextEditingController();
+  final TextEditingController _estController = TextEditingController();
+
   List<Map<String, dynamic>> _servicesList = [];
-  List<String> _categoriesList = ['Semua'];
+  List<String> _categoriesList = [];
   
-  String _selectedCategory = 'Semua';
+  String _selectedCategory = 'Kiloan';
+  String _selectedUnit = 'kg';
+  String _selectedEstUnit = 'Hari'; // Pilihan waktu estimasi (Hari/Jam)
   String _searchQuery = '';
   bool _isLoading = true;
+  String? _editingServiceId;
 
   @override
   void initState() {
@@ -37,17 +43,18 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _nameController.dispose();
+    _priceController.dispose();
+    _estController.dispose();
     super.dispose();
   }
 
   String _formatRupiah(num number) {
     final String str = number.toInt().toString();
     final RegExp reg = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
-    final String result = str.replaceAllMapped(reg, (Match m) => '${m[1]}.');
-    return 'Rp $result';
+    return 'Rp ${str.replaceAllMapped(reg, (Match m) => '${m[1]}.')}';
   }
 
-  // 🟢 LOAD DATA MENGGUNAKAN ENGINE RPC BACKEND SUPABASE
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
@@ -56,315 +63,527 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
         if (mounted) setState(() => _isLoading = false);
         return;
       }
-
-      // Panggil Stored Procedure get_services_by_store
+  
       final response = await supabase.rpc('get_services_by_store', params: {
         'p_store_id': storeId,
         'p_keyword': '',
       });
-
+  
       final servicesData = List<Map<String, dynamic>>.from(response ?? []);
-
-      List<String> rawCategories = [];
-      for (var item in servicesData) {
-        final catName = (item['category'] ?? '').toString().trim();
-        if (catName.isNotEmpty && !rawCategories.contains(catName)) {
-          rawCategories.add(catName);
+  
+      // Ambil kategori unik dari database Supabase
+      final Set<String> fetchedCategories = {};
+      for (var service in servicesData) {
+        final cat = (service['category'] ?? '').toString().trim();
+        if (cat.isNotEmpty) {
+          fetchedCategories.add(cat);
         }
       }
-
+  
+      List<String> finalCategories = fetchedCategories.toList();
+      if (finalCategories.isEmpty) {
+        finalCategories = ['Kiloan', 'Satuan'];
+      }
+  
       if (mounted) {
         setState(() {
           _servicesList = servicesData;
-          _categoriesList = ['Semua', ...rawCategories];
+          _categoriesList = finalCategories;
+          if (finalCategories.isNotEmpty) {
+            _selectedCategory = finalCategories.first;
+          }
           _isLoading = false;
         });
       }
     } catch (e) {
-      debugPrint('Error fetch services RPC: $e');
+      debugPrint('Error fetch services: $e');
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
   List<Map<String, dynamic>> get _filteredServices {
+    if (_searchQuery.isEmpty) return _servicesList;
     return _servicesList.where((service) {
       final name = (service['name'] ?? '').toString().toLowerCase();
-      final category = (service['category'] ?? '').toString().toLowerCase();
-      final query = _searchQuery.toLowerCase();
-
-      final matchesSearch = name.contains(query);
-      final matchesCategory = _selectedCategory == 'Semua' ||
-          category == _selectedCategory.toLowerCase();
-
-      return matchesSearch && matchesCategory;
+      return name.contains(_searchQuery.toLowerCase());
     }).toList();
   }
 
-  Future<void> _navigateToEditLayanan() async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const EditLayananScreen()),
-    );
-    _loadData();
+  void _resetForm() {
+    _editingServiceId = null;
+    _nameController.clear();
+    _priceController.clear();
+    _estController.clear();
+    _selectedCategory = _categoriesList.isNotEmpty ? _categoriesList.first : 'Kiloan';
+    _selectedUnit = 'kg';
+    _selectedEstUnit = 'Hari';
   }
 
-  Future<double?> _showQtyDialog(Map<String, dynamic> service) async {
-    final qtyController = TextEditingController(text: '');
-    final unit = service['unit'] ?? 'Kg';
+  Future<void> _saveLayanan() async {
+    final name = _nameController.text.trim();
+    final price = double.tryParse(_priceController.text.trim()) ?? 0;
+    final est = int.tryParse(_estController.text.trim()) ?? 1;
+    final storeId = context.read<SettingsProvider>().storeId;
 
-    final result = await showDialog<double>(
-      context: context,
-      builder: (dialogCtx) => AlertDialog(
-        backgroundColor: _bgDark,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          service['name'] ?? 'Jumlah Order',
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _textBlack),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Harga: ${_formatRupiah((service['price'] as num?) ?? 0)} / $unit',
-              style: const TextStyle(
-                fontSize: 11,
-                color: Colors.black,
-                fontWeight: FontWeight.bold,
-              ),
+    if (name.isEmpty || price <= 0 || storeId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nama dan Biaya Layanan wajib diisi!'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    try {
+      final payload = {
+        'name': name,
+        'category': _selectedCategory,
+        'unit': _selectedUnit,
+        'price': price,
+        'estimated_days': est,
+        'estimated_unit': _selectedEstUnit,
+      };
+
+      if (_editingServiceId != null) {
+        await supabase.from('services').update(payload).eq('id', _editingServiceId!);
+      } else {
+        await supabase.from('services').insert({
+          'store_id': storeId,
+          ...payload,
+        });
+      }
+
+      _resetForm();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Layanan berhasil disimpan!'), backgroundColor: Colors.green),
+        );
+      }
+      _loadData();
+    } catch (e) {
+      debugPrint('Error save service: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal menyimpan: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteLayanan(String id) async {
+    try {
+      await supabase.from('services').delete().eq('id', id);
+      _loadData();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Layanan berhasil dihapus')),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error delete service: $e');
+    }
+  }
+
+  void _showTambahKategoriDialog(BuildContext mainContext, StateSetter setPopUpState) {
+    final catController = TextEditingController();
+  
+    showDialog(
+      context: mainContext,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Tambah Kategori Baru', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: catController,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: 'Contoh: Sepatu / Helm',
+            hintStyle: const TextStyle(fontSize: 12),
+            filled: true,
+            fillColor: Colors.grey.shade100,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide.none,
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: qtyController,
-              autofocus: true,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-              decoration: InputDecoration(
-                labelText: 'Jumlah / Qty ($unit)',
-                hintText: 'Contoh: 2.5 atau 3',
-                hintStyle: const TextStyle(
-                  color: Colors.black38,
-                  fontSize: 12,
-                  fontWeight: FontWeight.normal,
-                ),
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10), 
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogCtx),
+            onPressed: () => Navigator.pop(ctx),
             child: const Text('Batal', style: TextStyle(color: Colors.grey, fontSize: 12)),
           ),
-         ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _goldAccent,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEC4899)),
             onPressed: () {
-              final qty = double.tryParse(qtyController.text.replaceAll(',', '.'));
-              if (qty != null && qty > 0) {
-                // 🟢 PERBAIKAN DI SINI: Tutup dialog input qty dulu dengan membawa nilai qty
-                Navigator.pop(dialogCtx, qty);
+              final newCat = catController.text.trim();
+              if (newCat.isNotEmpty) {
+                setState(() {
+                  if (!_categoriesList.contains(newCat)) {
+                    _categoriesList.add(newCat);
+                  }
+                });
+                setPopUpState(() {
+                  _selectedCategory = newCat;
+                });
               }
+              Navigator.pop(ctx);
             },
-            child: const Text('TAMBAHKAN', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+            child: const Text('SIMPAN', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
+  }
 
-    qtyController.dispose();
-    return result;
+  void _openTambahPopUp([Map<String, dynamic>? item]) {
+    if (item != null) {
+      _editingServiceId = item['id'].toString();
+      _nameController.text = item['name'] ?? '';
+      _priceController.text = (item['price'] ?? 0).toString();
+      _estController.text = (item['estimated_days'] ?? 1).toString();
+      _selectedCategory = item['category'] ?? 'Kiloan';
+      _selectedUnit = item['unit'] ?? 'kg';
+      _selectedEstUnit = item['estimated_unit'] ?? 'Hari';
+    } else {
+      _resetForm();
+    }
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setPopUpState) {
+            return Dialog(
+              backgroundColor: const Color(0xFFFAF5F7),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16.0),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            _editingServiceId != null ? 'Edit Layanan' : 'Tambah Layanan',
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _textBlack),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded, size: 20),
+                            onPressed: () => Navigator.pop(dialogContext),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+
+                      // List Kategori Scroll Horizontal (+ Tombol Kategori)
+                      SizedBox(
+                        height: 34,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: _categoriesList.length + 1,
+                          separatorBuilder: (_, __) => const SizedBox(width: 6),
+                          itemBuilder: (context, index) {
+                            if (index == 0) {
+                              return ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF10B981),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                ),
+                                onPressed: () {
+                                  _showTambahKategoriDialog(context, setPopUpState);
+                                },
+                                icon: const Icon(Icons.add, color: Colors.white, size: 14),
+                                label: const Text(
+                                  'Kategori',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              );
+                            }
+                      
+                            final cat = _categoriesList[index - 1];
+                            final isSelected = _selectedCategory == cat;
+                            return GestureDetector(
+                              onTap: () {
+                                setPopUpState(() => _selectedCategory = cat);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: isSelected ? const Color(0xFFBE185D) : const Color(0xFF831843),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  cat,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Nama Layanan Input
+                      const Text('Nama Layanan', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _textBlack)),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: _nameController,
+                        decoration: InputDecoration(
+                          hintText: 'Contoh: Cuci Komplit / Cuci Lipat',
+                          hintStyle: const TextStyle(fontSize: 12, color: Colors.grey),
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Satuan Hitungan (Radio Buttons)
+                      const Text('Satuan Hitungan', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _textBlack)),
+                      Row(
+                        children: [
+                          _buildRadioOption('kg', setPopUpState),
+                          _buildRadioOption('Pcs', setPopUpState),
+                          _buildRadioOption('meter', setPopUpState),
+                          _buildRadioOption('pasang', setPopUpState),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Biaya Layanan
+                      const Text('Biaya Layanan (Rp)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _textBlack)),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: _priceController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          hintText: '8000',
+                          hintStyle: const TextStyle(fontSize: 12, color: Colors.grey),
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Estimasi Pengerjaan & Dropdown
+                      const Text('Estimasi Pengerjaan', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _textBlack)),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: TextField(
+                              controller: _estController,
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(
+                                hintText: '2',
+                                hintStyle: const TextStyle(fontSize: 12, color: Colors.grey),
+                                filled: true,
+                                fillColor: Colors.white,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            flex: 2,
+                            child: Container(
+                              height: 48,
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: _selectedEstUnit,
+                                  isExpanded: true,
+                                  icon: const Icon(Icons.arrow_drop_down, color: Colors.grey),
+                                  style: const TextStyle(fontSize: 12, color: _textBlack, fontWeight: FontWeight.w500),
+                                  items: const [
+                                    DropdownMenuItem(value: 'Hari', child: Text('Hari')),
+                                    DropdownMenuItem(value: 'Jam', child: Text('Jam')),
+                                  ],
+                                  onChanged: (String? newValue) {
+                                    if (newValue != null) {
+                                      setPopUpState(() {
+                                        _selectedEstUnit = newValue;
+                                      });
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Tombol Simpan
+                      SizedBox(
+                        width: double.infinity,
+                        height: 44,
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _pinkAccent,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          onPressed: () async {
+                            Navigator.pop(dialogContext);
+                            await _saveLayanan();
+                          },
+                          icon: const Icon(Icons.add_rounded, color: Colors.white, size: 18),
+                          label: Text(
+                            _editingServiceId != null ? 'UPDATE LAYANAN' : '+ SIMPAN LAYANAN BARU',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildRadioOption(String value, StateSetter setPopUpState) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Radio<String>(
+          value: value,
+          groupValue: _selectedUnit,
+          activeColor: _pinkAccent,
+          visualDensity: VisualDensity.compact,
+          onChanged: (val) {
+            if (val != null) {
+              setPopUpState(() => _selectedUnit = val);
+            }
+          },
+        ),
+        Text(value, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+        const SizedBox(width: 6),
+      ],
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final filteredList = _filteredServices;
+
     return Scaffold(
       backgroundColor: _bgDark,
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 0,
+        elevation: 1,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: _textBlack),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          'Daftar Layanan',
-          style: TextStyle(color: _textBlack, fontSize: 16, fontWeight: FontWeight.bold),
+          'KELOLA LAYANAN LAUNDRY',
+          style: TextStyle(color: _textBlack, fontSize: 14, fontWeight: FontWeight.bold),
         ),
-        centerTitle: true,
         actions: [
           IconButton(
-            tooltip: 'Kelola & Edit Layanan',
-            icon: const Icon(Icons.edit_note_rounded, color: _goldAccent, size: 26),
-            onPressed: _navigateToEditLayanan,
+            tooltip: 'Tambah Layanan Baru',
+            icon: const Icon(Icons.add_circle_outline_rounded, color: _pinkAccent, size: 26),
+            onPressed: () => _openTambahPopUp(),
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 8),
         ],
-      ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 4,
-              offset: Offset(0, -2),
-            ),
-          ],
-        ),
-        child: ElevatedButton.icon(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFEC4899),
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          onPressed: _navigateToEditLayanan,
-          icon: const Icon(Icons.add_rounded, color: Colors.white),
-          label: const Text(
-            'Tambah Layanan',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
-          ),
-        ),
       ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const Text('Daftar Layanan', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _textBlack)),
+              const SizedBox(height: 8),
               TextField(
                 controller: _searchController,
-                autofocus: true,
                 onChanged: (val) => setState(() => _searchQuery = val.trim()),
-                style: const TextStyle(fontSize: 12),
                 decoration: InputDecoration(
                   hintText: 'Cari layanan...',
+                  hintStyle: const TextStyle(fontSize: 12, color: Colors.grey),
                   prefixIcon: const Icon(Icons.search_rounded, color: Colors.grey),
                   filled: true,
                   fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide.none,
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 34,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _categoriesList.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (context, index) {
-                    final category = _categoriesList[index];
-                    final bool isSelected = _selectedCategory == category;
-
-                    return GestureDetector(
-                      onTap: () => setState(() => _selectedCategory = category),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: isSelected ? _goldAccent : Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: isSelected ? _goldAccent : Colors.black12,
-                          ),
-                        ),
-                        child: Text(
-                          category,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                            color: isSelected ? Colors.white : _textBlack,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
               const SizedBox(height: 14),
+
               Expanded(
                 child: _isLoading
-                    ? const Center(child: CircularProgressIndicator(color: _goldAccent))
+                    ? const Center(child: CircularProgressIndicator(color: _pinkAccent))
                     : filteredList.isEmpty
-                        ? const Center(
-                            child: Text(
-                              'Layanan aktif tidak ditemukan',
-                              style: TextStyle(fontSize: 12, color: Colors.black45),
-                            ),
-                          )
+                        ? const Center(child: Text('Layanan tidak ditemukan', style: TextStyle(fontSize: 12, color: Colors.grey)))
                         : ListView.separated(
                             itemCount: filteredList.length,
                             separatorBuilder: (_, __) => const SizedBox(height: 8),
                             itemBuilder: (context, index) {
                               final item = filteredList[index];
                               final price = (item['price'] as num?) ?? 0;
-                              final unit = item['unit'] ?? 'Kg';
+                              final unit = item['unit'] ?? 'kg';
+                              final cat = item['category'] ?? '-';
+                              final est = item['estimated_days'] ?? 1;
+                              final estUnit = item['estimated_unit'] ?? 'Hari';
 
                               return Container(
                                 decoration: BoxDecoration(
                                   color: Colors.white,
-                                  borderRadius: BorderRadius.circular(12),
-                                  
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: Colors.black12),
                                 ),
                                 child: ListTile(
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  leading: Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: _cardDark,
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: const Icon(
-                                      Icons.local_laundry_service_rounded,
-                                      color: _goldAccent,
-                                      size: 20,
-                                    ),
-                                  ),
+                                  dense: true,
                                   title: Text(
                                     item['name'] ?? '-',
                                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _textBlack),
                                   ),
                                   subtitle: Text(
-                                    '${_formatRupiah(price)} / $unit',
-                                    style: const TextStyle(fontSize: 10, color: Colors.black54),
+                                    '${_formatRupiah(price)} / $unit  •  $cat  •  Est: $est $estUnit',
+                                    style: const TextStyle(fontSize: 10, color: Colors.grey),
                                   ),
-                                  trailing: Container(
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: BoxDecoration(
-                                      color: _goldAccent.withOpacity(0.12),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(
-                                      Icons.add_rounded,
-                                      color: _goldAccent,
-                                      size: 18,
-                                    ),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.edit_rounded, color: Colors.blue, size: 18),
+                                        onPressed: () => _openTambahPopUp(item),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.red, size: 18),
+                                        onPressed: () => _deleteLayanan(item['id'].toString()),
+                                      ),
+                                    ],
                                   ),
-                                  onTap: () async {
-                                    final qty = await _showQtyDialog(item);
-                                    if (qty != null && qty > 0 && mounted) {
-                                      Navigator.pop(context, {...item, 'quantity': qty});
-                                    }
-                                  },
                                 ),
                               );
                             },

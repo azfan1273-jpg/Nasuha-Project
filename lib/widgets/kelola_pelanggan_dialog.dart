@@ -149,15 +149,29 @@ class _KelolaPelangganDialogState extends State<KelolaPelangganDialog> {
                     const SnackBar(content: Text('Nama Pelanggan wajib diisi!')),
                   );
                   return;
-                }
+                }                                
                 final settings = context.read<SettingsProvider>();
+                
+                // note: Generate Customer Code Dinamis berbasis 3 huruf terakhir nama + nomor urut acak
+                final cleanName = name.replaceAll(RegExp(r'[^a-zA-Z]'), '').toUpperCase();
+                String prefix;
+                if (cleanName.length >= 3) {
+                  prefix = cleanName.substring(cleanName.length - 3);
+                } else {
+                  prefix = cleanName.padRight(3, 'X');
+                }
+                // Gunakan 4 digit acak untuk menghindari duplikasi tanpa query max sequence
+                final randomSeq = (1000 + DateTime.now().millisecondsSinceEpoch % 9000).toString();
+                final newCustomerCode = '$prefix-$randomSeq';
+                
                 final payload = {
                   'name': name,
                   'phone': phone.isEmpty ? '-' : phone,
                   'address': address.isEmpty ? '-' : address,
                   if (!isEdit) 'store_id': settings.storeId,
+                  if (!isEdit) 'customer_code': newCustomerCode, // note: Tambahkan kode dinamis hanya saat tambah baru
                 };
-
+                
                 try {
                   if (isEdit) {
                     await supabase
@@ -167,7 +181,8 @@ class _KelolaPelangganDialogState extends State<KelolaPelangganDialog> {
                   } else {
                     await supabase.from('customers').insert(payload);
                   }
-
+                  
+                
                   if (dialogContext.mounted) Navigator.pop(dialogContext);
                   _fetchCustomers(_searchController.text);
                 } catch (e) {

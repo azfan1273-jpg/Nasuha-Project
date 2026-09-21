@@ -324,83 +324,83 @@ class SettingScreen extends StatelessWidget {
   }
 
   Widget _buildThemeSelector(BuildContext context) {
-    final settings = context.watch<SettingsProvider>();
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildThemeOption(
-            context,
-            color: const Color(0xFFEC4899),
-            label: 'Pink Tema',
-            mode: AppThemeMode.pink,
-            isSelected: settings.currentTheme == AppThemeMode.pink,
-          ),
-          _buildThemeOption(
-            context,
-            color: const Color(0xFF0284C7),
-            label: 'Dark Tema',
-            mode: AppThemeMode.dark,
-            isSelected: settings.currentTheme == AppThemeMode.dark,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildThemeOption(
-    BuildContext context, {
-    required Color color,
-    required String label,
-    required AppThemeMode mode,
-    required bool isSelected,
-  }) {
-    return GestureDetector(
-      onTap: () => context.read<SettingsProvider>().setTheme(mode),
-      child: Row(
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.all(3),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: isSelected ? color : Colors.transparent,
-                width: 2,
+      final settings = context.watch<SettingsProvider>();
+  
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _buildThemeOption(
+              context,
+              color: const Color(0xFFEC4899),
+              label: 'Pink Tema',
+              themeValue: 'default',
+              isSelected: settings.selectedTheme == 'default',
+            ),
+            _buildThemeOption(
+              context,
+              color: const Color(0xFF121212),
+              label: 'Dark Tema',
+              themeValue: 'gold',
+              isSelected: settings.selectedTheme == 'gold',
+            ),
+          ],
+        ),
+      );
+    }
+  
+    Widget _buildThemeOption(
+      BuildContext context, {
+      required Color color,
+      required String label,
+      required String themeValue,
+      required bool isSelected,
+    }) {
+      return GestureDetector(
+        onTap: () => context.read<SettingsProvider>().setTheme(themeValue),
+        child: Row(
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isSelected ? color : Colors.transparent,
+                  width: 2,
+                ),
+              ),
+              child: CircleAvatar(
+                backgroundColor: color,
+                radius: 14,
+                child: isSelected
+                    ? const Icon(Icons.check, size: 14, color: Colors.white)
+                    : null,
               ),
             ),
-            child: CircleAvatar(
-              backgroundColor: color,
-              radius: 14,
-              child: isSelected
-                  ? const Icon(Icons.check, size: 14, color: Colors.white)
-                  : null,
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isSelected ? _textBlack : Colors.grey,
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              color: isSelected ? _textBlack : Colors.grey,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+          ],
+        ),
+      );
+    }
 }

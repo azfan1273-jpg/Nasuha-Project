@@ -1,40 +1,48 @@
 import 'package:flutter/material.dart';
 import '../main.dart';
 
-class CustomerInsightEngine {
-  static Future<List<Map<String, dynamic>>> fetchTomorrowPredictions({required String? storeId}) async {
-    if (storeId == null || storeId.isEmpty) return [];
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+class CustomerInsightEngine {
+  // Masukkan domain resmi Vercel kamu di sini!
+  static const String baseUrl = 'https://nasuha-web.vercel.app/api/clay';
+
+  static Future<List<Map<String, dynamic>>> fetchTomorrowPredictions({String? storeId}) async {
     try {
-      final response = await supabase.rpc(
-        'get_customer_predictions',
-        params: {'p_store_id': storeId},
+      final session = Supabase.instance.client.auth.currentSession;
+      final token = session?.accessToken;
+
+      if (token == null) {
+        throw Exception("Sesi pengguna tidak ditemukan. Silakan login kembali.");
+      }
+
+      final url = Uri.parse('$baseUrl/predict-tomorrow');
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
       );
 
-      if (response == null) return [];
-
-      final List<dynamic> listData = response as List<dynamic>;
-
-      return listData.map((item) {
-        return {
-          'name': item['customer_name'] ?? 'Pelanggan',
-          'phone': item['customer_phone'] ?? '-',
-          'score': item['score'] ?? 80,
-          'reason': item['reason'] ?? 'Siklus rutin',
-          'est_spend': item['est_spend'] ?? 0,
-          'favorite_service': item['favorite_service'] ?? 'Cuci Komplit',
-          'total_tx': item['total_tx'] ?? 1,
-          'tag': item['tag'] ?? 'Aktif',
-          'contribution': item['contribution'] ?? 'Reguler',
-          'cust_data': {
-            'name': item['customer_name'] ?? 'Pelanggan',
-            'phone': item['customer_phone'] ?? '-',
-          },
-        };
-      }).toList();
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        
+        if (data is Map<String, dynamic> && data.containsKey('predictions')) {
+          final List predictionsList = data['predictions'];
+          return List<Map<String, dynamic>>.from(predictionsList);
+        } else if (data is List) {
+          return List<Map<String, dynamic>>.from(data);
+        }
+      } else {
+        throw Exception('Gagal memuat data dari Clay Engine (Status: ${response.statusCode})');
+      }
     } catch (e) {
-      debugPrint('Error fetch predictions via RPC: $e');
-      return [];
+      print('Error pada CustomerInsightEngine: $e');
+      rethrow;
     }
+    return [];
   }
 }
