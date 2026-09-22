@@ -23,6 +23,8 @@ import 'login_screen.dart';
 import 'aa_pengumuman_developer.dart';
 import '../helpers/notification_helper.dart';
 
+import 'premium_akun_screen.dart';
+import '../providers/subscription_provider.dart';
 
 
 
@@ -672,7 +674,13 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                     icon: Icons.workspace_premium_outlined,
                     title: 'Premium Akun',
                     settings: settings,
-                    onTap: () => Navigator.pop(context),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const PremiumAkunScreen()),
+                      );
+                    },
                   ),
                   _buildSidebarItem(
                     icon: Icons.info_outline_rounded,

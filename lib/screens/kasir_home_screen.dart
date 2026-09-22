@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../main.dart';
-import '../providers/settings_provider.dart';
-import '../widgets/buat_order_dialog.dart';
-import 'daftar_order_by_status_screen.dart';
-import '../helpers/customer_insight_engine.dart';
-import 'customer_detail_screen.dart';
+import 'package:nasuha_kasir_laundry/main.dart';
+import 'package:nasuha_kasir_laundry/providers/settings_provider.dart';
+import 'package:nasuha_kasir_laundry/widgets/buat_order_dialog.dart';
+import 'package:nasuha_kasir_laundry/screens/daftar_order_by_status_screen.dart';
+import 'package:nasuha_kasir_laundry/helpers/customer_insight_engine.dart';
+import 'package:nasuha_kasir_laundry/screens/customer_detail_screen.dart';
 
 class KasirHomeScreen extends StatefulWidget {
   const KasirHomeScreen({super.key});

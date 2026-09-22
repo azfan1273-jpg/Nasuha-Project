@@ -8,6 +8,7 @@ import 'providers/order_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/kasir_page_manager.dart';
 import 'screens/splash_screen.dart';
+import 'providers/subscription_provider.dart';
 
 SupabaseClient get supabase => Supabase.instance.client;
 
@@ -28,6 +29,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
         ChangeNotifierProvider(create: (_) => OrderProvider()),
+        ChangeNotifierProvider(create: (_) => SubscriptionProvider()),
       ],
       child: const NasuhaApp(),
     ),

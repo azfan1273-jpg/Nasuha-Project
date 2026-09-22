@@ -1,132 +1,21 @@
+<!-- Potongan kode web/index.html -->
 <!DOCTYPE html>
 <html>
 <head>
   <base href="$FLUTTER_BASE_HREF">
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+  <!-- Meta Tag Tambahan untuk Aplikasi Mobile Web / PWA -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Nasuha Kasir Laundry">
+
   <title>Nasuha Kasir Laundry</title>
   <link rel="manifest" href="manifest.json">
 </head>
 <body style="background-color: #0F1115;">
   <script src="flutter_bootstrap.js" async></script>
 </body>
-
-<script>
-  let errorCount = 0;
-  function toggleDebugConsole() {
-    const box = document.getElementById('debug-console');
-    box.style.display = box.style.display === 'none' ? 'block' : 'none';
-  }
-
-  function clearDebugLogs() {
-    document.getElementById('debug-logs').innerHTML = '';
-    errorCount = 0;
-    const badge = document.getElementById('debug-error-badge');
-    badge.innerText = '0';
-    badge.style.display = 'none';
-  }
-
-  // Intercept Console Log
-  (function () {
-    const logsBox = document.getElementById('debug-logs');
-    const badge = document.getElementById('debug-error-badge');
-
-    function printLog(msg, isError = false) {
-      if (!logsBox) return;
-      const item = document.createElement('div');
-      item.style.marginBottom = '4px';
-      item.style.color = isError ? '#F87171' : '#34D399';
-      item.innerText = (isError ? '[ERR] ' : '[LOG] ') + msg;
-      logsBox.appendChild(item);
-      logsBox.scrollTop = logsBox.scrollHeight;
-
-      if (isError) {
-        errorCount++;
-        badge.innerText = errorCount;
-        badge.style.display = 'inline-block';
-      }
-    }
-
-    const origLog = console.log;
-    console.log = function (...args) {
-      origLog.apply(console, args);
-      printLog(args.join(' '));
-    };
-
-    const origErr = console.error;
-    console.error = function (...args) {
-      origErr.apply(console, args);
-      printLog(args.join(' '), true);
-    };
-  })();
-
-  // Fitur Drag & Drop untuk Menggeser Console
-  (function() {
-    const el = document.getElementById("debug-floating-container");
-    let isDragging = false, xOffset = 0, yOffset = 0;
-
-    el.addEventListener("mousedown", (e) => {
-      if (e.target.tagName === 'SPAN' && e.target.innerText === 'Clear') return;
-      isDragging = true;
-      xOffset = e.clientX - el.offsetLeft;
-      yOffset = e.clientY - el.offsetTop;
-    });
-
-    document.addEventListener("mousemove", (e) => {
-      if (isDragging) {
-        el.style.left = (e.clientX - xOffset) + "px";
-        el.style.top = (e.clientY - yOffset) + "px";
-        el.style.right = "auto";
-      }
-    });
-
-    document.addEventListener("mouseup", () => isDragging = false);
-  })();
-</script>
-
-<script>
-  let errorCount = 0;
-  function toggleDebugConsole() {
-    const box = document.getElementById('debug-console');
-    box.style.display = box.style.display === 'none' ? 'block' : 'none';
-  }
-
-  (function () {
-    const logsBox = document.getElementById('debug-logs');
-    const badge = document.getElementById('debug-error-badge');
-
-    function printLog(msg, isError = false) {
-      if (!logsBox) return;
-      const item = document.createElement('div');
-      item.style.color = isError ? '#FF5555' : '#00FF66';
-      item.style.marginBottom = '4px';
-      item.innerText = (isError ? '[ERR] ' : '[LOG] ') + msg;
-      logsBox.appendChild(item);
-      logsBox.scrollTop = logsBox.scrollHeight;
-
-      if (isError) {
-        errorCount++;
-        badge.innerText = errorCount;
-        badge.style.display = 'inline-block';
-      }
-    }
-
-    const origLog = console.log;
-    console.log = function (...args) {
-      origLog.apply(console, args);
-      printLog(args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' '));
-    };
-
-    const origError = console.error;
-    console.error = function (...args) {
-      origError.apply(console, args);
-      printLog(args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' '), true);
-    };
-
-    window.onerror = function (msg, url, line) {
-      printLog(msg + ' (Line: ' + line + ')', true);
-    };
-  })();
-</script>
 </html>
