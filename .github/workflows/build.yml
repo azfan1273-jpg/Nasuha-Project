@@ -27,6 +27,12 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Create .env file                              # 👈 TAMBAHAN
+        run: |                                              # 👈
+          echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> .env
+          echo "SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}" >> .env
+          ls -la .env
         
       - name: Decode Keystore
         run: |
