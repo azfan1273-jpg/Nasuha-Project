@@ -6,7 +6,7 @@ import '../providers/order_provider.dart';
 import '../helpers/database_helper.dart';
 import 'cari_pelanggan_screen.dart';
 import 'kasir_screen.dart';
-import 'edit_layanan_screen.dart';
+import 'daftar_layanan_screen.dart';
 import 'owner_screen.dart';
 import 'parfum_screen.dart';
 import 'printer_screen.dart';
@@ -94,7 +94,7 @@ class SettingScreen extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const EditLayananScreen(),
+                      builder: (context) => const DaftarLayananScreen(),
                     ),
                   );
                 },

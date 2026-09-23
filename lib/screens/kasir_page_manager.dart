@@ -9,7 +9,7 @@ import 'get_order_screen.dart';
 
 import 'owner_screen.dart';
 import 'kasir_screen.dart';
-import 'edit_layanan_screen.dart';
+import 'daftar_layanan_screen.dart';
 import 'parfum_screen.dart';
 import 'cari_pelanggan_screen.dart';
 import 'printer_screen.dart';
@@ -515,7 +515,7 @@ class _KasirPageManagerState extends State<KasirPageManager> {
                       settings: settings,
                       onTap: () {
                         Navigator.pop(context);
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => EditLayananScreen()));
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const DaftarLayananScreen()));
                       },
                     ),
                     _buildSidebarItem(

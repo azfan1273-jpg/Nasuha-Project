@@ -47,12 +47,12 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
 
-      - name: Build Release AAB (App Bundle untuk Play Store)
-        run: flutter build appbundle --release
-        env:
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+#      - name: Build Release AAB (App Bundle untuk Play Store)
+#        run: flutter build appbundle --release
+#        env:
+#          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+#          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+#          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
 
       - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
@@ -60,8 +60,8 @@ jobs:
           name: flutter-apk
           path: build/app/outputs/flutter-apk/*.apk
 
-      - name: Upload AAB Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: flutter-aab
-          path: build/app/outputs/bundle/release/*.aab
+#      - name: Upload AAB Artifact
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: flutter-aab
+#          path: build/app/outputs/bundle/release/*.aab

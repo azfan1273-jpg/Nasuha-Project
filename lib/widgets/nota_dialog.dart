@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import '../providers/settings_provider.dart';
 import '../helpers/bluetooth_helper.dart';
+import '../main.dart';
 
 class NotaDialog extends StatefulWidget {
   final Map<String, dynamic> order;
@@ -15,6 +16,13 @@ class NotaDialog extends StatefulWidget {
 
 class _NotaDialogState extends State<NotaDialog> {
   String _selectedMode = 'customer';
+  String _customerCode = '';
+
+  @override
+    void initState() {
+      super.initState();
+      _fetchCustomerCode(); // 🟢 PANGGIL FUNGSI INI SAAT DIALOG DIBUKA
+    }
 
   String _formatRupiah(num number) {
     final String str = number.toInt().toString();
@@ -77,6 +85,31 @@ class _NotaDialogState extends State<NotaDialog> {
     }
     return itemsList;
   }
+
+  	// 🟢 FUNGSI BARU UNTUK FETCH CUSTOMER CODE
+	  Future<void> _fetchCustomerCode() async {
+	    final String storeId = (widget.order['store_id'] ?? '').toString(); // Asumsi order punya store_id
+		final String customerId = (widget.order['customer_id'] ?? '').toString();
+			    
+		// 🛡️ Validasi: kalau salah satu kosong, jangan lanjut query
+	    if (customerId.isEmpty || storeId.isEmpty) return;
+	    try{
+	      final response = await supabase
+              .from('customers')
+              .select('customer_code')
+              .eq('id', customerId)
+              .eq('store_id', storeId) // 🟢 FILTER GANDA: ID + STORE
+              .maybeSingle();
+	
+	      if (response != null && mounted) {
+	        setState(() {
+	          _customerCode = response['customer_code'] ?? '';
+	        });
+	      }
+	    } catch (e) {
+	      print('Error fetching customer code: $e');
+	    }
+	  }
 
 	Future<void> _printReceiptToBluetooth(BuildContext context, bool isCustomerMode) async {
 	  // 🟢 STEP 1: CEK STATUS KONEKSI
@@ -227,8 +260,14 @@ class _NotaDialogState extends State<NotaDialog> {
 	    sb.write("\x1B\x45\x01");
 	    sb.writeln(customerName.toUpperCase());
 	    sb.write("\x1B\x45\x00");
+	    
+	    if (_customerCode.isNotEmpty) {
+   	    sb.writeln("Kode: $_customerCode");
+   	    }
+   	    
 	    sb.writeln(nota);
-	    sb.write("\x1B\x61\x00");
+	    sb.write("\x1B\x61\x00");	     	   
+	    
 	    if (showNamaKasir) {
 	      sb.writeln(_formatTwoColumns("Kasir:", kasirName, width: printWidth));
 	    }
@@ -541,6 +580,14 @@ class _NotaDialogState extends State<NotaDialog> {
           textAlign: TextAlign.center,
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
         ),
+        if (_customerCode.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(
+            'Kode: $_customerCode',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+          ),
+        ],
         Text(
           nota,
           textAlign: TextAlign.center,

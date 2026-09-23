@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/settings_provider.dart';
 import '../screens/cari_pelanggan_screen.dart';
 import '../screens/daftar_layanan_screen.dart';
+import 'qty_input_dialog.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -188,11 +189,11 @@ class FormOrderDialogState extends State<FormOrderDialog> {
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
-        builder: (context) => const CariPelangganScreen(
-          isSelectionMode: true,
+          builder: (context) => const CariPelangganScreen(
+            isSelectionMode: true,
+          ),
         ),
-      ),
-    );
+      );
 
     if (result != null) {
       setState(() => _selectedCustomer = result);
@@ -203,9 +204,9 @@ class FormOrderDialogState extends State<FormOrderDialog> {
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
-        builder: (context) => DaftarLayananScreen(),
-      ),
-    );
+         builder: (context) => const DaftarLayananScreen(isSelectionMode: true),
+       ),
+     );
 
     if (result != null) {
       setState(() {
@@ -227,40 +228,24 @@ class FormOrderDialogState extends State<FormOrderDialog> {
 
   Future<void> _editQuantity(int index) async {
     final item = _selectedServices[index];
-    final TextEditingController qtyController = TextEditingController(
-      text: item['quantity'].toString(),
-    );
-
-    await showDialog(
+  
+    final newQty = await showDialog<double>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Ubah Qty ${item['name']}'),
-        content: TextField(
-          controller: qtyController,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(
-            labelText: 'Jumlah / Berat (misal: 1.5)',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final newQty = double.tryParse(qtyController.text) ?? item['quantity'];
-              setState(() {
-                _selectedServices[index]['quantity'] = newQty;
-              });
-              Navigator.pop(context);
-            },
-            child: const Text('Simpan'),
-          ),
-        ],
+      builder: (_) => QtyInputDialog(
+        serviceName: item['name'] ?? 'Layanan',
+        price: (item['price'] as num).toDouble(),
+        unit: item['unit'] ?? 'Kg',
+        initialQty: (item['quantity'] as num).toDouble(),
+        title: 'Ubah Jumlah / Berat',
+        startEmpty: false,
       ),
     );
+  
+    if (newQty != null && mounted) {
+      setState(() {
+        _selectedServices[index]['quantity'] = newQty;
+      });
+    }
   }
 
   Future<void> _submitOrder() async {

@@ -2,11 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import '../providers/settings_provider.dart';
+import '../widgets/qty_input_dialog.dart'; // ⬅️ import popup qty
 
 final supabase = Supabase.instance.client;
 
 class DaftarLayananScreen extends StatefulWidget {
-  const DaftarLayananScreen({super.key});
+  final bool isSelectionMode;
+
+  const DaftarLayananScreen({
+    super.key,
+    this.isSelectionMode = false,
+  });
 
   @override
   State<DaftarLayananScreen> createState() => _DaftarLayananScreenState();
@@ -18,18 +24,16 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
   static const Color _textBlack = Color(0xFF111827);
 
   final TextEditingController _searchController = TextEditingController();
-  
-  // Controller Form Tambah / Edit
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _estController = TextEditingController();
 
   List<Map<String, dynamic>> _servicesList = [];
   List<String> _categoriesList = [];
-  
+
   String _selectedCategory = 'Kiloan';
   String _selectedUnit = 'kg';
-  String _selectedEstUnit = 'Hari'; // Pilihan waktu estimasi (Hari/Jam)
+  String _selectedEstUnit = 'Hari';
   String _searchQuery = '';
   bool _isLoading = true;
   String? _editingServiceId;
@@ -63,35 +67,28 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
         if (mounted) setState(() => _isLoading = false);
         return;
       }
-  
+
       final response = await supabase.rpc('get_services_by_store', params: {
         'p_store_id': storeId,
         'p_keyword': '',
       });
-  
+
       final servicesData = List<Map<String, dynamic>>.from(response ?? []);
-  
-      // Ambil kategori unik dari database Supabase
+
       final Set<String> fetchedCategories = {};
       for (var service in servicesData) {
         final cat = (service['category'] ?? '').toString().trim();
-        if (cat.isNotEmpty) {
-          fetchedCategories.add(cat);
-        }
+        if (cat.isNotEmpty) fetchedCategories.add(cat);
       }
-  
+
       List<String> finalCategories = fetchedCategories.toList();
-      if (finalCategories.isEmpty) {
-        finalCategories = ['Kiloan', 'Satuan'];
-      }
-  
+      if (finalCategories.isEmpty) finalCategories = ['Kiloan', 'Satuan'];
+
       if (mounted) {
         setState(() {
           _servicesList = servicesData;
           _categoriesList = finalCategories;
-          if (finalCategories.isNotEmpty) {
-            _selectedCategory = finalCategories.first;
-          }
+          if (finalCategories.isNotEmpty) _selectedCategory = finalCategories.first;
           _isLoading = false;
         });
       }
@@ -133,13 +130,13 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
     }
 
     try {
+      // ✅ Gabung angka + unit jadi 1 string: "2 Hari"
       final payload = {
         'name': name,
         'category': _selectedCategory,
         'unit': _selectedUnit,
         'price': price,
-        'estimated_days': est,
-        'estimated_unit': _selectedEstUnit,
+        'estimation': '$est $_selectedEstUnit',
       };
 
       if (_editingServiceId != null) {
@@ -182,9 +179,32 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
     }
   }
 
+  // ============================================================
+  // POPUP QTY (dipanggil waktu mode pilih)
+  // ============================================================
+  Future<void> _showQtyDialog(Map<String, dynamic> item) async {
+    final qty = await showDialog<double>(
+      context: context,
+      builder: (_) => QtyInputDialog(
+        serviceName: item['name'] ?? 'Layanan',
+        price: (item['price'] as num).toDouble(),
+        unit: item['unit'] ?? 'kg',
+       // initialQty: 1.0,
+        title: 'Jumlah / Berat',
+      ),
+    );
+
+    if (qty != null && mounted) {
+      Navigator.pop(context, {
+        ...item,        // estimation & field lain otomatis ikut
+        'quantity': qty,
+      });
+    }
+  }
+
   void _showTambahKategoriDialog(BuildContext mainContext, StateSetter setPopUpState) {
     final catController = TextEditingController();
-  
+
     showDialog(
       context: mainContext,
       builder: (ctx) => AlertDialog(
@@ -214,13 +234,9 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
               final newCat = catController.text.trim();
               if (newCat.isNotEmpty) {
                 setState(() {
-                  if (!_categoriesList.contains(newCat)) {
-                    _categoriesList.add(newCat);
-                  }
+                  if (!_categoriesList.contains(newCat)) _categoriesList.add(newCat);
                 });
-                setPopUpState(() {
-                  _selectedCategory = newCat;
-                });
+                setPopUpState(() => _selectedCategory = newCat);
               }
               Navigator.pop(ctx);
             },
@@ -236,10 +252,15 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
       _editingServiceId = item['id'].toString();
       _nameController.text = item['name'] ?? '';
       _priceController.text = (item['price'] ?? 0).toString();
-      _estController.text = (item['estimated_days'] ?? 1).toString();
+
+      // ✅ Pecah "2 Hari" jadi angka + unit
+      final estStr = item['estimation']?.toString() ?? '1 Hari';
+      final parts = estStr.trim().split(' ');
+      _estController.text = parts.isNotEmpty ? parts[0] : '1';
+      _selectedEstUnit = parts.length > 1 ? parts[1] : 'Hari';
+
       _selectedCategory = item['category'] ?? 'Kiloan';
       _selectedUnit = item['unit'] ?? 'kg';
-      _selectedEstUnit = item['estimated_unit'] ?? 'Hari';
     } else {
       _resetForm();
     }
@@ -275,8 +296,6 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
                         ],
                       ),
                       const SizedBox(height: 8),
-
-                      // List Kategori Scroll Horizontal (+ Tombol Kategori)
                       SizedBox(
                         height: 34,
                         child: ListView.separated(
@@ -289,53 +308,32 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF10B981),
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                                 ),
-                                onPressed: () {
-                                  _showTambahKategoriDialog(context, setPopUpState);
-                                },
+                                onPressed: () => _showTambahKategoriDialog(context, setPopUpState),
                                 icon: const Icon(Icons.add, color: Colors.white, size: 14),
-                                label: const Text(
-                                  'Kategori',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
+                                label: const Text('Kategori',
+                                    style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                               );
                             }
-                      
                             final cat = _categoriesList[index - 1];
                             final isSelected = _selectedCategory == cat;
                             return GestureDetector(
-                              onTap: () {
-                                setPopUpState(() => _selectedCategory = cat);
-                              },
+                              onTap: () => setPopUpState(() => _selectedCategory = cat),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                 decoration: BoxDecoration(
                                   color: isSelected ? const Color(0xFFBE185D) : const Color(0xFF831843),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
-                                child: Text(
-                                  cat,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
+                                child: Text(cat,
+                                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                               ),
                             );
                           },
                         ),
                       ),
                       const SizedBox(height: 16),
-
-                      // Nama Layanan Input
                       const Text('Nama Layanan', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _textBlack)),
                       const SizedBox(height: 6),
                       TextField(
@@ -350,20 +348,14 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
                         ),
                       ),
                       const SizedBox(height: 14),
-
-                      // Satuan Hitungan (Radio Buttons)
                       const Text('Satuan Hitungan', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _textBlack)),
-                      Row(
-                        children: [
-                          _buildRadioOption('kg', setPopUpState),
-                          _buildRadioOption('Pcs', setPopUpState),
-                          _buildRadioOption('meter', setPopUpState),
-                          _buildRadioOption('pasang', setPopUpState),
-                        ],
-                      ),
+                      Row(children: [
+                        _buildRadioOption('kg', setPopUpState),
+                        _buildRadioOption('Pcs', setPopUpState),
+                        _buildRadioOption('meter', setPopUpState),
+                        _buildRadioOption('pasang', setPopUpState),
+                      ]),
                       const SizedBox(height: 14),
-
-                      // Biaya Layanan
                       const Text('Biaya Layanan (Rp)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _textBlack)),
                       const SizedBox(height: 6),
                       TextField(
@@ -379,8 +371,6 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
                         ),
                       ),
                       const SizedBox(height: 14),
-
-                      // Estimasi Pengerjaan & Dropdown
                       const Text('Estimasi Pengerjaan', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _textBlack)),
                       const SizedBox(height: 6),
                       Row(
@@ -406,10 +396,7 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
                             child: Container(
                               height: 48,
                               padding: const EdgeInsets.symmetric(horizontal: 12),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
+                              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
                               child: DropdownButtonHideUnderline(
                                 child: DropdownButton<String>(
                                   value: _selectedEstUnit,
@@ -420,12 +407,8 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
                                     DropdownMenuItem(value: 'Hari', child: Text('Hari')),
                                     DropdownMenuItem(value: 'Jam', child: Text('Jam')),
                                   ],
-                                  onChanged: (String? newValue) {
-                                    if (newValue != null) {
-                                      setPopUpState(() {
-                                        _selectedEstUnit = newValue;
-                                      });
-                                    }
+                                  onChanged: (val) {
+                                    if (val != null) setPopUpState(() => _selectedEstUnit = val);
                                   },
                                 ),
                               ),
@@ -434,8 +417,6 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
                         ],
                       ),
                       const SizedBox(height: 20),
-
-                      // Tombol Simpan
                       SizedBox(
                         width: double.infinity,
                         height: 44,
@@ -476,9 +457,7 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
           activeColor: _pinkAccent,
           visualDensity: VisualDensity.compact,
           onChanged: (val) {
-            if (val != null) {
-              setPopUpState(() => _selectedUnit = val);
-            }
+            if (val != null) setPopUpState(() => _selectedUnit = val);
           },
         ),
         Text(value, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
@@ -500,18 +479,20 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
           icon: const Icon(Icons.arrow_back_rounded, color: _textBlack),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'KELOLA LAYANAN LAUNDRY',
-          style: TextStyle(color: _textBlack, fontSize: 14, fontWeight: FontWeight.bold),
+        title: Text(
+          widget.isSelectionMode ? 'PILIH LAYANAN' : 'KELOLA LAYANAN LAUNDRY',
+          style: const TextStyle(color: _textBlack, fontSize: 14, fontWeight: FontWeight.bold),
         ),
-        actions: [
-          IconButton(
-            tooltip: 'Tambah Layanan Baru',
-            icon: const Icon(Icons.add_circle_outline_rounded, color: _pinkAccent, size: 26),
-            onPressed: () => _openTambahPopUp(),
-          ),
-          const SizedBox(width: 8),
-        ],
+        actions: widget.isSelectionMode
+            ? []
+            : [
+                IconButton(
+                  tooltip: 'Tambah Layanan Baru',
+                  icon: const Icon(Icons.add_circle_outline_rounded, color: _pinkAccent, size: 26),
+                  onPressed: () => _openTambahPopUp(),
+                ),
+                const SizedBox(width: 8),
+              ],
       ),
       body: SafeArea(
         child: Padding(
@@ -531,14 +512,10 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
                   filled: true,
                   fillColor: Colors.white,
                   contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide.none,
-                  ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                 ),
               ),
               const SizedBox(height: 14),
-
               Expanded(
                 child: _isLoading
                     ? const Center(child: CircularProgressIndicator(color: _pinkAccent))
@@ -552,8 +529,8 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
                               final price = (item['price'] as num?) ?? 0;
                               final unit = item['unit'] ?? 'kg';
                               final cat = item['category'] ?? '-';
-                              final est = item['estimated_days'] ?? 1;
-                              final estUnit = item['estimated_unit'] ?? 'Hari';
+                              // ✅ Baca langsung sebagai string
+                              final estStr = item['estimation']?.toString() ?? '1 Hari';
 
                               return Container(
                                 decoration: BoxDecoration(
@@ -563,27 +540,36 @@ class _DaftarLayananScreenState extends State<DaftarLayananScreen> {
                                 ),
                                 child: ListTile(
                                   dense: true,
+                                  onTap: () {
+                                    if (widget.isSelectionMode) {
+                                      _showQtyDialog(item); // ✅ Popup qty
+                                    } else {
+                                      _openTambahPopUp(item);
+                                    }
+                                  },
                                   title: Text(
                                     item['name'] ?? '-',
                                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _textBlack),
                                   ),
                                   subtitle: Text(
-                                    '${_formatRupiah(price)} / $unit  •  $cat  •  Est: $est $estUnit',
+                                    '${_formatRupiah(price)} / $unit  •  $cat  •  Est: $estStr',
                                     style: const TextStyle(fontSize: 10, color: Colors.grey),
                                   ),
-                                  trailing: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.edit_rounded, color: Colors.blue, size: 18),
-                                        onPressed: () => _openTambahPopUp(item),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.red, size: 18),
-                                        onPressed: () => _deleteLayanan(item['id'].toString()),
-                                      ),
-                                    ],
-                                  ),
+                                  trailing: widget.isSelectionMode
+                                      ? const Icon(Icons.chevron_right_rounded, color: Colors.grey)
+                                      : Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            IconButton(
+                                              icon: const Icon(Icons.edit_rounded, color: Colors.blue, size: 18),
+                                              onPressed: () => _openTambahPopUp(item),
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(Icons.delete_outline_rounded, color: Colors.red, size: 18),
+                                              onPressed: () => _deleteLayanan(item['id'].toString()),
+                                            ),
+                                          ],
+                                        ),
                                 ),
                               );
                             },
