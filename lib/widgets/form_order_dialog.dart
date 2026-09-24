@@ -294,7 +294,7 @@ class FormOrderDialogState extends State<FormOrderDialog> {
       // Hitung total
       final totalPrice = itemsPayload.fold<double>(
         0, 
-        (sum, item) => sum + (item['subtotal'] as double)
+        (sum, item) => sum + (item['subtotal'] as num).toDouble()  // ✅
       ).round(); // ✅ ROUND TOTAL
       
 
@@ -741,3 +741,4 @@ class FormOrderDialogState extends State<FormOrderDialog> {
     );
   }
 }
+

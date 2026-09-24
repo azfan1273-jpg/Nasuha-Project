@@ -150,50 +150,61 @@ class _KelolaPelangganDialogState extends State<KelolaPelangganDialog> {
                   );
                   return;
                 }                                
-                final settings = context.read<SettingsProvider>();
-                
-                // note: Generate Customer Code Dinamis berbasis 3 huruf terakhir nama + nomor urut acak
-                final cleanName = name.replaceAll(RegExp(r'[^a-zA-Z]'), '').toUpperCase();
-                String prefix;
-                if (cleanName.length >= 3) {
-                  prefix = cleanName.substring(cleanName.length - 3);
-                } else {
-                  prefix = cleanName.padRight(3, 'X');
-                }
-                // Gunakan 4 digit acak untuk menghindari duplikasi tanpa query max sequence
-                final randomSeq = (1000 + DateTime.now().millisecondsSinceEpoch % 9000).toString();
-                final newCustomerCode = '$prefix-$randomSeq';
-                
-                final payload = {
-                  'name': name,
-                  'phone': phone.isEmpty ? '-' : phone,
-                  'address': address.isEmpty ? '-' : address,
-                  if (!isEdit) 'store_id': settings.storeId,
-                  if (!isEdit) 'customer_code': newCustomerCode, // note: Tambahkan kode dinamis hanya saat tambah baru
-                };
+                final settings = context.read<SettingsProvider>();                               
                 
                 try {
                   if (isEdit) {
-                    await supabase
-                        .from('customers')
-                        .update(payload)
-                        .eq('id', existingCustomer['id']);
-                  } else {
-                    await supabase.from('customers').insert(payload);
-                  }
-                  
-                
-                  if (dialogContext.mounted) Navigator.pop(dialogContext);
-                  _fetchCustomers(_searchController.text);
-                } catch (e) {
-                  debugPrint('Error save customer: $e');
-                  if (dialogContext.mounted) {
+                  await supabase
+                      .from('customers')
+                      .update({
+                        'name': name,
+                        'phone': phone.isEmpty ? '-' : phone,
+                        'address': address.isEmpty ? '-' : address,
+                      })
+                      .eq('id', existingCustomer['id']);
+                } else {
+                  await supabase.rpc('insert_customer_by_store', params: {
+                    'p_store_id': settings.storeId,
+                    'p_name': name,
+                    'p_phone': phone.isEmpty ? '-' : phone,
+                    'p_address': address.isEmpty ? '-' : address,
+                  });
+                }
+
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+                _fetchCustomers(_searchController.text);
+              } on PostgrestException catch (e) {
+                debugPrint('Error save customer: $e');
+                if (dialogContext.mounted) {
+                  // 🟢 HANDLE DUPLIKAT NAMA (unique constraint di tabel customers)
+                  if (e.code == '23505') {
                     ScaffoldMessenger.of(dialogContext).showSnackBar(
-                      SnackBar(content: Text('Gagal menyimpan pelanggan: $e')),
+                      SnackBar(
+                        content: const Text(
+                          '⚠️ Nama pelanggan sudah terdaftar! Gunakan nama lain.',
+                        ),
+                        backgroundColor: Colors.orange.shade700,
+                        duration: const Duration(seconds: 3),
+                      ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(dialogContext).showSnackBar(
+                      SnackBar(
+                        content: Text('Gagal menyimpan pelanggan: ${e.message}'),
+                        backgroundColor: Colors.red,
+                      ),
                     );
                   }
                 }
-              },
+              } catch (e) {
+                debugPrint('Error save customer: $e');
+                if (dialogContext.mounted) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    SnackBar(content: Text('Gagal menyimpan pelanggan: $e')),
+                  );
+                }
+              }
+            },
               child: Text(
                 isEdit ? 'UPDATE' : 'SIMPAN',
                 style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),

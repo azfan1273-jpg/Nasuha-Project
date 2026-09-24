@@ -20,7 +20,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   List<Map<String, dynamic>> _allOrders = [];
   List<Map<String, dynamic>> _filteredOrders = [];
   Map<String, dynamic> _currentCustomerProfile = {};
-  Map<String, dynamic>? _churnData; // Data untuk analisis churn
 
   // Stats
   int _totalTransaksi = 0;
@@ -49,8 +48,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     final profile = _currentCustomerProfile.isNotEmpty
         ? _currentCustomerProfile
         : widget.customer;
-    final phone = (profile['phone'] ?? profile['customer_phone'] ?? '').toString();
-    final name = (profile['name'] ?? profile['customer_name'] ?? 'Pelanggan').toString();
+    final phone =
+        (profile['phone'] ?? profile['customer_phone'] ?? '').toString();
+    final name =
+        (profile['name'] ?? profile['customer_name'] ?? 'Pelanggan').toString();
 
     if (phone.isEmpty || phone == '-') {
       if (mounted) {
@@ -70,12 +71,12 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     }
 
     final message = Uri.encodeComponent(
-      'Halo $name, ada yang bisa dibantu terkait order laundry Anda?'
-    );
+        'Halo $name, ada yang bisa dibantu terkait order laundry Anda?');
     final whatsappUrl = 'https://wa.me/$cleanPhone?text=$message';
 
     if (await canLaunchUrl(Uri.parse(whatsappUrl))) {
-      await launchUrl(Uri.parse(whatsappUrl), mode: LaunchMode.externalApplication);
+      await launchUrl(Uri.parse(whatsappUrl),
+          mode: LaunchMode.externalApplication);
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -88,60 +89,24 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     }
   }
 
-  // ✅ LOGIC STATUS MURNI KONTRIBUSI + CHURN
+  // ✅ LOGIC STATUS MURNI KONTRIBUSI (TANPA CHURN)
   Map<String, dynamic> _getCustomerStatusBadge() {
     if (_allOrders.isEmpty || _persenKontribusi == 0) {
       return {'label': 'Baru', 'color': Colors.grey};
     }
 
-    final latestOrder = _allOrders.first;
-    final latestDate = DateTime.tryParse(latestOrder['created_at']?.toString() ?? '');
-    final daysSinceLastOrder = latestDate != null
-        ? DateTime.now().difference(latestDate).inDays
-        : 0;
-
-    // Tentukan status dasar berdasarkan kontribusi murni
-    String baseStatus;
-    Color baseColor;
-
+    // Tentukan status berdasarkan kontribusi murni
     if (_persenKontribusi >= 10) {
-      baseStatus = 'VVIP';
-      baseColor = const Color(0xFFFFD700);
-    } else if (_persenKontribusi >= 7) {
-      baseStatus = 'VIP';
-      baseColor = const Color(0xFFEC4899);
+      return {'label': 'VVIP', 'color': const Color(0xFFFFD700)};
     } else if (_persenKontribusi >= 5) {
-      baseStatus = 'Best';
-      baseColor = Colors.cyanAccent;
-    } else if (_persenKontribusi >= 1) {
-      baseStatus = 'Reguler';
-      baseColor = Colors.lightGreenAccent;
+      return {'label': 'VIP', 'color': const Color(0xFFEC4899)};
+    } else if (_persenKontribusi >= 4) {
+      return {'label': 'Best', 'color': Colors.cyanAccent};
+    } else if (_persenKontribusi >= 3) {
+      return {'label': 'Reguler', 'color': Colors.lightGreenAccent};
     } else {
-      baseStatus = 'Baru';
-      baseColor = Colors.grey;
+      return {'label': 'Baru', 'color': Colors.grey};
     }
-
-    // ✅ LOGIC CHURN: Hanya untuk Best ke bawah
-    if (baseStatus == 'Best' || baseStatus == 'Reguler' || baseStatus == 'Baru') {
-      // Cek data churn dari Supabase (penurunan >= 1%)
-      if (_churnData != null) {
-        final isChurn = _churnData?['is_churn'] ?? false;
-        final decline = _churnData?['decline'] ?? 0.0;
-        if (isChurn) {
-          return {
-            'label': 'Churn',
-            'color': Colors.redAccent,
-            'decline': decline,
-          };
-        }
-      }
-      // Fallback: jika data churn belum ada, cek berdasarkan hari
-      if (daysSinceLastOrder > 40) {
-        return {'label': 'Churn', 'color': Colors.redAccent};
-      }
-    }
-
-    return {'label': baseStatus, 'color': baseColor};
   }
 
   Future<void> _fetchCustomerOrders() async {
@@ -157,8 +122,14 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
 
       final custId = widget.customer['id']?.toString() ?? '';
       final custCode = widget.customer['customer_code']?.toString() ?? '';
-      final custPhone = (widget.customer['phone'] ?? widget.customer['customer_phone'] ?? '').toString();
-      final custName = (widget.customer['name'] ?? widget.customer['customer_name'] ?? '').toString();
+      final custPhone = (widget.customer['phone'] ??
+              widget.customer['customer_phone'] ??
+              '')
+          .toString();
+      final custName = (widget.customer['name'] ??
+              widget.customer['customer_name'] ??
+              '')
+          .toString();
 
       // 1. TARIK PROFIL PELANGGAN
       var profileQuery = Supabase.instance.client
@@ -189,7 +160,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
           'p_store_id': storeId,
           'p_cust_id': custId.isNotEmpty ? custId : null,
           'p_cust_code': custCode.isNotEmpty ? custCode : null,
-          'p_cust_phone': (custPhone.isNotEmpty && custPhone != '-') ? custPhone : null,
+          'p_cust_phone':
+              (custPhone.isNotEmpty && custPhone != '-') ? custPhone : null,
           'p_cust_name': custName.isNotEmpty ? custName : null,
         },
       );
@@ -200,7 +172,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       }
 
       // 3. PROSES HASIL
-      final grandTotalOmset = num.tryParse(response['grand_total_store']?.toString() ?? '0') ?? 0;
+      final grandTotalOmset =
+          num.tryParse(response['grand_total_store']?.toString() ?? '0') ?? 0;
       dynamic rawData = response['order_data'];
       List<Map<String, dynamic>> fetchedOrders = [];
 
@@ -239,26 +212,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
         });
         _applyTimeFilter(_selectedTimeFilter);
       }
-
-      // ✅ 4. FETCH CHURN ANALYSIS (Setelah data utama berhasil)
-      if (custCode.isNotEmpty) {
-        try {
-          final churnResponse = await Supabase.instance.client.rpc(
-            'get_customer_churn_analysis',
-            params: {
-              'p_store_id': storeId,
-              'p_cust_code': custCode,
-            },
-          );
-          if (churnResponse != null && mounted) {
-            setState(() {
-              _churnData = Map<String, dynamic>.from(churnResponse);
-            });
-          }
-        } catch (e) {
-          debugPrint('Error fetch churn data: $e');
-        }
-      }
     } catch (e, stackTrace) {
       debugPrint('💥 ERROR FATAL: $e');
       debugPrint('Stack trace: $stackTrace');
@@ -266,24 +219,26 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     }
   }
 
-  Future<void> _showEditCustomerDialog(BuildContext context, SettingsProvider settings) async {
+  Future<void> _showEditCustomerDialog(
+      BuildContext context, SettingsProvider settings) async {
     final profile = _currentCustomerProfile.isNotEmpty
         ? _currentCustomerProfile
         : widget.customer;
-    
+
     final nameController = TextEditingController(
-      text: (profile['name'] ?? profile['customer_name'] ?? '').toString()
-    );
+        text: (profile['name'] ?? profile['customer_name'] ?? '').toString());
     final phoneController = TextEditingController(
-      text: (profile['phone'] ?? profile['customer_phone'] ?? '').toString() == '-'
-          ? ''
-          : (profile['phone'] ?? profile['customer_phone'] ?? '').toString()
-    );
+        text: (profile['phone'] ?? profile['customer_phone'] ?? '').toString() ==
+                '-'
+            ? ''
+            : (profile['phone'] ?? profile['customer_phone'] ?? '').toString());
     final addressController = TextEditingController(
-      text: (profile['address'] ?? profile['customer_address'] ?? '').toString() == '-'
-          ? ''
-          : (profile['address'] ?? profile['customer_address'] ?? '').toString()
-    );
+        text: (profile['address'] ?? profile['customer_address'] ?? '')
+                    .toString() ==
+                '-'
+            ? ''
+            : (profile['address'] ?? profile['customer_address'] ?? '')
+                .toString());
 
     await showDialog(
       context: context,
@@ -307,7 +262,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                 style: TextStyle(fontSize: 12, color: settings.textColor),
                 decoration: InputDecoration(
                   labelText: 'Nama Pelanggan *',
-                  labelStyle: TextStyle(color: settings.textColor.withOpacity(0.6)),
+                  labelStyle:
+                      TextStyle(color: settings.textColor.withOpacity(0.6)),
                   border: const OutlineInputBorder(),
                   isDense: true,
                 ),
@@ -320,7 +276,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                 decoration: InputDecoration(
                   labelText: 'No. WA / HP *',
                   hintText: '08...',
-                  labelStyle: TextStyle(color: settings.textColor.withOpacity(0.6)),
+                  labelStyle:
+                      TextStyle(color: settings.textColor.withOpacity(0.6)),
                   border: const OutlineInputBorder(),
                   isDense: true,
                 ),
@@ -332,7 +289,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                 style: TextStyle(fontSize: 12, color: settings.textColor),
                 decoration: InputDecoration(
                   labelText: 'Alamat',
-                  labelStyle: TextStyle(color: settings.textColor.withOpacity(0.6)),
+                  labelStyle:
+                      TextStyle(color: settings.textColor.withOpacity(0.6)),
                   border: const OutlineInputBorder(),
                   isDense: true,
                 ),
@@ -371,7 +329,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: settings.accentColor,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape:
+                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: () async {
               if (nameController.text.trim().isEmpty) return;
@@ -422,7 +381,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     );
   }
 
-  Future<void> _confirmDeleteCustomer(BuildContext context, SettingsProvider settings) async {
+  Future<void> _confirmDeleteCustomer(
+      BuildContext context, SettingsProvider settings) async {
     final profile = _currentCustomerProfile.isNotEmpty
         ? _currentCustomerProfile
         : widget.customer;
@@ -498,13 +458,15 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
         final sevenDaysAgo = now.subtract(const Duration(days: 6));
         _filteredOrders = _allOrders.where((o) {
           final dt = DateTime.tryParse(o['created_at']?.toString() ?? '');
-          return dt != null && dt.isAfter(sevenDaysAgo.subtract(const Duration(hours: 1)));
+          return dt != null &&
+              dt.isAfter(sevenDaysAgo.subtract(const Duration(hours: 1)));
         }).toList();
       } else if (filter == '30 Hari') {
         final thirtyDaysAgo = now.subtract(const Duration(days: 29));
         _filteredOrders = _allOrders.where((o) {
           final dt = DateTime.tryParse(o['created_at']?.toString() ?? '');
-          return dt != null && dt.isAfter(thirtyDaysAgo.subtract(const Duration(hours: 1)));
+          return dt != null &&
+              dt.isAfter(thirtyDaysAgo.subtract(const Duration(hours: 1)));
         }).toList();
       } else if (filter == 'Bulan Ini') {
         _filteredOrders = _allOrders.where((o) {
@@ -559,14 +521,16 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     Map<String, double> dayMap = {};
 
     for (var dt in dateRange) {
-      final key = "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}";
+      final key =
+          "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}";
       dayMap[key] = 0.0;
     }
 
     for (var o in _filteredOrders) {
       final dtRaw = DateTime.tryParse(o['created_at']?.toString() ?? '');
       if (dtRaw != null) {
-        final key = "${dtRaw.year}-${dtRaw.month.toString().padLeft(2, '0')}-${dtRaw.day.toString().padLeft(2, '0')}";
+        final key =
+            "${dtRaw.year}-${dtRaw.month.toString().padLeft(2, '0')}-${dtRaw.day.toString().padLeft(2, '0')}";
         if (dayMap.containsKey(key)) {
           double val = (_selectedMetricFilter == 'Harga')
               ? (double.tryParse(o['total_price']?.toString() ?? '0') ?? 0)
@@ -579,7 +543,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     List<FlSpot> spots = [];
     int index = 1;
     for (var dt in dateRange) {
-      final key = "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}";
+      final key =
+          "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}";
       spots.add(FlSpot(index.toDouble(), dayMap[key] ?? 0.0));
       index++;
     }
@@ -605,10 +570,11 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     final profile = _currentCustomerProfile.isNotEmpty
         ? _currentCustomerProfile
         : widget.customer;
-    final name = (profile['name'] ?? profile['customer_name'] ?? 'Pelanggan').toString();
-    final phone = (profile['phone'] ?? profile['customer_phone'] ?? '-').toString();
-    final customerCode = (profile['customer_code'] ?? 'NSH-????').toString();
-
+    final name =
+        (profile['name'] ?? profile['customer_name'] ?? 'Pelanggan').toString();
+    final phone =
+        (profile['phone'] ?? profile['customer_phone'] ?? '-').toString();
+    final customerCode = (profile['customer_code'] ?? '').toString();
     return Scaffold(
       backgroundColor: settings.bgDark,
       appBar: AppBar(
@@ -635,7 +601,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
             onPressed: _openWhatsAppChat,
           ),
           IconButton(
-            icon: Icon(Icons.edit_note_rounded, color: settings.textColor, size: 26),
+            icon: Icon(Icons.edit_note_rounded,
+                color: settings.textColor, size: 26),
             tooltip: 'Edit Data Pelanggan',
             onPressed: () => _showEditCustomerDialog(context, settings),
           ),
@@ -643,7 +610,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
         ],
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: settings.accentColor))
+          ? Center(
+              child: CircularProgressIndicator(color: settings.accentColor))
           : SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Column(
@@ -656,7 +624,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                     decoration: BoxDecoration(
                       color: settings.cardDark,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: settings.textColor.withOpacity(0.05)),
+                      border:
+                          Border.all(color: settings.textColor.withOpacity(0.05)),
                     ),
                     child: Column(
                       children: [
@@ -664,8 +633,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                           children: [
                             CircleAvatar(
                               radius: 20,
-                              backgroundColor: settings.textColor.withOpacity(0.2),
-                              child: Icon(Icons.person, color: settings.textColor),
+                              backgroundColor:
+                                  settings.textColor.withOpacity(0.2),
+                              child: Icon(Icons.person,
+                                  color: settings.textColor),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -686,20 +657,23 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                                       Text(
                                         phone,
                                         style: TextStyle(
-                                          color: settings.textColor.withOpacity(0.6),
+                                          color: settings.textColor
+                                              .withOpacity(0.6),
                                           fontSize: 12,
                                         ),
                                       ),
                                       const SizedBox(width: 8),
-                                      if (customerCode != 'NSH-????')
+                                      if (customerCode.isNotEmpty)
                                         Container(
                                           padding: const EdgeInsets.symmetric(
                                             horizontal: 6,
                                             vertical: 2,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: settings.accentColor.withOpacity(0.15),
-                                            borderRadius: BorderRadius.circular(4),
+                                            color: settings.accentColor
+                                                .withOpacity(0.15),
+                                            borderRadius:
+                                                BorderRadius.circular(4),
                                           ),
                                           child: Text(
                                             customerCode,
@@ -790,17 +764,20 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                   const SizedBox(height: 16),
                   // DROPDOWN PILIHAN METRIK GRAFIK
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
                     decoration: BoxDecoration(
                       color: settings.cardDark,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: settings.textColor.withOpacity(0.08)),
+                      border: Border.all(
+                          color: settings.textColor.withOpacity(0.08)),
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
                         value: _selectedMetricFilter,
                         dropdownColor: settings.cardDark,
-                        icon: Icon(Icons.arrow_drop_down, color: settings.textColor),
+                        icon: Icon(Icons.arrow_drop_down,
+                            color: settings.textColor),
                         style: TextStyle(
                           color: settings.textColor,
                           fontWeight: FontWeight.bold,
@@ -814,7 +791,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                         items: ['Harga', 'Transaksi'].map((m) {
                           return DropdownMenuItem(
                             value: m,
-                            child: Text(m, style: TextStyle(color: settings.textColor)),
+                            child: Text(m,
+                                style: TextStyle(color: settings.textColor)),
                           );
                         }).toList(),
                       ),
@@ -827,7 +805,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                       final chartSpots = _generateChartData();
                       final dateRange = _getDateRange();
                       final double maxY = _getMaxY();
-                      double chartWidth = MediaQuery.of(context).size.width - 60;
+                      double chartWidth =
+                          MediaQuery.of(context).size.width - 60;
                       if (_selectedTimeFilter == '30 Hari' ||
                           _selectedTimeFilter == 'Bulan Ini' ||
                           _selectedTimeFilter == 'Semua') {
@@ -837,11 +816,13 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                       return Container(
                         height: 220,
                         width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 12, horizontal: 8),
                         decoration: BoxDecoration(
                           color: settings.cardDark,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: settings.textColor.withOpacity(0.05)),
+                          border: Border.all(
+                              color: settings.textColor.withOpacity(0.05)),
                         ),
                         child: Row(
                           children: [
@@ -852,26 +833,40 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                                 LineChartData(
                                   maxY: maxY,
                                   minY: 0,
-                                  gridData: const FlGridData(show: false),
+                                  gridData:
+                                      const FlGridData(show: false),
                                   borderData: FlBorderData(show: false),
                                   titlesData: FlTitlesData(
-                                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                                    bottomTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                    rightTitles: const AxisTitles(
+                                        sideTitles:
+                                            SideTitles(showTitles: false)),
+                                    topTitles: const AxisTitles(
+                                        sideTitles:
+                                            SideTitles(showTitles: false)),
+                                    bottomTitles: const AxisTitles(
+                                        sideTitles:
+                                            SideTitles(showTitles: false)),
                                     leftTitles: AxisTitles(
                                       sideTitles: SideTitles(
                                         showTitles: true,
                                         reservedSize: 45,
                                         getTitlesWidget: (val, meta) {
-                                          if (val < 0) return const SizedBox.shrink();
+                                          if (val < 0) {
+                                            return const SizedBox.shrink();
+                                          }
                                           String label = '';
-                                          if (_selectedMetricFilter == 'Transaksi') {
-                                            if (val % 1 == 0) label = val.toInt().toString();
+                                          if (_selectedMetricFilter ==
+                                              'Transaksi') {
+                                            if (val % 1 == 0) {
+                                              label = val.toInt().toString();
+                                            }
                                           } else {
                                             if (val >= 1000000) {
-                                              label = '${(val / 1000000).toStringAsFixed(1)}M';
+                                              label =
+                                                  '${(val / 1000000).toStringAsFixed(1)}M';
                                             } else if (val >= 1000) {
-                                              label = '${(val / 1000).toInt()}k';
+                                              label =
+                                                  '${(val / 1000).toInt()}k';
                                             } else {
                                               label = val.toInt().toString();
                                             }
@@ -879,7 +874,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                                           return Text(
                                             label,
                                             style: TextStyle(
-                                              color: settings.textColor.withOpacity(0.6),
+                                              color: settings.textColor
+                                                  .withOpacity(0.6),
                                               fontSize: 9,
                                             ),
                                           );
@@ -905,34 +901,48 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                                       gridData: FlGridData(
                                         show: true,
                                         drawVerticalLine: false,
-                                        getDrawingHorizontalLine: (val) => FlLine(
-                                          color: settings.textColor.withOpacity(0.08),
+                                        getDrawingHorizontalLine: (val) =>
+                                            FlLine(
+                                          color: settings.textColor
+                                              .withOpacity(0.08),
                                           strokeWidth: 1,
                                         ),
                                       ),
                                       titlesData: FlTitlesData(
-                                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                                        leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                        rightTitles: const AxisTitles(
+                                            sideTitles: SideTitles(
+                                                showTitles: false)),
+                                        topTitles: const AxisTitles(
+                                            sideTitles: SideTitles(
+                                                showTitles: false)),
+                                        leftTitles: const AxisTitles(
+                                            sideTitles: SideTitles(
+                                                showTitles: false)),
                                         bottomTitles: AxisTitles(
                                           sideTitles: SideTitles(
                                             showTitles: true,
                                             interval: 1,
                                             getTitlesWidget: (val, meta) {
-                                              final int index = val.toInt() - 1;
-                                              if (index < 0 || index >= dateRange.length) {
+                                              final int index =
+                                                  val.toInt() - 1;
+                                              if (index < 0 ||
+                                                  index >= dateRange.length) {
                                                 return const SizedBox.shrink();
                                               }
                                               final dt = dateRange[index];
-                                              final label = "${dt.day}/${dt.month}";
+                                              final label =
+                                                  "${dt.day}/${dt.month}";
                                               return Padding(
-                                                padding: const EdgeInsets.only(top: 6),
+                                                padding: const EdgeInsets.only(
+                                                    top: 6),
                                                 child: Text(
                                                   label,
                                                   style: TextStyle(
-                                                    color: settings.textColor.withOpacity(0.8),
+                                                    color: settings.textColor
+                                                        .withOpacity(0.8),
                                                     fontSize: 9,
-                                                    fontWeight: FontWeight.bold,
+                                                    fontWeight:
+                                                        FontWeight.bold,
                                                   ),
                                                 ),
                                               );
@@ -940,21 +950,28 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                                           ),
                                         ),
                                       ),
-                                      borderData: FlBorderData(show: false),
+                                      borderData:
+                                          FlBorderData(show: false),
                                       lineTouchData: LineTouchData(
                                         enabled: true,
-                                        touchTooltipData: LineTouchTooltipData(
-                                          getTooltipColor: (touchedSpot) => settings.accentColor,
+                                        touchTooltipData:
+                                            LineTouchTooltipData(
+                                          getTooltipColor: (touchedSpot) =>
+                                              settings.accentColor,
                                           getTooltipItems: (touchedSpots) {
                                             return touchedSpots.map((spot) {
-                                              final idx = spot.x.toInt() - 1;
+                                              final idx =
+                                                  spot.x.toInt() - 1;
                                               String dateStr = '';
-                                              if (idx >= 0 && idx < dateRange.length) {
+                                              if (idx >= 0 &&
+                                                  idx < dateRange.length) {
                                                 final dt = dateRange[idx];
-                                                dateStr = "${dt.day}/${dt.month}/${dt.year}";
+                                                dateStr =
+                                                    "${dt.day}/${dt.month}/${dt.year}";
                                               }
                                               final val = spot.y;
-                                              final formattedVal = _selectedMetricFilter == 'Harga'
+                                              final formattedVal = _selectedMetricFilter ==
+                                                      'Harga'
                                                   ? _formatRupiah(val)
                                                   : '${val.toInt()} Transaksi';
                                               return LineTooltipItem(
@@ -976,10 +993,12 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                                           color: settings.accentColor,
                                           barWidth: 2.5,
                                           isStrokeCapRound: true,
-                                          dotData: const FlDotData(show: true),
+                                          dotData:
+                                              const FlDotData(show: true),
                                           belowBarData: BarAreaData(
                                             show: true,
-                                            color: settings.accentColor.withOpacity(0.12),
+                                            color: settings.accentColor
+                                                .withOpacity(0.12),
                                           ),
                                         ),
                                       ],
@@ -1003,7 +1022,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
-                      children: ['Semua', 'Bulan Ini', '7 Hari', '30 Hari'].map((f) {
+                      children:
+                          ['Semua', 'Bulan Ini', '7 Hari', '30 Hari'].map((f) {
                         final isSel = _selectedTimeFilter == f;
                         return GestureDetector(
                           onTap: () => _applyTimeFilter(f),
@@ -1013,13 +1033,16 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                               vertical: 6,
                             ),
                             decoration: BoxDecoration(
-                              color: isSel ? settings.accentColor : Colors.transparent,
+                              color: isSel
+                                  ? settings.accentColor
+                                  : Colors.transparent,
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
                               f,
                               style: TextStyle(
-                                color: isSel ? Colors.white : settings.textColor,
+                                color:
+                                    isSel ? Colors.white : settings.textColor,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -1037,7 +1060,9 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                             padding: const EdgeInsets.all(20),
                             child: Text(
                               'Belum ada transaksi',
-                              style: TextStyle(color: settings.textColor.withOpacity(0.6)),
+                              style: TextStyle(
+                                  color:
+                                      settings.textColor.withOpacity(0.6)),
                             ),
                           ),
                         )
@@ -1047,9 +1072,13 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                           itemCount: _filteredOrders.length,
                           itemBuilder: (context, index) {
                             final item = _filteredOrders[index];
-                            final num price = num.tryParse(item['total_price']?.toString() ?? '0') ?? 0;
-                            final String nota = item['nota_number'] ?? 'LNDR-${(item['id'] ?? 0).toString().padLeft(5, '0')}';
-                            final String rawDate = item['created_at'] ?? '';
+                            final num price = num.tryParse(
+                                    item['total_price']?.toString() ?? '0') ??
+                                0;
+                            final String nota = item['nota_number'] ??
+                                'LNDR-${(item['id'] ?? 0).toString().padLeft(5, '0')}';
+                            final String rawDate =
+                                item['created_at'] ?? '';
 
                             return GestureDetector(
                               onTap: () {
@@ -1070,13 +1099,17 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                                 decoration: BoxDecoration(
                                   color: settings.cardDark,
                                   borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: settings.textColor.withOpacity(0.05)),
+                                  border: Border.all(
+                                      color: settings.textColor
+                                          .withOpacity(0.05)),
                                 ),
                                 child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           _formatDateReadable(rawDate),
@@ -1090,7 +1123,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                                         Text(
                                           nota,
                                           style: TextStyle(
-                                            color: settings.textColor.withOpacity(0.6),
+                                            color: settings.textColor
+                                                .withOpacity(0.6),
                                             fontSize: 11,
                                           ),
                                         ),
@@ -1116,17 +1150,20 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     );
   }
 
-  Widget _buildStatItem(String title, String value, Color valueColor, SettingsProvider settings) {
+  Widget _buildStatItem(String title, String value, Color valueColor,
+      SettingsProvider settings) {
     return Column(
       children: [
         Text(
           title,
-          style: TextStyle(color: settings.textColor.withOpacity(0.6), fontSize: 10),
+          style: TextStyle(
+              color: settings.textColor.withOpacity(0.6), fontSize: 10),
         ),
         const SizedBox(height: 4),
         Text(
           value,
-          style: TextStyle(color: valueColor, fontWeight: FontWeight.bold, fontSize: 13),
+          style: TextStyle(
+              color: valueColor, fontWeight: FontWeight.bold, fontSize: 13),
         ),
       ],
     );
@@ -1136,10 +1173,28 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     if (raw.isEmpty) return '-';
     try {
       final dt = DateTime.parse(raw);
-      final List<String> days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+      final List<String> days = [
+        'Minggu',
+        'Senin',
+        'Selasa',
+        'Rabu',
+        'Kamis',
+        'Jumat',
+        'Sabtu'
+      ];
       final List<String> months = [
-        'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+        'Januari',
+        'Februari',
+        'Maret',
+        'April',
+        'Mei',
+        'Juni',
+        'Juli',
+        'Agustus',
+        'September',
+        'Oktober',
+        'November',
+        'Desember'
       ];
       return '${days[dt.weekday % 7]}, ${dt.day.toString().padLeft(2, '0')} ${months[dt.month - 1]} ${dt.year}';
     } catch (_) {

@@ -1,7 +1,7 @@
 name: nasuha_kasir_laundry
 description: "Aplikasi Kasir Laundry - Nasuha Kasir Laundry"
 publish_to: 'none' 
-version: 1.0.0+3
+version: 1.0.0+4
 
 environment:
   sdk: '>=3.12.2 <4.0.0' 
@@ -10,6 +10,7 @@ dependencies:
     flutter:
       sdk: flutter
     print_bluetooth_thermal: ^1.1.0
+    flutter_blue_plus: ^1.35.5
     permission_handler: ^11.3.1
     cupertino_icons: ^1.0.8
     provider: ^6.1.5+1

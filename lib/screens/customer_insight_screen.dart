@@ -22,24 +22,30 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
   int _totalPotensial = 0;
   num _totalEstOmset = 0;
 
+  // 🟢 State Churn Risk
+  List<Map<String, dynamic>> _churnList = [];
+  bool _isLoadingChurn = false;
+  int _churnTotalCount = 0;
+  int _churnCurrentLimit = 10;
+  bool _isLoadingMoreChurn = false;
+
   @override
   void initState() {
     super.initState();
     _analyzePredictions();
     _fetchTopCustomers();
+    _fetchChurnRisk();
   }
 
-  // Helper format rupiah simple
   String _formatRupiahSimple(num number) {
-    if (number == null || number == 0) return '0';
+    if (number == 0) return '0';
     final String str = number.toInt().toString();
     final RegExp reg = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
     return str.replaceAllMapped(reg, (Match m) => '${m[1]}.');
   }
 
-  // Format rupiah lengkap
   String _formatRupiah(num number) {
-    if (number == null || number == 0) return 'Rp 0';
+    if (number == 0) return 'Rp 0';
     final String str = number.toInt().toString();
     final RegExp reg = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
     return 'Rp ${str.replaceAllMapped(reg, (Match m) => '${m[1]}.')}';
@@ -56,7 +62,7 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
 
       final predictions = await CustomerInsightEngine.fetchTomorrowPredictions(storeId: storeId);
       num totalOmsetAcc = 0;
-      
+
       for (var item in predictions) {
         final val = item['est_spend'] ?? item['estimated_omset'] ?? 0;
         if (val is num) {
@@ -80,7 +86,6 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
     }
   }
 
-  // Function fetch top customers
   Future<void> _fetchTopCustomers() async {
     setState(() => _isLoadingTopCustomers = true);
     try {
@@ -89,7 +94,7 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
         setState(() => _isLoadingTopCustomers = false);
         return;
       }
-  
+
       final response = await Supabase.instance.client.rpc(
         'get_top_customers',
         params: {
@@ -97,15 +102,15 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
           'p_limit': 20,
         },
       );
-  
+
       if (response != null) {
         final topCustomersData = response['top_customers'];
-        final totalRevenue = response['total_store_revenue'] ?? 0; // ✅ AMBIL TOTAL OMSET
-        
+        final totalRevenue = response['total_store_revenue'] ?? 0;
+
         if (topCustomersData is List) {
           setState(() {
             _topCustomers = List<Map<String, dynamic>>.from(topCustomersData);
-            _totalStoreRevenue = num.tryParse(totalRevenue.toString()) ?? 0; // ✅ SIMPAN
+            _totalStoreRevenue = num.tryParse(totalRevenue.toString()) ?? 0;
             _isLoadingTopCustomers = false;
           });
         }
@@ -116,12 +121,11 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
     }
   }
 
-  // Function untuk cashback/reminder WhatsApp
   Future<void> _sendCashbackOffer(Map<String, dynamic> customer) async {
     final phone = customer['customer_phone']?.toString() ?? '';
     final name = customer['customer_name']?.toString() ?? 'Pelanggan';
     final totalRevenue = customer['total_revenue'] ?? 0;
-    
+
     if (phone.isEmpty || phone == '-') {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -132,13 +136,11 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
       return;
     }
 
-    // Format nomor
     String cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
     if (cleanPhone.startsWith('0')) {
       cleanPhone = '62${cleanPhone.substring(1)}';
     }
 
-    // Pesan cashback
     final message = Uri.encodeComponent(
       'Halo Kak $name! Terima kasih sudah menjadi pelanggan setia Nasuha Laundry. '
       'Sebagai apresiasi untuk transaksi senilai Rp ${_formatRupiahSimple(totalRevenue)}, '
@@ -175,9 +177,82 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
     );
 
     final url = Uri.parse("https://wa.me/$formattedPhone?text=$message");
-    
+
     if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  // 🟢 FETCH CHURN — sekarang pakai ENGINE (siap migrasi ke Python)
+  Future<void> _fetchChurnRisk() async {
+    setState(() {
+      _isLoadingChurn = true;
+      _churnCurrentLimit = 10;
+    });
+
+    try {
+      final storeId = context.read<SettingsProvider>().storeId;
+      if (storeId == null) {
+        if (mounted) setState(() => _isLoadingChurn = false);
+        return;
+      }
+
+      final response = await CustomerInsightEngine.fetchChurnRisk(
+        storeId: storeId,
+        limit: 10,
+        offset: 0,
+      );
+
+      if (mounted) {
+        final data = response['data'] ?? [];
+        final totalCount = response['total_count'] ?? 0;
+
+        setState(() {
+          _churnList = List<Map<String, dynamic>>.from(data);
+          _churnTotalCount = num.tryParse(totalCount.toString())?.toInt() ?? 0;
+          _isLoadingChurn = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetch churn risk: $e');
+      if (mounted) setState(() => _isLoadingChurn = false);
+    }
+  }
+
+  Future<void> _loadMoreChurn() async {
+    if (_isLoadingMoreChurn) return;
+
+    setState(() => _isLoadingMoreChurn = true);
+
+    try {
+      final storeId = context.read<SettingsProvider>().storeId;
+      if (storeId == null) {
+        if (mounted) setState(() => _isLoadingMoreChurn = false);
+        return;
+      }
+
+      final newLimit = _churnCurrentLimit + 10;
+
+      final response = await CustomerInsightEngine.fetchChurnRisk(
+        storeId: storeId,
+        limit: newLimit,
+        offset: 0,
+      );
+
+      if (mounted) {
+        final data = response['data'] ?? [];
+        final totalCount = response['total_count'] ?? 0;
+
+        setState(() {
+          _churnList = List<Map<String, dynamic>>.from(data);
+          _churnTotalCount = num.tryParse(totalCount.toString())?.toInt() ?? 0;
+          _churnCurrentLimit = newLimit;
+          _isLoadingMoreChurn = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error load more churn: $e');
+      if (mounted) setState(() => _isLoadingMoreChurn = false);
     }
   }
 
@@ -203,6 +278,7 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
             onPressed: () {
               _analyzePredictions();
               _fetchTopCustomers();
+              _fetchChurnRisk();
             },
           ),
         ],
@@ -257,8 +333,9 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
                         )
                       : _buildFrozenPredictionTable(),
                   const SizedBox(height: 24),
-                  // Top Customers Table
                   _buildTopCustomersTable(),
+                  const SizedBox(height: 24),
+                  _buildChurnSection(),
                   const SizedBox(height: 20),
                 ],
               ),
@@ -277,7 +354,6 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. KOLOM STABIL (FROZEN: NAMA PELANGGAN)
           SizedBox(
             width: 130,
             child: Column(
@@ -329,7 +405,6 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
             ),
           ),
           Container(width: 1, color: Colors.white12),
-          // 2. KOLOM SCROLLABLE HORIZONTAL
           Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -354,7 +429,6 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
                   ),
                   const Divider(height: 1, thickness: 1, color: Colors.white12),
                   ..._predictions.map((item) {
-                    // Parsing nilai aman dengan fallback key dari API Vercel
                     final int score = (item['score'] ?? item['ai_score'] ?? 0).toInt();
                     final num estSpend = item['est_spend'] ?? item['estimated_omset'] ?? 0;
                     final int totalTx = item['total_tx'] ?? item['transaction_count'] ?? 0;
@@ -363,7 +437,7 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
                     final String favorite = item['favorite_service'] ?? item['service'] ?? '-';
                     final String customerName = item['customer_name'] ?? item['name'] ?? '-';
                     final String phone = item['phone'] ?? item['customer_phone'] ?? '';
-                    
+
                     Color badgeColor = Colors.orange;
                     if (score >= 80) badgeColor = const Color(0xFF00E676);
                     else if (score >= 55) badgeColor = Colors.amber;
@@ -419,7 +493,6 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
                               style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white70),
                             ),
                           ),
-                          // Tombol WA Follow Up
                           _DataCell(
                             width: 90,
                             child: InkWell(
@@ -487,7 +560,6 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
     );
   }
 
-  // Widget untuk Top Customers Table
   Widget _buildTopCustomersTable() {
     return Container(
       margin: const EdgeInsets.only(top: 24),
@@ -503,8 +575,6 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          
-          // ✅ INFO TOTAL OMSET TOKO (KOTAK 3D)
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -567,9 +637,7 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
               ],
             ),
           ),
-          
           const SizedBox(height: 16),
-          
           _isLoadingTopCustomers
               ? const Center(
                   child: Padding(
@@ -606,7 +674,6 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
             Container(
               height: 42,
               color: const Color(0xFF252528),
@@ -623,7 +690,6 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
               ),
             ),
             const Divider(height: 1, thickness: 1, color: Colors.white12),
-            // Data rows
             ..._topCustomers.map((customer) {
               final status = customer['customer_status'] ?? 'Reguler';
               final name = customer['customer_name'] ?? '-';
@@ -631,8 +697,7 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
               final totalTx = customer['total_transactions'] ?? 0;
               final favoriteService = customer['favorite_service'] ?? '-';
               final contributionPercent = customer['contribution_percent'];
-              
-              // Fix: Handle contribution yang bisa jadi String atau num
+
               String contributionText = '0%';
               if (contributionPercent is String) {
                 contributionText = contributionPercent.contains('%') ? contributionPercent : '${contributionPercent}%';
@@ -752,13 +817,339 @@ class _CustomerInsightScreenState extends State<CustomerInsightScreen> {
       ),
     );
   }
+
+  // 🟢 SECTION CHURN RISK
+  Widget _buildChurnSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 20),
+            const SizedBox(width: 8),
+            const Text(
+              'Pelanggan Potensi Churn',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(width: 8),
+            if (_churnTotalCount > 0)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
+                ),
+                child: Text(
+                  '$_churnTotalCount',
+                  style: const TextStyle(
+                    color: Colors.redAccent,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Pelanggan yang berisiko berhenti. Segera follow-up!',
+          style: TextStyle(color: Colors.grey, fontSize: 11),
+        ),
+        const SizedBox(height: 12),
+        _isLoadingChurn
+            ? const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(20),
+                  child: CircularProgressIndicator(color: Colors.redAccent),
+                ),
+              )
+            : _churnList.isEmpty
+                ? Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2A2A2E),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white12),
+                    ),
+                    child: const Center(
+                      child: Column(
+                        children: [
+                          Icon(Icons.check_circle_outline, color: Colors.greenAccent, size: 32),
+                          SizedBox(height: 8),
+                          Text(
+                            '✅ Tidak ada pelanggan berisiko churn',
+                            style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'Semua pelanggan kamu aktif belanja 🎉',
+                            style: TextStyle(color: Colors.grey, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : Column(
+                    children: [
+                      ..._churnList.map((item) => _buildChurnCard(item)),
+                      const SizedBox(height: 12),
+                      if (_churnList.length < _churnTotalCount)
+                        SizedBox(
+                          width: double.infinity,
+                          height: 44,
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.redAccent,
+                              side: BorderSide(color: Colors.redAccent.withOpacity(0.5)),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: _isLoadingMoreChurn ? null : _loadMoreChurn,
+                            icon: _isLoadingMoreChurn
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.redAccent),
+                                  )
+                                : const Icon(Icons.expand_more_rounded, size: 18),
+                            label: Text(
+                              _isLoadingMoreChurn
+                                  ? 'Memuat...'
+                                  : 'Muat Lebih Banyak (${_churnList.length} dari $_churnTotalCount)',
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+      ],
+    );
+  }
+
+  // 🟢 CARD CHURN — UPDATE: Kontribusi & Performance
+  Widget _buildChurnCard(Map<String, dynamic> item) {
+    final String name = item['customer_name']?.toString() ?? '-';
+    final String phone = item['customer_phone']?.toString() ?? '';
+    final String status = item['status_base']?.toString() ?? '-';
+    final double contributionCurrent = (item['contribution_current'] as num?)?.toDouble() ?? 0;
+    final double performance = (item['performance'] as num?)?.toDouble() ?? 0;
+    final String reason = item['churn_reason']?.toString() ?? '-';
+    final String solution = item['solution']?.toString() ?? '-';
+    final int days = (item['days_since_last_order'] as num?)?.toInt() ?? 0;
+
+    Color statusColor = Colors.grey;
+    if (status == 'VVIP') statusColor = const Color(0xFFFFD700);
+    else if (status == 'VIP') statusColor = const Color(0xFFEC4899);
+    else if (status == 'Best') statusColor = Colors.cyanAccent;
+    else if (status == 'Reguler') statusColor = Colors.lightGreenAccent;
+
+    // 🟢 Warna performance: merah kalau turun, hijau kalau naik
+    Color perfColor = performance > 0
+        ? Colors.redAccent // tergerus = merah (perhatian)
+        : (performance < 0 ? Colors.greenAccent : Colors.grey);
+
+    String perfText;
+    if (performance > 0) {
+      perfText = '↓ ${performance.toStringAsFixed(2)}%';
+    } else if (performance < 0) {
+      perfText = '↑ ${performance.abs().toStringAsFixed(2)}%';
+    } else {
+      perfText = '0.00%';
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2A2A2E),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.redAccent.withOpacity(0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: statusColor.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            status,
+                            style: TextStyle(
+                              color: statusColor,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '$days hari lalu',
+                          style: const TextStyle(color: Colors.grey, fontSize: 10),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              InkWell(
+                onTap: () => _sendWhatsAppReminder(phone, name),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.greenAccent.withOpacity(0.4)),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.chat_rounded, size: 14, color: Colors.greenAccent),
+                      SizedBox(width: 4),
+                      Text('WA', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          // 🟢 BARIS KONTRIBUSI & PERFORMANCE
+          Row(
+            children: [
+              Expanded(
+                child: _buildChurnInfoItem(
+                  label: 'Kontribusi',
+                  value: '${contributionCurrent.toStringAsFixed(2)}%',
+                  valueColor: Colors.white70,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildChurnInfoItem(
+                  label: 'Performance',
+                  value: perfText,
+                  valueColor: perfColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E1E22),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.info_outline, color: Colors.orange, size: 12),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Alasan: ',
+                      style: TextStyle(color: Colors.grey.shade400, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                    Expanded(
+                      child: Text(
+                        reason,
+                        style: const TextStyle(color: Colors.orangeAccent, fontSize: 10),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(Icons.lightbulb_outline, color: Colors.lightBlueAccent, size: 12),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Solusi: ',
+                      style: TextStyle(color: Colors.grey.shade400, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                    Expanded(
+                      child: Text(
+                        solution,
+                        style: const TextStyle(color: Colors.lightBlueAccent, fontSize: 10),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChurnInfoItem({
+    required String label,
+    required String value,
+    required Color valueColor,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(color: Colors.grey, fontSize: 9),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: TextStyle(color: valueColor, fontSize: 12, fontWeight: FontWeight.bold),
+        ),
+      ],
+    );
+  }
 }
+
+// =============================================
+// HELPER CLASSES (di luar state)
+// =============================================
 
 class _HeaderCell extends StatelessWidget {
   final String title;
   final double width;
   final bool isCenter;
-  
+
   const _HeaderCell({
     required this.title,
     required this.width,
@@ -783,7 +1174,7 @@ class _HeaderCell extends StatelessWidget {
 class _DataCell extends StatelessWidget {
   final Widget child;
   final double width;
-  
+
   const _DataCell({
     required this.child,
     required this.width,

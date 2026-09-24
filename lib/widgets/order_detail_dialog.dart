@@ -179,9 +179,16 @@ class _OrderDetailDialogState extends State<OrderDetailDialog> {
   }
 
   void _showPrintDialog(BuildContext context) {
+    // Buat Map gabungan untuk memastikan ID penting ikut terbawa
+    final Map<String, dynamic> orderForNota = Map<String, dynamic>.from(_currentOrder);
+    
+    // Ambil customer_id dan store_id dengan beberapa opsi fallback key
+    orderForNota['customer_id'] ??= _currentOrder['customer_id'] ?? _currentOrder['id_customer'];
+    orderForNota['store_id'] ??= _currentOrder['store_id'] ?? _currentOrder['id_toko'];
+  
     showDialog(
       context: context,
-      builder: (ctx) => NotaDialog(order: _currentOrder),
+      builder: (ctx) => NotaDialog(order: orderForNota),
     );
   }
 
